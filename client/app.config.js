@@ -1,4 +1,4 @@
-{
+export default {
   "expo": {
     "name": "Klassin",
     "slug": "klassin",
@@ -19,7 +19,7 @@
       "edgeToEdgeEnabled": true,
       "predictiveBackGestureEnabled": false,
       "package": "com.atul004.klassin",
-      "googleServicesFile": "./google-services.json"
+      "googleServicesFile": process.env.GOOGLE_SERVICES_JSON || "./google-services.json"
     },
     "web": {
       "output": "static",
@@ -49,7 +49,8 @@
       "router": {},
       "eas": {
         "projectId": "7cc11cd9-774d-4dda-988a-aba00c125c58"
-      }
+      },
+      "fcmConfig": process.env.FCM_JSON || "./fcm.json"
     }
   }
 }

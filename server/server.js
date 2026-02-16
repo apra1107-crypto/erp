@@ -29,6 +29,7 @@ import teacherAttendanceRoutes from './routes/teacherAttendanceRoutes.js';
 import homeworkRoutes from './routes/homeworkRoutes.js';
 import noticeRoutes from './routes/noticeRoutes.js';
 import calendarRoutes from './routes/calendarRoutes.js';
+import appStatsRoutes from './routes/appStatsRoutes.js';
 
 // Controller/Middleware Imports
 import { createNotice, getNotices, updateNotice, deleteNotice } from './controllers/noticeController.js';
@@ -107,6 +108,7 @@ app.use('/api/salary', salaryRoutes);
 app.use('/api/teacher-attendance', teacherAttendanceRoutes);
 app.use('/api/homework', homeworkRoutes);
 app.use('/api/calendar', calendarRoutes);
+app.use('/api/stats', appStatsRoutes);
 
 // Notice Routes (Manual definition to keep specific controllers)
 const noticeRouter = express.Router();

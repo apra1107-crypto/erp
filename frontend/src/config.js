@@ -20,4 +20,5 @@ export const API_ENDPOINTS = {
     FEES: `${BASE_URL}/api/fees`,
     ROUTINE: `${BASE_URL}/api/routine`,
     ADMIT_CARD: `${BASE_URL}/api/admit-cards`,
+    STATS: `${BASE_URL}/api/stats`,
 };

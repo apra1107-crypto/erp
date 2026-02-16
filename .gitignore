@@ -36,4 +36,4 @@ Thumbs.db
 # Mobile specific
 client/google-services.json
 client/fcm.json
-
+*.apk

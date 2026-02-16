@@ -269,7 +269,7 @@ const SubscriptionPage = () => {
                         <button className="counter-btn" onClick={handleDecrement} disabled={months <= 1}>−</button>
                         <div className="counter-display">
                             <span className="count">{months}</span>
-                            <span className="label text-xs uppercase tracking-wider text-gray-400">Minute{months > 1 ? 's' : ''}</span>
+                            <span className="label text-xs uppercase tracking-wider text-gray-400">Month{months > 1 ? 's' : ''}</span>
                         </div>
                         <button className="counter-btn" onClick={handleIncrement}>+</button>
                     </div>

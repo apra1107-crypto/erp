@@ -1,0 +1,553 @@
+/* Result Dashboard Stunning Aesthetic Overhaul */
+.result-dashboard {
+    padding: 30px;
+    background: #ffffff;
+    min-height: 100vh;
+    transition: background 0.3s ease;
+}
+
+.result-dashboard.theme-dark {
+    background: #0f172a;
+    /* Professional Dark Blue/Slate */
+}
+
+.rd-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 40px;
+    background: transparent;
+    padding: 10px 0;
+    border-radius: 0;
+    box-shadow: none;
+    border: none;
+}
+
+.rd-header h2 {
+    font-size: 28px;
+    color: #0f172a;
+    font-weight: 800;
+    letter-spacing: -0.5px;
+    margin: 0;
+    transition: color 0.3s ease;
+}
+
+.theme-dark .rd-header h2 {
+    color: #ffffff !important;
+}
+
+.btn-create-exam {
+    background: linear-gradient(135deg, #2563eb 0%, #1e40af 100%);
+    color: white;
+    border: none;
+    padding: 14px 28px;
+    border-radius: 12px;
+    font-weight: 700;
+    cursor: pointer;
+    transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+    box-shadow: 0 10px 15px -3px rgba(37, 99, 235, 0.3);
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    font-size: 15px;
+}
+
+.btn-create-exam:hover {
+    transform: translateY(-3px) scale(1.02);
+    box-shadow: 0 20px 25px -5px rgba(37, 99, 235, 0.4);
+}
+
+.btn-create-exam:active {
+    transform: translateY(-1px);
+}
+
+/* Flashcard UI - Smaller & Refined */
+.exams-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
+    gap: 20px;
+}
+
+.exam-card {
+    border-radius: 16px;
+    padding: 24px;
+    box-shadow: 0 10px 25px rgba(0, 0, 0, 0.25);
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    cursor: pointer;
+    transition: all 0.4s cubic-bezier(0.165, 0.84, 0.44, 1);
+    position: relative;
+    overflow: hidden;
+    display: flex;
+    flex-direction: column;
+    background: linear-gradient(135deg, #2563eb 0%, #1e40af 100%);
+    /* Default Vibrant Blue */
+}
+
+.exam-card:hover {
+    transform: translateY(-8px) scale(1.02);
+    box-shadow: 0 25px 50px rgba(0, 0, 0, 0.4);
+    border-color: rgba(255, 255, 255, 0.3);
+}
+
+/* Shine Effect for Color Cards */
+.exam-card::before {
+    content: '';
+    position: absolute;
+    top: -50%;
+    left: -50%;
+    width: 200%;
+    height: 200%;
+    background: linear-gradient(45deg, transparent, rgba(255, 255, 255, 0.1), transparent);
+    transform: rotate(45deg);
+    transition: 0.5s;
+    pointer-events: none;
+}
+
+.exam-card:hover::before {
+    left: 100%;
+}
+
+/* Dynamic Colorful Gradients */
+.exam-card:nth-child(even) {
+    background: linear-gradient(135deg, #db2777 0%, #9d174d 100%);
+    /* Vibrant Pink */
+}
+
+.exam-card:nth-child(3n) {
+    background: linear-gradient(135deg, #6366f1 0%, #4338ca 100%);
+    /* Vibrant Indigo */
+}
+
+.exam-card:nth-child(4n) {
+    background: linear-gradient(135deg, #0f172a 0%, #1e293b 100%);
+    /* Deep Professional Slate */
+}
+
+.exam-card-icon {
+    width: 50px;
+    height: 50px;
+    background: rgba(255, 255, 255, 0.2);
+    backdrop-filter: blur(8px);
+    border-radius: 12px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 24px;
+    color: white;
+    margin-bottom: 20px;
+    border: 1px solid rgba(255, 255, 255, 0.3);
+}
+
+.exam-card-info h3 {
+    margin: 0 0 8px 0;
+    color: white;
+    font-size: 20px;
+    font-weight: 800;
+}
+
+.exam-card-info p {
+    margin: 0;
+    color: rgba(255, 255, 255, 0.9);
+    font-weight: 600;
+    font-size: 14px;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+}
+
+.exam-date {
+    display: inline-block;
+    margin-top: 15px;
+    padding: 4px 12px;
+    background: rgba(0, 0, 0, 0.2);
+    font-size: 11px;
+    color: white;
+    border-radius: 8px;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+}
+
+.exam-card-actions {
+    margin-top: 24px;
+    border-top: 1px solid #f1f5f9;
+    padding-top: 20px;
+}
+
+.btn-view {
+    width: 100%;
+    padding: 12px;
+    background: #fafafa;
+    border: 1.5px solid #edf2f7;
+    border-radius: 12px;
+    color: #1e293b;
+    font-weight: 700;
+    cursor: pointer;
+    transition: all 0.2s;
+    font-size: 14px;
+}
+
+.btn-view:hover {
+    background: #1e3a8a;
+    color: white;
+    border-color: #1e3a8a;
+}
+
+.btn-delete-card:hover {
+    background: #e11d48;
+    color: white;
+    transform: scale(1.1);
+}
+
+.card-top-actions {
+    display: flex;
+    gap: 10px;
+}
+
+.btn-delete-card {
+    background: #fff1f2;
+    color: #e11d48;
+    border: none;
+    width: 36px;
+    height: 36px;
+    border-radius: 10px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    transition: all 0.2s;
+}
+
+.btn-delete-card:hover {
+    background: #e11d48;
+    color: white;
+    transform: scale(1.1);
+}
+
+.btn-edit-card {
+    background: #eff6ff;
+    color: #2563eb;
+    border: none;
+    width: 36px;
+    height: 36px;
+    border-radius: 10px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    transition: all 0.2s;
+}
+
+.btn-edit-card:hover {
+    background: #2563eb;
+    color: white;
+    transform: scale(1.1);
+}
+
+/* Stunning Dialog Styles */
+.modal-overlay {
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background-color: rgba(0, 0, 0, 0.6);
+    /* Slightly darker for better focus */
+    backdrop-filter: blur(12px) saturate(200%);
+    /* Enhanced blur */
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    z-index: 999999;
+    /* Absolute top priority to cover any header */
+}
+
+.modal-content {
+    background: rgba(255, 255, 255, 0.98);
+    border-radius: 24px;
+    box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.25);
+    border: 1px solid white;
+    overflow: visible;
+    /* To allow close button on edge */
+    animation: modalSlideUp 0.4s cubic-bezier(0.165, 0.84, 0.44, 1);
+    position: relative;
+}
+
+@keyframes modalSlideUp {
+    from {
+        transform: translateY(30px);
+        opacity: 0;
+    }
+
+    to {
+        transform: translateY(0);
+        opacity: 1;
+    }
+}
+
+.modal-title-text {
+    font-size: 26px;
+    font-weight: 800;
+    letter-spacing: -0.8px;
+    color: #0f172a;
+    margin: 0 0 5px 0;
+    /* Tightest gap */
+}
+
+.close-btn {
+    background: #f8fafc;
+    color: #64748b;
+    width: 32px;
+    height: 32px;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: all 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+    position: absolute;
+    top: 25px;
+    right: 25px;
+    border: 1px solid #e2e8f0;
+    font-size: 18px;
+    cursor: pointer;
+    z-index: 100;
+}
+
+.close-btn:hover {
+    background: #fee2e2;
+    color: #ef4444;
+    transform: rotate(180deg) scale(1.1);
+    border-color: #fecaca;
+    box-shadow: 0 5px 15px rgba(239, 68, 68, 0.2);
+}
+
+.modal-body {
+    padding: 0;
+    margin-top: 5px;
+    /* Minimal gap between title and fields */
+}
+
+/* Grading Card Styling - Blended & Stunning */
+.grading-card {
+    background: linear-gradient(135deg, #1e40af 0%, #3b82f6 100%);
+    padding: 18px;
+    border-radius: 16px;
+    color: white;
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+    box-shadow: 0 8px 20px rgba(59, 130, 246, 0.2);
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    transition: transform 0.2s ease;
+}
+
+.grading-card:hover {
+    transform: translateY(-4px);
+}
+
+.grading-card input {
+    background: rgba(255, 255, 255, 0.1);
+    border: 1px solid rgba(255, 255, 255, 0.2);
+    color: white;
+    text-align: center;
+    font-weight: 700;
+    border-radius: 8px;
+}
+
+.grading-card input:focus {
+    background: rgba(255, 255, 255, 0.2);
+    border-color: white;
+}
+
+.grading-card label {
+    color: rgba(255, 255, 255, 0.9) !important;
+    font-weight: 800 !important;
+    font-size: 13px !important;
+}
+
+/* Smoother Inputs */
+.form-input {
+    border: 2px solid #f1f5f9;
+    background: #f8fafc;
+    font-weight: 600;
+    color: #1e293b;
+    padding: 12px 16px;
+}
+
+.form-input:focus {
+    background: white;
+    border-color: #3b82f6;
+    box-shadow: 0 0 0 4px rgba(59, 130, 246, 0.1);
+}
+
+/* Blueprint Table */
+.blueprint-section {
+    margin-bottom: 25px;
+}
+
+.blueprint-table-container {
+    background: white;
+    border: 2px solid #f1f5f9;
+    border-radius: 16px;
+    overflow: hidden;
+}
+
+.blueprint-table thead tr {
+    background: #f8fafc;
+}
+
+.blueprint-table th {
+    padding: 14px 16px;
+    color: #64748b;
+    font-weight: 700;
+    font-size: 13px;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+}
+
+.blueprint-table td {
+    padding: 12px 16px;
+}
+
+.blueprint-table input {
+    background: transparent;
+    border: 1px solid transparent;
+    transition: all 0.2s;
+}
+
+.blueprint-table input:focus {
+    background: #f1f5f9;
+    border-color: #cbd5e1;
+}
+
+/* Modal Actions */
+.modal-actions {
+    background: #f8fafc;
+    padding: 24px 32px;
+    display: flex;
+    align-items: center;
+    gap: 16px;
+    border-top: 1px solid #f1f5f9;
+}
+
+.btn-cancel {
+    background: white;
+    color: #475569;
+    font-weight: 700;
+    border: 1.5px solid #e2e8f0;
+    border-radius: 14px;
+    padding: 12px 20px;
+    transition: all 0.3s ease;
+    font-size: 14px;
+}
+
+.btn-cancel:hover {
+    background: #f8fafc;
+    border-color: #cbd5e1;
+    color: #1e293b;
+    transform: translateY(-1px);
+}
+
+.btn-save {
+    background: linear-gradient(135deg, #2563eb 0%, #1e40af 100%);
+    box-shadow: 0 8px 20px rgba(37, 99, 235, 0.25);
+    border-radius: 14px;
+    font-weight: 700;
+    padding: 12px 24px;
+    color: white;
+    border: none;
+    font-size: 14px;
+    position: relative;
+    overflow: hidden;
+    transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.btn-save::after {
+    content: '';
+    position: absolute;
+    top: -50%;
+    left: -50%;
+    width: 200%;
+    height: 200%;
+    background: linear-gradient(45deg, transparent, rgba(255, 255, 255, 0.1), transparent);
+    transform: rotate(45deg);
+    transition: 0.5s;
+}
+
+.btn-save:hover {
+    transform: translateY(-3px) scale(1.02);
+    box-shadow: 0 15px 25px rgba(37, 99, 235, 0.4);
+}
+
+.btn-save:hover::after {
+    left: 100%;
+}
+
+/* Scrollbar Polish */
+.modal-body::-webkit-scrollbar {
+    width: 6px;
+}
+
+.modal-body::-webkit-scrollbar-track {
+    background: transparent;
+}
+
+.modal-body::-webkit-scrollbar-thumb {
+    background: #e2e8f0;
+    border-radius: 10px;
+}
+
+/* Add Subject Button Refinement */
+.btn-add-subject {
+    background: #eff6ff;
+    color: #2563eb;
+    border: 1.5px dashed #bfdbfe;
+    padding: 10px 20px;
+    border-radius: 12px;
+    font-weight: 700;
+    cursor: pointer;
+    transition: all 0.3s ease;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.btn-add-subject:hover {
+    background: #dbeafe;
+    border-color: #3b82f6;
+    transform: translateY(-2px);
+    box-shadow: 0 4px 12px rgba(37, 99, 235, 0.1);
+}
+
+/* Feature Toggles Styling - High Visibility */
+.feature-toggle-label {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    font-size: 14px;
+    font-weight: 700;
+    cursor: pointer;
+    background: white;
+    padding: 10px 18px;
+    border-radius: 12px;
+    border: 1.5px solid #e2e8f0;
+    transition: all 0.2s ease;
+    user-select: none;
+    color: #334155;
+    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.02);
+}
+
+.feature-toggle-label:hover {
+    border-color: #3b82f6;
+    background: #f0f7ff;
+    color: #2563eb;
+    transform: translateY(-2px);
+    box-shadow: 0 4px 12px rgba(37, 99, 235, 0.08);
+}
+
+.feature-toggle-label input[type="checkbox"] {
+    width: 20px;
+    height: 20px;
+    cursor: pointer;
+    accent-color: #2563eb;
+}

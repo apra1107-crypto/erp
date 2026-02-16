@@ -1,0 +1,138 @@
+@import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@300;400;500;600;700;800&family=Inter:wght@300;400;500;600&family=Anonymous+Pro:wght@700&display=swap');
+
+:root {
+  /* Premium Dark SaaS Palette */
+  --bg-page: #0B0F19;
+  /* Deep Slate/Navy */
+  --bg-card: #151B2B;
+  --bg-card-hover: #1E2538;
+
+  --primary: #3B82F6;
+  /* Vibrant Blue */
+  --primary-hover: #2563EB;
+  --primary-glow: rgba(59, 130, 246, 0.4);
+
+  --accent: #8B5CF6;
+  /* Violet */
+  --accent-glow: rgba(139, 92, 246, 0.4);
+
+  /* Typography */
+  --text-primary: #F8FAFC;
+  --text-secondary: #94A3B8;
+  --text-tertiary: #64748B;
+
+  /* UI Borders & Lines */
+  --border-subtle: rgba(255, 255, 255, 0.06);
+  --border-highlight: rgba(255, 255, 255, 0.12);
+
+  /* Spacing & Radius */
+  --radius-sm: 8px;
+  --radius-md: 12px;
+  --radius-lg: 24px;
+
+  --nav-height: 80px;
+}
+
+* {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+body {
+  font-family: 'Inter', sans-serif;
+  background-color: var(--bg-page);
+  color: var(--text-primary);
+  line-height: 1.6;
+  overflow-x: hidden;
+
+  ::selection {
+    color: white;
+    background: var(--primary);
+  }
+}
+
+h1,
+h2,
+h3,
+h4,
+h5,
+h6 {
+  font-family: 'Plus Jakarta Sans', sans-serif;
+  color: white;
+  letter-spacing: -0.02em;
+}
+
+button {
+  font-family: 'Plus Jakarta Sans', sans-serif;
+  cursor: pointer;
+}
+
+a {
+  text-decoration: none;
+  color: inherit;
+  transition: all 0.2s ease;
+}
+
+.container {
+  max-width: 1280px;
+  margin: 0 auto;
+  padding: 0 24px;
+}
+
+/* Scrollbar */
+::-webkit-scrollbar {
+  width: 10px;
+}
+
+::-webkit-scrollbar-track {
+  background: var(--bg-page);
+}
+
+::-webkit-scrollbar-thumb {
+  background: #334155;
+  border-radius: 5px;
+  border: 2px solid var(--bg-page);
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: #475569;
+}
+
+/* Utility Animations */
+@keyframes float {
+  0% {
+    transform: translateY(0px);
+  }
+
+  50% {
+    transform: translateY(-10px);
+  }
+
+  100% {
+    transform: translateY(0px);
+  }
+}
+
+@keyframes glow {
+  0% {
+    opacity: 0.5;
+  }
+
+  50% {
+    opacity: 1;
+  }
+
+  100% {
+    opacity: 0.5;
+  }
+}
+
+.unique-code-text {
+  font-family: 'Anonymous Pro', monospace !important;
+  font-weight: 700;
+  font-size: 1.2rem;
+  letter-spacing: 2px;
+}

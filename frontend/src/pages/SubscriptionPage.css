@@ -1,0 +1,556 @@
+/* Main Wrapper - Absolute Full Screen Overlay */
+.sub-bento-wrapper {
+    position: fixed;
+    /* Covers the existing dashboard layout */
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    z-index: 10000;
+    /* High z-index to be on top of everything */
+    height: 100vh;
+    width: 100vw;
+    background:
+        radial-gradient(at 0% 0%, hsla(253, 16%, 7%, 1) 0, transparent 50%),
+        radial-gradient(at 50% 0%, hsla(225, 39%, 30%, 1) 0, transparent 50%),
+        radial-gradient(at 100% 0%, hsla(339, 49%, 30%, 1) 0, transparent 50%);
+    background-color: #0f172a;
+    padding: 1rem 1.5rem;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+    font-family: 'Inter', system-ui, sans-serif;
+    color: #f8fafc;
+}
+
+/* Page Title (Absolute Center or Top) */
+.sub-page-title {
+    position: absolute;
+    top: 1.5rem;
+    left: 0;
+    right: 0;
+    text-align: center;
+    font-size: 1.1rem;
+    font-weight: 700;
+    margin: 0;
+    color: rgba(255, 255, 255, 0.7);
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    pointer-events: none;
+    /* Let clicks pass through if needed */
+    z-index: 50;
+}
+
+/* Floating Back Button - Smaller */
+.floating-back-btn {
+    position: absolute;
+    top: 1.25rem;
+    left: 1.5rem;
+    width: 36px;
+    /* Smaller width */
+    height: 36px;
+    /* Smaller height */
+    border-radius: 12px;
+    /* Less rounded or fully round, sticking to consistent look */
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    background: rgba(255, 255, 255, 0.05);
+    backdrop-filter: blur(10px);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    color: #fff;
+    transition: all 0.2s;
+    z-index: 100;
+}
+
+.floating-back-btn svg {
+    width: 20px;
+    height: 20px;
+}
+
+.floating-back-btn:hover {
+    background: rgba(255, 255, 255, 0.15);
+    transform: scale(1.05);
+}
+
+/* Bento Grid Layout - Optimized for 100vh with title space */
+.bento-grid {
+    display: grid;
+    /* 3 Columns: Plan | Action | History */
+    grid-template-columns: 260px 1fr 300px;
+    /* Rows: Auto for top buttons/trial, 1fr for main actions */
+    grid-template-rows: 90px 1fr;
+    gap: 1rem;
+    /* Tighter gap */
+    flex: 1;
+    min-height: 0;
+    max-width: 1400px;
+    /* Slightly constrained width for "smaller" look */
+    margin: 0 auto;
+    width: 100%;
+    /* Extra padding top to clear the absolute title */
+    padding-top: 3.5rem;
+}
+
+/* Grid Areas */
+.area-plan {
+    grid-column: 1 / 2;
+    grid-row: 1 / 3;
+}
+
+.area-trial {
+    grid-column: 2 / 3;
+    grid-row: 1 / 2;
+}
+
+.area-action {
+    grid-column: 2 / 3;
+    grid-row: 2 / 3;
+}
+
+.area-history {
+    grid-column: 3 / 4;
+    grid-row: 1 / 3;
+}
+
+/* Responsive adjustments */
+@media (max-width: 1100px) {
+    .bento-grid {
+        grid-template-columns: 1fr 1fr;
+        grid-template-rows: auto 1fr;
+    }
+
+    .area-plan {
+        grid-column: 1 / 2;
+        grid-row: 1 / 3;
+    }
+
+    .area-trial {
+        grid-column: 2 / 3;
+        grid-row: 1 / 2;
+    }
+
+    .area-action {
+        grid-column: 2 / 3;
+        grid-row: 2 / 3;
+    }
+
+    .area-history {
+        display: none;
+        /* Hide history on small screens or move it */
+    }
+}
+
+/* Common Glassmorphic Bento Item */
+.bento-item {
+    background: rgba(255, 255, 255, 0.07);
+    /* Low opacity white */
+    backdrop-filter: blur(12px);
+    /* Strong blur */
+    -webkit-backdrop-filter: blur(12px);
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    border-radius: 20px;
+    /* Slightly smaller radius */
+    padding: 1.25rem;
+    /* Slightly reduced padding */
+    box-shadow: 0 8px 32px 0 rgba(0, 0, 0, 0.2);
+    display: flex;
+    flex-direction: column;
+    position: relative;
+    overflow: hidden;
+    transition: transform 0.3s ease;
+}
+
+.bento-item:hover {
+    border-color: rgba(255, 255, 255, 0.2);
+    transform: translateY(-2px);
+}
+
+/* --- Area 1: Plan (Left Gradient) --- */
+.area-plan {
+    background: linear-gradient(145deg, rgba(79, 70, 229, 0.8), rgba(129, 140, 248, 0.4));
+    border: 1px solid rgba(255, 255, 255, 0.2);
+    justify-content: space-between;
+}
+
+.area-plan .glass-overlay {
+    position: absolute;
+    top: -50px;
+    right: -50px;
+    width: 200px;
+    height: 200px;
+    background: radial-gradient(circle, rgba(255, 255, 255, 0.2) 0%, transparent 70%);
+    border-radius: 50%;
+    pointer-events: none;
+}
+
+.plan-top {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+}
+
+.plan-label {
+    color: rgba(255, 255, 255, 0.8);
+    font-size: 0.8rem;
+    font-weight: 500;
+}
+
+.plan-status-badge {
+    background: rgba(255, 255, 255, 0.1);
+    padding: 0.25rem 0.75rem;
+    border-radius: 100px;
+    font-size: 0.7rem;
+    font-weight: 700;
+    backdrop-filter: blur(4px);
+    border: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.plan-status-badge.active {
+    background: rgba(16, 185, 129, 0.2);
+    color: #34d399;
+    border-color: rgba(16, 185, 129, 0.3);
+}
+
+.plan-status-badge.trial {
+    background: rgba(245, 158, 11, 0.2);
+    color: #fbbf24;
+    border-color: rgba(245, 158, 11, 0.3);
+}
+
+.plan-status-badge.expired {
+    background: rgba(239, 68, 68, 0.2);
+    color: #fca5a5;
+    border-color: rgba(239, 68, 68, 0.3);
+}
+
+.plan-status-badge.disabled {
+    background: rgba(100, 116, 139, 0.3);
+    color: #cbd5e1;
+    border-color: rgba(100, 116, 139, 0.4);
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+}
+
+.plan-title {
+    color: white;
+    text-shadow: 0 2px 10px rgba(0, 0, 0, 0.2);
+    font-size: 2rem;
+    font-weight: 800;
+    line-height: 1.1;
+    margin: 1.5rem 0;
+}
+
+.plan-price-row {
+    color: white;
+    margin-bottom: 2rem;
+}
+
+.plan-price-row .currency {
+    font-size: 1.5rem;
+    font-weight: 600;
+    opacity: 0.8;
+}
+
+.plan-price-row .amount {
+    font-size: 2.5rem;
+    /* Slightly smaller amount */
+    font-weight: 800;
+}
+
+.plan-price-row .period {
+    font-size: 0.9rem;
+    opacity: 0.7;
+}
+
+.plan-features-list {
+    display: flex;
+    flex-direction: column;
+    gap: 0.5rem;
+}
+
+.plan-features-list span {
+    background: rgba(255, 255, 255, 0.1);
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    padding: 0.5rem 1rem;
+    border-radius: 12px;
+    font-size: 0.8rem;
+    font-weight: 500;
+}
+
+/* --- Area 2: Trial (Top Middle) --- */
+.area-trial {
+    flex-direction: row;
+    align-items: center;
+    gap: 1rem;
+    padding: 1rem 1.5rem;
+    /* Compact padding */
+}
+
+.trial-icon-box {
+    background: rgba(249, 115, 22, 0.2);
+    color: #fb923c;
+    width: 42px;
+    /* Smaller icon */
+    height: 42px;
+    border-radius: 12px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.trial-icon-box svg {
+    width: 20px;
+    height: 20px;
+}
+
+.trial-info h3 {
+    color: white;
+    margin: 0;
+    font-size: 0.95rem;
+}
+
+.trial-info .expired {
+    color: #fca5a5;
+    font-weight: 700;
+    margin: 0;
+    font-size: 0.85rem;
+}
+
+/* --- Area 3: Action Center (Middle Main) --- */
+.area-action {
+    /* Ensure content fits */
+    justify-content: space-between;
+    gap: 0.75rem;
+    /* Reduced gap */
+    padding: 1.25rem 1.75rem;
+}
+
+.action-header h3 {
+    color: white;
+    font-size: 1.25rem;
+    /* Smaller title */
+    margin: 0;
+    font-weight: 800;
+}
+
+.action-header p {
+    color: rgba(255, 255, 255, 0.6);
+    margin: 0.25rem 0 0 0;
+    font-size: 0.9rem;
+}
+
+.interactive-counter {
+    background: rgba(0, 0, 0, 0.2);
+    /* Darker pill for contrast */
+    border-radius: 16px;
+    padding: 0.75rem;
+    margin: 0.25rem 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 1.5rem;
+}
+
+.counter-btn {
+    background: rgba(255, 255, 255, 0.1);
+    color: white;
+    width: 48px;
+    /* Smaller buttons */
+    height: 48px;
+    font-size: 1.5rem;
+    line-height: 1;
+    border-radius: 14px;
+    border: none;
+    cursor: pointer;
+    transition: all 0.2s;
+}
+
+.counter-btn:hover:not(:disabled) {
+    background: #4f46e5;
+    transform: scale(1.1);
+    box-shadow: 0 10px 20px rgba(79, 70, 229, 0.3);
+}
+
+.counter-display {
+    text-align: center;
+}
+
+.counter-display .count {
+    color: white;
+    font-size: 2.75rem;
+    /* Smaller count */
+    font-weight: 900;
+    line-height: 1;
+    display: block;
+}
+
+.counter-display .label {
+    color: rgba(255, 255, 255, 0.5);
+    font-size: 0.75rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.1em;
+}
+
+.bill-preview {
+    background: rgba(255, 255, 255, 0.05);
+    border: 1px solid rgba(255, 255, 255, 0.05);
+    border-radius: 14px;
+    padding: 1rem;
+}
+
+.bill-row {
+    color: rgba(255, 255, 255, 0.7);
+    display: flex;
+    justify-content: space-between;
+    font-size: 0.9rem;
+}
+
+.bill-divider {
+    background: rgba(255, 255, 255, 0.1);
+    height: 1px;
+    margin: 0.75rem 0;
+}
+
+.bill-row.total {
+    color: #a5b4fc;
+    font-weight: 800;
+    font-size: 1.1rem;
+}
+
+.action-pay-btn {
+    background: #6366f1;
+    /* Vivid Indigo */
+    box-shadow: 0 4px 15px rgba(99, 102, 241, 0.4);
+    margin-top: auto;
+    /* Push to bottom if space allows */
+    border-radius: 12px;
+    padding: 0.85rem;
+    width: 100%;
+    color: white;
+    border: none;
+    font-size: 1rem;
+    font-weight: 700;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 0.6rem;
+    transition: all 0.3s;
+}
+
+.action-pay-btn:hover {
+    background: #4f46e5;
+    transform: translateY(-3px);
+}
+
+.action-pay-btn svg {
+    width: 18px;
+    height: 18px;
+}
+
+/* --- Area 4: History (Right) --- */
+.area-history {
+    padding: 0;
+}
+
+.history-head {
+    padding: 1.25rem 1.5rem;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+}
+
+.history-head h3 {
+    color: white;
+    margin: 0;
+    font-size: 1rem;
+    font-weight: 700;
+}
+
+.history-badge {
+    background: rgba(255, 255, 255, 0.1);
+    color: white;
+    padding: 0.15rem 0.4rem;
+    border-radius: 6px;
+    font-size: 0.7rem;
+    font-weight: 700;
+}
+
+.history-scroll-area {
+    padding: 1rem;
+    overflow-y: auto;
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    gap: 0.6rem;
+    /* Tighter list */
+}
+
+.history-scroll-area::-webkit-scrollbar {
+    width: 4px;
+}
+
+.history-scroll-area::-webkit-scrollbar-thumb {
+    background: rgba(0, 0, 0, 0.1);
+    border-radius: 10px;
+}
+
+.history-row-item {
+    background: rgba(255, 255, 255, 0.03);
+    border: 1px solid rgba(255, 255, 255, 0.05);
+    color: white;
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+    padding: 0.7rem;
+    border-radius: 14px;
+    transition: all 0.2s;
+}
+
+.history-row-item:hover {
+    background: rgba(255, 255, 255, 0.1);
+    border-color: rgba(255, 255, 255, 0.2);
+}
+
+.row-icon-status {
+    width: 28px;
+    height: 28px;
+    background: rgba(16, 185, 129, 0.1);
+    color: #10b981;
+    border-radius: 8px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.row-icon-status svg {
+    width: 14px;
+    height: 14px;
+}
+
+.row-info {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+}
+
+.row-date {
+    font-size: 0.8rem;
+    font-weight: 600;
+    color: white;
+}
+
+.row-id {
+    color: rgba(255, 255, 255, 0.4);
+    font-size: 0.65rem;
+}
+
+.row-amount {
+    color: #fff;
+    font-weight: 700;
+    font-size: 0.85rem;
+}

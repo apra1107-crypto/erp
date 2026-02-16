@@ -31,3 +31,8 @@ yarn-error.log*
 Thumbs.db
 .vscode/
 .idea/
+
+# Mobile specific
+client/google-services.json
+client/fcm.json
+

@@ -96,8 +96,56 @@
     color: white;
 }
 
+.mobile-menu-toggle {
+    display: none;
+    background: transparent;
+    border: none;
+    color: white;
+    cursor: pointer;
+    padding: 8px;
+    z-index: 1001;
+}
+
 @media (max-width: 768px) {
+    .header-inner {
+        padding: 0 16px;
+    }
+
+    .logo-text {
+        font-size: 1.25rem;
+    }
+
+    .mobile-menu-toggle {
+        display: block;
+    }
+
     .nav-actions {
         display: none;
+        position: fixed;
+        top: 60px;
+        left: 0;
+        width: 100%;
+        background: #0B0F19;
+        flex-direction: column;
+        padding: 20px;
+        gap: 20px;
+        border-bottom: 1px solid var(--border-subtle);
+        box-shadow: 0 10px 15px rgba(0, 0, 0, 0.5);
+    }
+
+    .nav-actions.mobile-open {
+        display: flex;
+    }
+
+    .nav-link-item {
+        width: 100%;
+        text-align: center;
+        padding: 12px;
+        font-size: 1.1rem;
+    }
+
+    .btn-download-nav, .btn-login-minimal {
+        width: 100%;
+        padding: 12px;
     }
 }

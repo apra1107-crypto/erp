@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "591354633156",
+    "project_id": "klassin-2b0bf",
+    "storage_bucket": "klassin-2b0bf.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:591354633156:android:ed82f0bc4831f5b7b9a291",
+        "android_client_info": {
+          "package_name": "com.atul004.klassin"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyDzzTuF01R5zk1M_Yv7Wg5ab1XERWGmRWc"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "confijjguration_version": "1"
+}

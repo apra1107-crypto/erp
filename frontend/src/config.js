@@ -1,4 +1,4 @@
-const IP_ADDRESS = 'localhost';
+const IP_ADDRESS = '13.51.207.67';
 const PORT = '5000';
 export const BASE_URL = `http://${IP_ADDRESS}:${PORT}`;
 

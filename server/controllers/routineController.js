@@ -111,7 +111,7 @@ export const getTeachersForStudent = async (req, res) => {
     try {
         const { institute_id } = req.user;
         const result = await pool.query(
-            'SELECT id, name, subject FROM teachers WHERE institute_id = $1 AND is_active = true',
+            'SELECT id, name, subject, photo_url FROM teachers WHERE institute_id = $1 AND is_active = true',
             [institute_id]
         );
         res.json(result.rows);

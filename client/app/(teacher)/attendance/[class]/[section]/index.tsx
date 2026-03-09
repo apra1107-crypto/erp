@@ -57,9 +57,10 @@ export default function TakeAttendance() {
         setLoading(true);
         try {
             const token = await AsyncStorage.getItem('teacherToken');
+            const storedSessionId = await AsyncStorage.getItem('selectedSessionId');
             const userDataStr = await AsyncStorage.getItem('teacherData');
             const userData = userDataStr ? JSON.parse(userDataStr) : null;
-            const sessionId = userData ? JSON.parse(userData).current_session_id : null;
+            const sessionId = storedSessionId || (userData ? userData.current_session_id : null);
             const dateStr = formatDateForAPI(selectedDate);
             
             const headers = { 
@@ -69,12 +70,18 @@ export default function TakeAttendance() {
 
             // Fetch students
             const studentsRes = await axios.get(
-                `${API_ENDPOINTS.TEACHER}/student/list?class=${className}&section=${section}`,
+                `${API_ENDPOINTS.TEACHER}/student/list?class=${className}&section=${section}&date=${dateStr}`,
                 { headers }
             );
 
             const allStudents = studentsRes.data.students || [];
-            const filtered = allStudents.filter((s: any) => String(s.class).trim() === String(className).trim() && String(s.section).trim() === String(section).trim());
+            const filtered = allStudents
+                .filter((s: any) => String(s.class).trim() === String(className).trim() && String(s.section).trim() === String(section).trim())
+                .sort((a: any, b: any) => {
+                    const rollA = parseInt(a.roll_no) || 0;
+                    const rollB = parseInt(b.roll_no) || 0;
+                    return rollA - rollB;
+                });
             setStudents(filtered);
 
             // Fetch existing attendance
@@ -115,9 +122,10 @@ export default function TakeAttendance() {
         setApproving(true);
         try {
             const token = await AsyncStorage.getItem('teacherToken');
+            const storedSessionId = await AsyncStorage.getItem('selectedSessionId');
             const userDataStr = await AsyncStorage.getItem('teacherData');
             const userData = userDataStr ? JSON.parse(userDataStr) : null;
-            const sessionId = userData ? JSON.parse(userData).current_session_id : null;
+            const sessionId = storedSessionId || (userData ? userData.current_session_id : null);
 
             await axios.post(
                 `${API_ENDPOINTS.ABSENT_REQUEST}/approve/${requestId}`,
@@ -168,9 +176,10 @@ export default function TakeAttendance() {
         setSaving(true);
         try {
             const token = await AsyncStorage.getItem('teacherToken');
+            const storedSessionId = await AsyncStorage.getItem('selectedSessionId');
             const userDataStr = await AsyncStorage.getItem('teacherData');
             const userData = userDataStr ? JSON.parse(userDataStr) : null;
-            const sessionId = userData ? JSON.parse(userData).current_session_id : null;
+            const sessionId = storedSessionId || (userData ? userData.current_session_id : null);
             const dateStr = formatDateForAPI(selectedDate);
 
             const attendanceArray = students.map(s => ({
@@ -547,17 +556,14 @@ export default function TakeAttendance() {
                                     <Text style={styles.logAction}>
                                         {log.action_type === 'initial' ? '📝 Took attendance' : '✏️ Modified attendance'}
                                     </Text>
-                                    <Text style={styles.logStats}>
-                                        Total: {log.total_students} | Present: {log.present_count} | Absent: {log.absent_count}
-                                    </Text>
-                                    {log.changes_made && (
-                                        <Text style={styles.logChanges}>{log.changes_made}</Text>
-                                    )}
-                                </View>
-                            ))}
-                        </View>
-                    )}
-
+                                                                    <Text style={styles.logStats}>
+                                                                        Total: {log.total_students ?? '0'} | Present: {log.present_count ?? '0'} | Absent: {log.absent_count ?? '0'}
+                                                                    </Text>
+                                                                    {renderLogChanges(log)}
+                                                                </View>
+                                                            ))}
+                                                        </View>
+                                                    )}
                     {/* Student List */}
                     <View style={styles.studentList}>
                         {students.length === 0 ? (

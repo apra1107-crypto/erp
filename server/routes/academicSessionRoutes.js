@@ -127,16 +127,6 @@ router.delete('/:id', protect, principalOrSpecialTeacher, async (req, res) => {
             `, [id]);
         }
 
-        // C. Fee Payments (linked to fee records)
-        // Check both monthly and occasional
-        if (await tableExists('fee_payments')) {
-             await client.query(`
-                DELETE FROM fee_payments 
-                WHERE (monthly_fee_id IN (SELECT id FROM student_monthly_fees WHERE session_id = $1))
-                OR (occasional_fee_id IN (SELECT id FROM student_occasional_fees WHERE session_id = $1))
-            `, [id]);
-        }
-
         // 4. Dynamically find all tables that have a session_id column
         const tableScanRes = await client.query(`
             SELECT table_name 
@@ -149,7 +139,7 @@ router.delete('/:id', protect, principalOrSpecialTeacher, async (req, res) => {
         const tablesWithSessionId = tableScanRes.rows.map(r => r.table_name);
         
         // We want to delete from "logs/records" tables before "main" tables like students
-        const priorityTables = ['attendance', 'teacher_self_attendance', 'notices', 'academic_calendar', 'class_routines', 'homework', 'exams', 'admit_cards', 'student_monthly_fees', 'student_occasional_fees'];
+        const priorityTables = ['attendance', 'teacher_self_attendance', 'notices', 'academic_calendar', 'class_routines', 'homework', 'exams', 'admit_cards'];
         
         // Sort: Priority tables first, then others, then students last
         const sortedTables = tablesWithSessionId.sort((a, b) => {

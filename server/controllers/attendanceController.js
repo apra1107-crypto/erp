@@ -23,7 +23,7 @@ const takeAttendance = async (req, res) => {
         let teacherName = 'Unknown';
         let actualTeacherId = teacherId; 
         
-        if (req.user.role === 'principal') {
+        if (req.user.role === 'principal' || !req.user.institute_id) {
             const principalResult = await pool.query('SELECT principal_name FROM institutes WHERE id = $1', [instituteId]);
             teacherName = principalResult.rows[0]?.principal_name || 'Principal';
             actualTeacherId = null; 

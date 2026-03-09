@@ -7,8 +7,7 @@ const finalTableCheck = async () => {
         const tables = [
             'students', 'teachers', 'attendance', 'attendance_logs', 
             'class_routines', 'admit_cards', 
-            'exams', 'student_exam_results', 'fee_configurations', 
-            'student_monthly_fees', 'student_occasional_fees'
+            'exams', 'student_exam_results'
         ];
 
         for (const table of tables) {
@@ -33,27 +32,6 @@ const finalTableCheck = async () => {
 
         console.log('\n🔐 Checking unique constraints...');
         
-        const updateUq = async (table, cols) => {
-            try {
-                const nameQuery = await pool.query(`
-                    SELECT conname FROM pg_constraint 
-                    WHERE conrelid = '${table}'::regclass AND contype = 'u'
-                `);
-                if (nameQuery.rows.length > 0) {
-                    for (const row of nameQuery.rows) {
-                        await pool.query(`ALTER TABLE ${table} DROP CONSTRAINT ${row.conname}`);
-                    }
-                }
-                await pool.query(`ALTER TABLE ${table} ADD UNIQUE (${cols.join(', ')})`);
-                console.log(`✅ Updated ${table} unique constraint to: ${cols.join(', ')}`);
-            } catch (e) {
-                console.warn(`⚠️ Could not update constraint for ${table}:`, e.message);
-            }
-        };
-
-        await updateUq('fee_configurations', ['institute_id', 'month_year', 'session_id']);
-        await updateUq('student_monthly_fees', ['student_id', 'month_year', 'session_id']);
-
         console.log('🎉 Final verification complete.');
         process.exit(0);
     } catch (err) {

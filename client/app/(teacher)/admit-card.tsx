@@ -15,18 +15,51 @@ import {
     Image,
     Platform,
     BackHandler,
+    Switch,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import axios from 'axios';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as Print from 'expo-print';
 import * as Sharing from 'expo-sharing';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { API_ENDPOINTS, BASE_URL } from '../../constants/Config';
 import { useNavigation } from 'expo-router';
 import Toast from 'react-native-toast-message';
 import { useTheme } from '../../context/ThemeContext';
+import DateTimePicker from '@react-native-community/datetimepicker';
+import Animated, { useSharedValue, useAnimatedStyle, withSpring, interpolateColor } from 'react-native-reanimated';
 
 const { width } = Dimensions.get('window');
+
+const ModernToggle = ({ value, onValueChange, activeColor }: { value: boolean, onValueChange: (v: boolean) => void, activeColor: string }) => {
+    const translateX = useSharedValue(value ? 20 : 0);
+    
+    useEffect(() => {
+        translateX.value = withSpring(value ? 22 : 2, { damping: 15, stiffness: 150 });
+    }, [value]);
+
+    const animatedThumbStyle = useAnimatedStyle(() => ({
+        transform: [{ translateX: translateX.value }]
+    }));
+
+    const animatedTrackStyle = useAnimatedStyle(() => {
+        const backgroundColor = interpolateColor(
+            translateX.value,
+            [2, 22],
+            ['#E9E9EB', activeColor]
+        );
+        return { backgroundColor };
+    });
+
+    return (
+        <TouchableOpacity activeOpacity={1} onPress={() => onValueChange(!value)}>
+            <Animated.View style={[{ width: 50, height: 28, borderRadius: 15, justifyContent: 'center', paddingHorizontal: 2 }, animatedTrackStyle]}>
+                <Animated.View style={[{ width: 24, height: 24, borderRadius: 12, backgroundColor: '#fff', elevation: 3, shadowColor: '#000', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.2, shadowRadius: 2 }, animatedThumbStyle]} />
+            </Animated.View>
+        </TouchableOpacity>
+    );
+};
 
 interface ClassSection {
     class: string | number;
@@ -38,6 +71,8 @@ interface ScheduleRow {
     day: string;
     subject: string;
     time: string;
+    startTime?: string;
+    endTime?: string;
 }
 
 interface AdmitCardEvent {
@@ -46,6 +81,7 @@ interface AdmitCardEvent {
     classes: ClassSection[];
     schedule: ScheduleRow[];
     created_at?: string;
+    is_published: boolean;
 }
 
 interface Student {
@@ -76,6 +112,7 @@ interface InstituteProfile {
 
 const AdmitCardScreen = () => {
     const navigation = useNavigation();
+    const insets = useSafeAreaInsets();
     const { theme, isDark } = useTheme();
     const [admitCardEvents, setAdmitCardEvents] = useState<AdmitCardEvent[]>([]);
     const [loading, setLoading] = useState(false);
@@ -85,7 +122,7 @@ const AdmitCardScreen = () => {
     const [examName, setExamName] = useState('');
     const [availableClassSections, setAvailableClassSections] = useState<ClassSection[]>([]);
     const [selectedClasses, setSelectedClasses] = useState<ClassSection[]>([]); 
-    const [schedule, setSchedule] = useState<ScheduleRow[]>([{ date: '', day: '', subject: '', time: '' }]);
+    const [schedule, setSchedule] = useState<ScheduleRow[]>([{ date: '', day: '', subject: '', time: '', startTime: '', endTime: '' }]);
     const [creationStep, setCreationStep] = useState(1);
 
     // View States
@@ -98,15 +135,49 @@ const AdmitCardScreen = () => {
     const [isGeneratingPDF, setIsGeneratingPDF] = useState(false);
     const [isSelectionMode, setIsSelectionMode] = useState(false);
     const [selectedStudent, setSelectedStudent] = useState<Student | null>(null);
+    const [filterTitle, setFilterTitle] = useState('All');
+    const [filterClass, setFilterClass] = useState('All');
+    const [isFilterModalVisible, setIsFilterModalVisible] = useState(false);
+    
+    // Schedule Date Picker States
+    const [showScheduleDatePicker, setShowScheduleDatePicker] = useState(false);
+    const [activeScheduleRowIdx, setActiveScheduleRowIdx] = useState<number | null>(null);
+
+    // Time Picker States
+    const [showStartTimePicker, setShowStartTimePicker] = useState(false);
+    const [showEndTimePicker, setShowEndTimePicker] = useState(false);
+    const [activeTimeRowIdx, setActiveTimeRowIdx] = useState<number | null>(null);
+
+    const uniqueTitles = useMemo(() => {
+        const titles = ['All', ...new Set(admitCardEvents.map(e => e.exam_name))];
+        return titles;
+    }, [admitCardEvents]);
+
+    const uniqueClasses = useMemo(() => {
+        const classes = new Set<string>();
+        admitCardEvents.forEach(event => {
+            event.classes.forEach(c => classes.add(String(c.class)));
+        });
+        return ['All', ...Array.from(classes).sort((a, b) => a.localeCompare(b, undefined, { numeric: true }))];
+    }, [admitCardEvents]);
+
+    const filteredEvents = useMemo(() => {
+        return admitCardEvents.filter(event => {
+            const matchTitle = filterTitle === 'All' || event.exam_name === filterTitle;
+            const matchClass = filterClass === 'All' || event.classes.some(c => String(c.class) === filterClass);
+            return matchTitle && matchClass;
+        });
+    }, [admitCardEvents, filterTitle, filterClass]);
 
     const styles = useMemo(() => StyleSheet.create({
         container: { flex: 1, backgroundColor: theme.background },
-        headerRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', padding: 20, paddingTop: 60, backgroundColor: theme.card },
-        title: { fontSize: 24, fontWeight: 'bold', color: theme.text },
-        subtitle: { fontSize: 14, color: theme.textLight },
+        headerRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingHorizontal: 20, paddingBottom: 15 },
+        backBtnHeader: { width: 40, height: 40, borderRadius: 20, backgroundColor: theme.card, justifyContent: 'center', alignItems: 'center', elevation: 2, shadowColor: '#000', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.1, shadowRadius: 4 },
+        title: { fontSize: 24, fontWeight: '900', color: theme.text, letterSpacing: -0.5 },
+        subtitle: { fontSize: 13, color: theme.textLight, fontWeight: '600', marginTop: 2 },
         floatingAddBtn: {
             position: 'absolute',
-            bottom: 30,
+            bottom: Math.max(30, insets.bottom + 15),
             right: 25,
             width: 65,
             height: 65,
@@ -122,76 +193,82 @@ const AdmitCardScreen = () => {
             zIndex: 999,
         },
         emptyState: { flex: 1, justifyContent: 'center', alignItems: 'center', marginTop: 100 },
-        emptyText: { fontSize: 18, color: theme.textLight, marginVertical: 20 },
-        createBtn: { paddingVertical: 12, paddingHorizontal: 24, backgroundColor: theme.primary, borderRadius: 10 },
-        createBtnText: { color: '#fff', fontWeight: 'bold' },
-        grid: { padding: 15 },
-        eventCard: { backgroundColor: theme.card, borderRadius: 20, padding: 18, marginBottom: 18, elevation: 3, position: 'relative', borderWidth: 1, borderColor: theme.border, flexDirection: 'row', alignItems: 'center', shadowColor: '#000', shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.1, shadowRadius: 6 },
-        eventIcon: { width: 56, height: 56, borderRadius: 16, backgroundColor: isDark ? '#1a2a33' : '#e3f2fd', justifyContent: 'center', alignItems: 'center', marginRight: 18 },
-        eventName: { fontSize: 18, fontWeight: '900', color: theme.text, marginBottom: 6 },
+        emptyText: { fontSize: 18, color: theme.textLight, marginVertical: 20, fontWeight: '700' },
+        createBtn: { paddingVertical: 14, paddingHorizontal: 28, backgroundColor: theme.primary, borderRadius: 15, elevation: 4 },
+        createBtnText: { color: '#fff', fontWeight: '900', textTransform: 'uppercase', letterSpacing: 0.5 },
+        grid: { padding: 20 },
+        eventCard: { backgroundColor: theme.card, borderRadius: 24, padding: 20, marginBottom: 18, elevation: 3, position: 'relative', borderWidth: 1, borderColor: theme.border, flexDirection: 'row', alignItems: 'center', shadowColor: '#000', shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.05, shadowRadius: 10 },
+        eventIcon: { width: 56, height: 56, borderRadius: 18, backgroundColor: theme.primary + '15', justifyContent: 'center', alignItems: 'center', marginRight: 18 },
+        eventName: { fontSize: 18, fontWeight: '900', color: theme.text, marginBottom: 6, letterSpacing: -0.3 },
         eventMetaRow: { flexDirection: 'row', gap: 8, marginBottom: 10 },
         metaBadge: { flexDirection: 'row', alignItems: 'center', backgroundColor: isDark ? '#1b2c1b' : '#e8f5e9', paddingHorizontal: 8, paddingVertical: 4, borderRadius: 8, gap: 4 },
         metaBadgeText: { fontSize: 11, fontWeight: '800', color: '#27ae60' },
         classChipsRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 6 },
-        miniClassChip: { fontSize: 10, fontWeight: '700', color: theme.textLight, backgroundColor: isDark ? '#333' : '#f1f5f9', paddingHorizontal: 6, paddingVertical: 3, borderRadius: 4, borderWidth: 1, borderColor: theme.border },
-        deleteIcon: { padding: 8, position: 'absolute', top: 12, right: 12 },
-        modalHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', padding: 20, paddingTop: 60, backgroundColor: theme.card, borderBottomWidth: 1, borderBottomColor: theme.border },
-        modalTitle: { fontSize: 18, fontWeight: 'bold', color: theme.text },
+        miniClassChip: { fontSize: 10, fontWeight: '800', color: theme.primary, backgroundColor: theme.primary + '10', paddingHorizontal: 8, paddingVertical: 4, borderRadius: 6, borderWidth: 1, borderColor: theme.primary + '20' },
+        deleteIcon: { padding: 8, position: 'absolute', bottom: 12, right: 12, backgroundColor: theme.danger + '10', borderRadius: 10 },
+        modalHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingHorizontal: 20, paddingBottom: 15 },
+        modalTitle: { fontSize: 22, fontWeight: '900', color: theme.text, letterSpacing: -0.5 },
         createContent: { padding: 20 },
         inputGroup: { marginBottom: 20 },
-        label: { fontSize: 14, fontWeight: '600', color: theme.text, marginBottom: 8 },
-        input: { backgroundColor: theme.card, borderWidth: 1, borderColor: theme.border, borderRadius: 10, padding: 12, fontSize: 16, color: theme.text },
-        chipContainer: { flexDirection: 'row', flexWrap: 'wrap', marginBottom: 20 },
-        chip: { paddingVertical: 8, paddingHorizontal: 15, backgroundColor: isDark ? '#2a2a2a' : '#f1f5f9', borderRadius: 20, marginRight: 10, marginBottom: 10, borderWidth: 1, borderColor: theme.border },
-        chipSelected: { backgroundColor: theme.primary, borderColor: theme.primary },
-        chipText: { color: theme.textLight, fontSize: 13, fontWeight: '500' },
-        chipTextSelected: { color: '#fff' },
-        footer: { padding: 20, backgroundColor: theme.card, borderTopWidth: 1, borderTopColor: theme.border },
-        footerRow: { flexDirection: 'row' },
-        primaryBtn: { backgroundColor: theme.primary, padding: 16, borderRadius: 12, alignItems: 'center' },
-        primaryBtnText: { color: '#fff', fontSize: 16, fontWeight: 'bold' },
-        secondaryBtn: { backgroundColor: isDark ? '#333' : '#f1f5f9', padding: 16, borderRadius: 12, alignItems: 'center', paddingHorizontal: 30 },
-        secondaryBtnText: { color: theme.text, fontSize: 16, fontWeight: 'bold' },
-        scheduleRow: { backgroundColor: theme.card, padding: 15, borderRadius: 12, marginBottom: 15, borderWidth: 1, borderColor: theme.border },
-        rowHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10 },
-        rowNum: { fontSize: 14, fontWeight: 'bold', color: theme.textLight },
-        rowInputs: { flexDirection: 'row' },
-        addRowBtn: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', padding: 15, borderStyle: 'dashed', borderWidth: 1, borderColor: theme.primary, borderRadius: 12, marginTop: 10 },
-        addRowBtnText: { marginLeft: 5, color: theme.primary, fontWeight: 'bold' },
-        tabBarContainer: { backgroundColor: theme.card, paddingVertical: 10, borderBottomWidth: 1, borderBottomColor: theme.border },
-        tabBar: { paddingHorizontal: 15 },
-        tab: { paddingVertical: 8, paddingHorizontal: 20, borderRadius: 20, marginRight: 10, backgroundColor: isDark ? '#2a2a2a' : '#f1f5f9', borderWidth: 1, borderColor: theme.border },
-        tabActive: { backgroundColor: theme.primary, borderColor: theme.primary },
-        tabText: { color: theme.textLight, fontWeight: 'bold', fontSize: 14 },
+        label: { fontSize: 14, fontWeight: '800', color: theme.text, marginBottom: 10, textTransform: 'uppercase', letterSpacing: 0.5 },
+        input: { backgroundColor: theme.card, borderWidth: 1, borderColor: theme.border, borderRadius: 15, padding: 15, fontSize: 16, color: theme.text, fontWeight: '600' },
+        chipContainer: { flexDirection: 'row', flexWrap: 'wrap', marginBottom: 20, gap: 10 },
+        chip: { paddingVertical: 10, paddingHorizontal: 18, backgroundColor: theme.card, borderRadius: 15, borderWidth: 1, borderColor: theme.border },
+        chipSelected: { backgroundColor: theme.primary, borderColor: theme.primary, elevation: 4, shadowColor: theme.primary, shadowOpacity: 0.3 },
+        chipText: { color: theme.textLight, fontSize: 14, fontWeight: '700' },
+        chipTextSelected: { color: '#fff', fontWeight: '800' },
+        footer: { 
+            padding: 20, 
+            paddingBottom: Math.max(20, insets.bottom + 15),
+            backgroundColor: theme.card, 
+            borderTopWidth: 1, 
+            borderTopColor: theme.border 
+        },
+        footerRow: { flexDirection: 'row', gap: 12 },
+        primaryBtn: { backgroundColor: theme.primary, padding: 18, borderRadius: 18, alignItems: 'center', elevation: 4, shadowColor: theme.primary, shadowOpacity: 0.3 },
+        primaryBtnText: { color: '#fff', fontSize: 16, fontWeight: '900', textTransform: 'uppercase', letterSpacing: 0.5 },
+        secondaryBtn: { backgroundColor: isDark ? '#222' : '#f1f5f9', padding: 18, borderRadius: 18, alignItems: 'center', borderWidth: 1, borderColor: theme.border, minWidth: 100 },
+        secondaryBtnText: { color: theme.text, fontSize: 16, fontWeight: '800' },
+        scheduleRow: { backgroundColor: theme.card, padding: 20, borderRadius: 24, marginBottom: 18, borderWidth: 1, borderColor: theme.border, elevation: 2 },
+        rowHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 15 },
+        rowNum: { fontSize: 14, fontWeight: '900', color: theme.primary, textTransform: 'uppercase' },
+        rowInputs: { flexDirection: 'row', gap: 10 },
+        addRowBtn: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', padding: 18, borderStyle: 'dashed', borderWidth: 2, borderColor: theme.primary, borderRadius: 18, marginTop: 10, backgroundColor: theme.primary + '05' },
+        addRowBtnText: { marginLeft: 8, color: theme.primary, fontWeight: '900', fontSize: 15 },
+        tabBarContainer: { paddingVertical: 10, marginBottom: 5 },
+        tabBar: { paddingHorizontal: 20, gap: 10 },
+        tab: { paddingVertical: 10, paddingHorizontal: 20, borderRadius: 15, backgroundColor: theme.card, borderWidth: 1, borderColor: theme.border },
+        tabActive: { backgroundColor: theme.primary, borderColor: theme.primary, elevation: 4, shadowColor: theme.primary, shadowOpacity: 0.3 },
+        tabText: { color: theme.textLight, fontWeight: '800', fontSize: 14 },
         tabTextActive: { color: '#fff' },
-        studentList: { padding: 15 },
-        studentCard: { flexDirection: 'row', alignItems: 'center', backgroundColor: theme.card, padding: 15, borderRadius: 16, marginBottom: 12, elevation: 2, borderWidth: 1, borderColor: theme.border, shadowColor: '#000', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.05, shadowRadius: 5 },
-        studentCardSelected: { borderColor: theme.primary, backgroundColor: isDark ? '#1a2233' : '#f0f4ff' },
-        studentAvatar: { width: 54, height: 54, borderRadius: 27, backgroundColor: isDark ? '#2a2a2a' : '#f0f0ff', justifyContent: 'center', alignItems: 'center', marginRight: 15, borderWidth: 1, borderColor: theme.border, overflow: 'hidden' },
+        studentList: { padding: 20 },
+        studentCard: { flexDirection: 'row', alignItems: 'center', backgroundColor: theme.card, padding: 15, borderRadius: 24, marginBottom: 15, elevation: 2, borderWidth: 1, borderColor: theme.border, shadowColor: '#000', shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.05, shadowRadius: 10 },
+        studentCardSelected: { borderColor: theme.primary, backgroundColor: isDark ? theme.primary + '10' : theme.primary + '05', borderWidth: 2 },
+        studentAvatar: { width: 56, height: 56, borderRadius: 18, backgroundColor: theme.primary + '10', justifyContent: 'center', alignItems: 'center', marginRight: 15, borderWidth: 1, borderColor: theme.border, overflow: 'hidden' },
         avatarImage: { width: '100%', height: '100%', resizeMode: 'cover' },
-        avatarText: { color: theme.primary, fontWeight: 'bold', fontSize: 20 },
+        avatarText: { color: theme.primary, fontWeight: '900', fontSize: 22 },
         studentInfo: { flex: 1 },
-        studentName: { fontSize: 16, fontWeight: '800', color: theme.text, marginBottom: 2 },
+        studentName: { fontSize: 17, fontWeight: '900', color: theme.text, marginBottom: 4, letterSpacing: -0.3 },
         studentRollContainer: { flexDirection: 'row', alignItems: 'center' },
-        studentRollLabel: { fontSize: 12, color: theme.textLight, fontWeight: '600' },
-        studentRollValue: { fontSize: 13, color: theme.primary, fontWeight: '700', marginLeft: 4 },
-        classBadge: { backgroundColor: isDark ? '#333' : '#eef2ff', paddingHorizontal: 8, paddingVertical: 2, borderRadius: 6, alignSelf: 'flex-start', marginTop: 4 },
-        classBadgeText: { fontSize: 10, color: theme.primary, fontWeight: '800' },
-        checkbox: { width: 26, height: 26, borderRadius: 13, borderWidth: 2, borderColor: theme.primary, justifyContent: 'center', alignItems: 'center' },
+        studentRollLabel: { fontSize: 11, color: theme.textLight, fontWeight: '800' },
+        studentRollValue: { fontSize: 12, color: theme.primary, fontWeight: '900', marginLeft: 4 },
+        classBadge: { backgroundColor: theme.primary + '10', paddingHorizontal: 8, paddingVertical: 3, borderRadius: 8, alignSelf: 'flex-start', marginTop: 6 },
+        classBadgeText: { fontSize: 10, color: theme.primary, fontWeight: '900', textTransform: 'uppercase' },
+        checkbox: { width: 28, height: 28, borderRadius: 10, borderWidth: 2, borderColor: theme.primary, justifyContent: 'center', alignItems: 'center' },
         checkboxSelected: { backgroundColor: theme.primary },
-        selectionHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingHorizontal: 20, paddingVertical: 12, backgroundColor: isDark ? '#1a1a1a' : '#f8fafc', borderBottomWidth: 1, borderBottomColor: theme.border },
-        selectionHeaderText: { fontSize: 14, fontWeight: '700', color: theme.textLight },
-        bulkFooter: { position: 'absolute', bottom: 30, left: 20, right: 20, zIndex: 1000 },
-        downloadBtn: { backgroundColor: theme.success, padding: 18, borderRadius: 20, flexDirection: 'row', justifyContent: 'center', alignItems: 'center', elevation: 10, shadowColor: theme.success, shadowOffset: { width: 0, height: 6 }, shadowOpacity: 0.4, shadowRadius: 10 },
-        downloadBtnText: { color: '#fff', fontSize: 17, fontWeight: '800' },
+        selectionHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingHorizontal: 25, paddingVertical: 15 },
+        selectionHeaderText: { fontSize: 15, fontWeight: '800', color: theme.textLight },
+        bulkFooter: { position: 'absolute', bottom: Math.max(30, insets.bottom + 15), left: 20, right: 20, zIndex: 1000 },
+        downloadBtn: { backgroundColor: theme.success, padding: 20, borderRadius: 22, flexDirection: 'row', justifyContent: 'center', alignItems: 'center', elevation: 10, shadowColor: theme.success, shadowOffset: { width: 0, height: 8 }, shadowOpacity: 0.4, shadowRadius: 12 },
+        downloadBtnText: { color: '#fff', fontSize: 17, fontWeight: '900', textTransform: 'uppercase', letterSpacing: 0.5 },
 
         // Individual Preview Styles
-        previewScroll: { flex: 1, backgroundColor: isDark ? '#000' : '#f0f2f5' },
+        previewScroll: { flex: 1, backgroundColor: isDark ? '#000' : '#f8f9fa' },
         previewContainer: { padding: 20, alignItems: 'center' },
         admitCardPaper: {
             width: width - 40,
             backgroundColor: '#fff',
-            padding: 20,
+            padding: 25,
             borderWidth: 2,
             borderColor: '#000',
             elevation: 10,
@@ -201,30 +278,30 @@ const AdmitCardScreen = () => {
             shadowRadius: 15,
         },
         paperHeader: { alignItems: 'center', paddingBottom: 15, marginBottom: 20 },
-        paperInstName: { fontSize: 22, fontWeight: '900', color: '#000', textAlign: 'center', textTransform: 'uppercase' },
-        paperInstSub: { fontSize: 11, color: '#333', textAlign: 'center', marginTop: 4, fontWeight: '600' },
-        paperExamTitle: { fontSize: 18, fontWeight: '900', color: '#000', borderWidth: 1, borderColor: '#000', paddingHorizontal: 15, paddingVertical: 5, marginTop: 15, textTransform: 'uppercase' },
-        paperInfoRow: { flexDirection: 'row', justifyContent: 'space-between', marginBottom: 20 },
+        paperInstName: { fontSize: 24, fontWeight: '900', color: '#000', textAlign: 'center', textTransform: 'uppercase', letterSpacing: 1 },
+        paperInstSub: { fontSize: 11, color: '#333', textAlign: 'center', marginTop: 6, fontWeight: '700', lineHeight: 16 },
+        paperExamTitle: { fontSize: 18, fontWeight: '900', color: '#000', borderWidth: 2, borderColor: '#000', paddingHorizontal: 20, paddingVertical: 8, marginTop: 20, textTransform: 'uppercase' },
+        paperInfoRow: { flexDirection: 'row', justifyContent: 'space-between', marginBottom: 25 },
         paperTable: { flex: 1, marginRight: 15 },
-        paperTableRow: { flexDirection: 'row', borderBottomWidth: 0.5, borderBottomColor: '#eee', paddingVertical: 5 },
-        paperLabel: { width: 100, fontSize: 10, fontWeight: 'bold', color: '#555' },
-        paperValue: { flex: 1, fontSize: 12, fontWeight: '900', color: '#000' },
-        paperPhoto: { width: 100, height: 120, borderWidth: 1, borderColor: '#000', backgroundColor: '#f9f9f9', justifyContent: 'center', alignItems: 'center' },
-        paperTimetable: { marginBottom: 20 },
-        paperTableTitle: { fontSize: 12, fontWeight: '900', textDecorationLine: 'underline', marginBottom: 10, color: '#000' },
-        paperGrid: { borderWidth: 1.5, borderColor: '#000' },
-        paperGridHeader: { flexDirection: 'row', backgroundColor: '#f0f0f0', borderBottomWidth: 1.5, borderBottomColor: '#000' },
+        paperTableRow: { flexDirection: 'row', borderBottomWidth: 1, borderBottomColor: '#eee', paddingVertical: 6 },
+        paperLabel: { width: 110, fontSize: 10, fontWeight: 'bold', color: '#555', textTransform: 'uppercase' },
+        paperValue: { flex: 1, fontSize: 13, fontWeight: '900', color: '#000' },
+        paperPhoto: { width: 110, height: 135, borderWidth: 2, borderColor: '#000', backgroundColor: '#f9f9f9', justifyContent: 'center', alignItems: 'center' },
+        paperTimetable: { marginBottom: 25 },
+        paperTableTitle: { fontSize: 13, fontWeight: '900', textDecorationLine: 'underline', marginBottom: 12, color: '#000', letterSpacing: 0.5 },
+        paperGrid: { borderWidth: 2, borderColor: '#000' },
+        paperGridHeader: { flexDirection: 'row', backgroundColor: '#f0f0f0', borderBottomWidth: 2, borderBottomColor: '#000' },
         paperGridRow: { flexDirection: 'row', borderBottomWidth: 1, borderBottomColor: '#000' },
-        paperGridCell: { padding: 8, borderRightWidth: 1, borderRightColor: '#000', flex: 1 },
+        paperGridCell: { padding: 10, borderRightWidth: 1, borderRightColor: '#000', flex: 1 },
         paperGridText: { fontSize: 10, fontWeight: 'bold', color: '#000' },
-        paperInstructions: { borderWidth: 1, borderColor: '#000', padding: 10, borderRadius: 4 },
-        paperInstTitle: { fontSize: 10, fontWeight: '900', textDecorationLine: 'underline', marginBottom: 5 },
-        paperInstItem: { fontSize: 9, fontWeight: '700', color: '#333', marginBottom: 2 },
-        paperFooter: { flexDirection: 'row', justifyContent: 'space-between', marginTop: 50, paddingHorizontal: 20 },
-        paperSigLine: { borderTopWidth: 1, borderTopColor: '#000', width: 120, alignItems: 'center', paddingTop: 5 },
-        paperSigText: { fontSize: 9, fontWeight: '900' },
+        paperInstructions: { borderWidth: 1.5, borderColor: '#000', padding: 12, borderRadius: 4, backgroundColor: '#fdfdfd' },
+        paperInstTitle: { fontSize: 11, fontWeight: '900', textDecorationLine: 'underline', marginBottom: 8 },
+        paperInstItem: { fontSize: 10, fontWeight: '700', color: '#333', marginBottom: 4, lineHeight: 14 },
+        paperFooter: { flexDirection: 'row', justifyContent: 'space-between', marginTop: 60, paddingHorizontal: 10 },
+        paperSigLine: { borderTopWidth: 1.5, borderTopColor: '#000', width: 130, alignItems: 'center', paddingTop: 8 },
+        paperSigText: { fontSize: 10, fontWeight: '900' },
         modalOverlay: { position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, backgroundColor: 'rgba(0,0,0,0.7)', justifyContent: 'center', alignItems: 'center', zIndex: 9999 },
-    }), [theme, isDark]);
+    }), [theme, isDark, insets]);
 
     useEffect(() => {
         const backAction = () => {
@@ -260,7 +337,13 @@ const AdmitCardScreen = () => {
             const response = await axios.get(`${API_ENDPOINTS.AUTH.TEACHER}/profile`, {
                 headers: { Authorization: `Bearer ${token}` }
             });
-            setInstProfile(response.data.teacher || response.data);
+            const profile = response.data.teacher;
+            setInstProfile({
+                institute_name: profile.institute_name,
+                affiliation: profile.affiliation,
+                address: profile.institute_address,
+                logo_url: profile.institute_logo
+            });
         } catch (error) {
             console.error('Error fetching institute profile:', error);
         }
@@ -270,8 +353,16 @@ const AdmitCardScreen = () => {
         try {
             setLoading(true);
             const token = await AsyncStorage.getItem('teacherToken');
+            const storedSessionId = await AsyncStorage.getItem('selectedSessionId');
+            const userDataStr = await AsyncStorage.getItem('teacherData');
+            const userData = userDataStr ? JSON.parse(userDataStr) : null;
+            const sessionId = storedSessionId || (userData ? userData.current_session_id : null);
+
             const response = await axios.get(`${API_ENDPOINTS.ADMIT_CARD}/list`, {
-                headers: { Authorization: `Bearer ${token}` }
+                headers: { 
+                    Authorization: `Bearer ${token}`,
+                    'x-academic-session-id': sessionId?.toString()
+                }
             });
             setAdmitCardEvents(response.data || []);
         } catch (error) {
@@ -282,11 +373,53 @@ const AdmitCardScreen = () => {
         }
     };
 
+    const toggleVisibility = async (event: AdmitCardEvent) => {
+        try {
+            const token = await AsyncStorage.getItem('teacherToken');
+            const storedSessionId = await AsyncStorage.getItem('selectedSessionId');
+            const userDataStr = await AsyncStorage.getItem('teacherData');
+            const userData = userDataStr ? JSON.parse(userDataStr) : null;
+            const sessionId = storedSessionId || (userData ? userData.current_session_id : null);
+            const newStatus = !event.is_published;
+            
+            setAdmitCardEvents(prev => prev.map(e => 
+                e.id === event.id ? { ...e, is_published: newStatus } : e
+            ));
+
+            await axios.patch(`${API_ENDPOINTS.ADMIT_CARD}/visibility/${event.id}`, 
+                { is_published: newStatus },
+                { 
+                    headers: { 
+                        Authorization: `Bearer ${token}`,
+                        'x-academic-session-id': sessionId?.toString()
+                    } 
+                }
+            );
+
+            Toast.show({ 
+                type: 'success', 
+                text1: newStatus ? 'Published' : 'Unpublished',
+                text2: newStatus ? 'Students can now see this admit card' : 'Hidden from student dashboard'
+            });
+        } catch (error: any) {
+            fetchAdmitCardEvents();
+            Toast.show({ type: 'error', text1: 'Update failed', text2: error.response?.data?.message || '' });
+        }
+    };
+
     const fetchClassSections = async () => {
         try {
             const token = await AsyncStorage.getItem('teacherToken');
+            const storedSessionId = await AsyncStorage.getItem('selectedSessionId');
+            const userDataStr = await AsyncStorage.getItem('teacherData');
+            const userData = userDataStr ? JSON.parse(userDataStr) : null;
+            const sessionId = storedSessionId || (userData ? userData.current_session_id : null);
+
             const response = await axios.get(`${API_ENDPOINTS.TEACHER}/student/list`, {
-                headers: { Authorization: `Bearer ${token}` }
+                headers: { 
+                    Authorization: `Bearer ${token}`,
+                    'x-academic-session-id': sessionId?.toString()
+                }
             });
             const allStudents = response.data.students || [];
             const unique: ClassSection[] = [];
@@ -319,12 +452,15 @@ const AdmitCardScreen = () => {
             date: '',
             day: '',
             subject: '',
-            time: lastRow ? lastRow.time : ''
+            time: lastRow ? lastRow.time : '',
+            startTime: lastRow ? lastRow.startTime : '',
+            endTime: lastRow ? lastRow.endTime : ''
         }]);
     };
 
     const updateScheduleRow = (index: number, field: keyof ScheduleRow, value: string) => {
         const newSchedule = [...schedule];
+        // @ts-ignore
         newSchedule[index][field] = value;
         if (field === 'date' && value) {
             const days = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
@@ -333,23 +469,40 @@ const AdmitCardScreen = () => {
                 newSchedule[index].day = days[dateObj.getDay()];
             }
         }
+        
+        if (field === 'startTime' || field === 'endTime') {
+            const s = newSchedule[index].startTime || '';
+            const e = newSchedule[index].endTime || '';
+            if (s && e) newSchedule[index].time = `${s} - ${e}`;
+            else if (s) newSchedule[index].time = s;
+            else if (e) newSchedule[index].time = e;
+        }
+        
         setSchedule(newSchedule);
     };
 
     const handleCreateEvent = async () => {
         if (!examName) return Alert.alert('Error', 'Enter exam name');
         if (selectedClasses.length === 0) return Alert.alert('Error', 'Select at least one class');
-        if (schedule.some(s => !s.date || !s.subject)) return Alert.alert('Error', 'Fill all schedule details');
+        if (schedule.some(s => !s.date || !s.subject || !s.time)) return Alert.alert('Error', 'Fill all schedule details');
 
         try {
             setLoading(true);
             const token = await AsyncStorage.getItem('teacherToken');
+            const storedSessionId = await AsyncStorage.getItem('selectedSessionId');
+            const userDataStr = await AsyncStorage.getItem('teacherData');
+            const userData = userDataStr ? JSON.parse(userDataStr) : null;
+            const sessionId = storedSessionId || (userData ? userData.current_session_id : null);
+
             await axios.post(`${API_ENDPOINTS.ADMIT_CARD}/create`, {
                 exam_name: examName,
                 classes: selectedClasses,
                 schedule: schedule
             }, {
-                headers: { Authorization: `Bearer ${token}` }
+                headers: { 
+                    Authorization: `Bearer ${token}`,
+                    'x-academic-session-id': sessionId?.toString()
+                }
             });
             Toast.show({ type: 'success', text1: 'Admit Card Event Created!' });
             setViewMode('list');
@@ -365,7 +518,7 @@ const AdmitCardScreen = () => {
     const resetForm = () => {
         setExamName('');
         setSelectedClasses([]);
-        setSchedule([{ date: '', day: '', subject: '', time: '' }]);
+        setSchedule([{ date: '', day: '', subject: '', time: '', startTime: '', endTime: '' }]);
         setCreationStep(1);
     };
 
@@ -375,10 +528,18 @@ const AdmitCardScreen = () => {
         try {
             setLoading(true);
             const token = await AsyncStorage.getItem('teacherToken');
+            const storedSessionId = await AsyncStorage.getItem('selectedSessionId');
+            const userDataStr = await AsyncStorage.getItem('teacherData');
+            const userData = userDataStr ? JSON.parse(userDataStr) : null;
+            const sessionId = storedSessionId || (userData ? userData.current_session_id : null);
+
             const response = await axios.post(`${API_ENDPOINTS.ADMIT_CARD}/students`, {
                 classes: event.classes
             }, {
-                headers: { Authorization: `Bearer ${token}` }
+                headers: { 
+                    Authorization: `Bearer ${token}`,
+                    'x-academic-session-id': sessionId?.toString()
+                }
             });
             setStudents(response.data);
             const firstClass = event.classes[0];
@@ -410,7 +571,7 @@ const AdmitCardScreen = () => {
         return Object.values(selectionMap).filter(Boolean).length;
     };
 
-    const formatDate = (dateStr: string | null | undefined): string => {
+    const formatDateString = (dateStr: string | null | undefined): string => {
         if (!dateStr) return '';
         const date = new Date(dateStr);
         if (isNaN(date.getTime())) return dateStr;
@@ -561,6 +722,7 @@ const AdmitCardScreen = () => {
                                 <tr><td class="label">Student Name</td><td class="value">${student.name}</td></tr>
                                 <tr><td class="label">Class & Section</td><td class="value">${student.class} - ${student.section}</td></tr>
                                 <tr><td class="label">Roll Number</td><td class="value">${student.roll_no || 'TBD'}</td></tr>
+                                <tr><td class="label">Date of Birth</td><td class="value">${formatDateString(student.dob)}</td></tr>
                                 <tr><td class="label">Father's Name</td><td class="value">${student.father_name}</td></tr>
                                 <tr><td class="label">Contact Number</td><td class="value">${student.mobile}</td></tr>
                             </table>
@@ -580,7 +742,7 @@ const AdmitCardScreen = () => {
                                 <tbody>
                                     ${eventSchedule.map(row => `
                                         <tr>
-                                            <td>${formatDate(row.date)} (${row.day})</td>
+                                            <td>${formatDateString(row.date)} (${row.day})</td>
                                             <td>${row.subject}</td>
                                             <td>${row.time}</td>
                                         </tr>
@@ -591,12 +753,12 @@ const AdmitCardScreen = () => {
 
                         <div class="instructions">
                             <div class="inst-title">IMPORTANT INSTRUCTIONS:</div>
-                            <ul class="inst-list">
-                                <li>1. Candidate must carry this Admit Card to the examination hall for all papers.</li>
-                                <li>2. Possession of mobile phones, electronic gadgets, or calculators is strictly prohibited.</li>
-                                <li>3. Candidates must report at the examination center at least 20 minutes before time.</li>
-                                <li>4. Ensure invigilator signature on this card during every examination session.</li>
-                            </ul>
+                            <ol class="inst-list">
+                                <li>Candidate must carry this Admit Card to the examination hall for all papers.</li>
+                                <li>Possession of mobile phones, electronic gadgets, or calculators is strictly prohibited.</li>
+                                <li>Candidates must report at the examination center at least 20 minutes before time.</li>
+                                <li>Ensure invigilator signature on this card during every examination session.</li>
+                            </ol>
                         </div>
 
                         <div class="signature-section">
@@ -657,51 +819,77 @@ const AdmitCardScreen = () => {
     };
 
     const renderList = () => (
-        <View style={{ flex: 1 }}>
-            <ScrollView style={styles.container} showsVerticalScrollIndicator={false}>
-                <View style={[styles.headerRow, { backgroundColor: 'transparent', paddingTop: 50 }]}>
-                    <TouchableOpacity onPress={() => navigation.goBack()} style={{ marginRight: 15, padding: 5 }}>
-                        <Ionicons name="arrow-back" size={28} color={theme.text} />
+        <View style={[styles.container, { paddingTop: insets.top }]}>
+            <ScrollView style={{ flex: 1 }} showsVerticalScrollIndicator={false}>
+                <View style={styles.headerRow}>
+                    <TouchableOpacity 
+                        onPress={() => navigation.goBack()} 
+                        style={[styles.backBtnHeader, { marginRight: 12 }]}
+                    >
+                        <Ionicons name="chevron-back" size={24} color={theme.text} />
                     </TouchableOpacity>
                     <View style={{ flex: 1 }}>
-                        <Text style={styles.title}>Admit Card Registry</Text>
-                        <Text style={styles.subtitle}>Manage examination identification</Text>
+                        <Text style={styles.title}>Admit Card</Text>
                     </View>
+                    <TouchableOpacity 
+                        onPress={() => setIsFilterModalVisible(true)} 
+                        style={[
+                            styles.backBtnHeader, 
+                            (filterTitle !== 'All' || filterClass !== 'All') && { backgroundColor: theme.primary + '15', borderColor: theme.primary }
+                        ]}
+                    >
+                        <Ionicons name="filter" size={22} color={(filterTitle !== 'All' || filterClass !== 'All') ? theme.primary : theme.text} />
+                        {(filterTitle !== 'All' || filterClass !== 'All') && (
+                            <View style={{ position: 'absolute', top: 8, right: 8, width: 8, height: 8, borderRadius: 4, backgroundColor: theme.primary, borderWidth: 1.5, borderColor: theme.card }} />
+                        )}
+                    </TouchableOpacity>
                 </View>
 
                 {loading ? (
                     <ActivityIndicator size="large" color={theme.primary} style={{ marginTop: 50 }} />
-                ) : admitCardEvents.length === 0 ? (
+                ) : filteredEvents.length === 0 ? (
                     <View style={styles.emptyState}>
                         <Ionicons name="document-text-outline" size={80} color={theme.border} />
-                        <Text style={styles.emptyText}>No exam events found</Text>
-                        <TouchableOpacity style={styles.createBtn} onPress={() => setViewMode('create')}>
-                            <Text style={styles.createBtnText}>Create Your First Event</Text>
-                        </TouchableOpacity>
+                        <Text style={styles.emptyText}>
+                            {filterTitle === 'All' ? 'No exam events found' : `No events found for ${filterTitle}`}
+                        </Text>
+                        {filterTitle === 'All' && (
+                            <TouchableOpacity style={styles.createBtn} onPress={() => setViewMode('create')}>
+                                <Text style={styles.createBtnText}>Create Your First Event</Text>
+                            </TouchableOpacity>
+                        )}
                     </View>
                 ) : (
                     <View style={styles.grid}>
-                        {admitCardEvents.map(event => (
+                        {filteredEvents.map(event => (
                             <TouchableOpacity 
                                 key={event.id} 
                                 style={styles.eventCard}
                                 onPress={() => handleViewEvent(event)}
                                 activeOpacity={0.9}
                             >
+                                {/* Top Right Toggle Switch */}
+                                <View style={{ position: 'absolute', top: 15, right: 15, zIndex: 10, alignItems: 'center' }}>
+                                    <ModernToggle
+                                        value={event.is_published}
+                                        onValueChange={() => toggleVisibility(event)}
+                                        activeColor={theme.success}
+                                    />
+                                    <Text style={{ fontSize: 8, fontWeight: '900', color: event.is_published ? theme.success : theme.textLight, marginTop: 4 }}>
+                                        {event.is_published ? 'LIVE' : 'HIDDEN'}
+                                    </Text>
+                                </View>
+
                                 <View style={styles.eventIcon}>
                                     <Ionicons name="document-text" size={28} color={theme.primary} />
                                 </View>
                                 <View style={{ flex: 1 }}>
                                     <Text style={styles.eventName}>{event.exam_name}</Text>
-                                    <View style={styles.eventMetaRow}>
-                                        <View style={styles.metaBadge}>
-                                            <Ionicons name="people" size={12} color="#27ae60" />
-                                            <Text style={styles.metaBadgeText}>{event.classes?.length} Classes</Text>
-                                        </View>
-                                        <View style={[styles.metaBadge, { backgroundColor: isDark ? '#2D1B36' : '#F3E5F5' }]}>
-                                            <Ionicons name="shield-checkmark" size={12} color="#8E44AD" />
-                                            <Text style={[styles.metaBadgeText, { color: '#8E44AD' }]}>Official</Text>
-                                        </View>
+                                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 5, marginBottom: 10 }}>
+                                        <Ionicons name="calendar-outline" size={12} color={theme.textLight} />
+                                        <Text style={{ fontSize: 11, color: theme.textLight, fontWeight: '700' }}>
+                                            {event.created_at ? new Date(event.created_at).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' }) : 'N/A'}
+                                        </Text>
                                     </View>
                                     <View style={styles.classChipsRow}>
                                         {event.classes?.slice(0, 3).map((c, idx) => (
@@ -710,11 +898,13 @@ const AdmitCardScreen = () => {
                                         {event.classes?.length > 3 && <Text style={styles.miniClassChip}>+{event.classes.length - 3} More</Text>}
                                     </View>
                                 </View>
+
+                                {/* Bottom Right Delete */}
                                 <TouchableOpacity 
                                     style={styles.deleteIcon}
                                     onPress={() => handleDeleteEvent(event.id)}
                                 >
-                                    <Ionicons name="trash-outline" size={20} color={theme.danger} />
+                                    <Ionicons name="trash-outline" size={18} color={theme.danger} />
                                 </TouchableOpacity>
                             </TouchableOpacity>
                         ))}
@@ -730,29 +920,104 @@ const AdmitCardScreen = () => {
             >
                 <Ionicons name="add" size={32} color="#fff" />
             </TouchableOpacity>
+
+            {/* Filter Bottom Sheet */}
+            <Modal
+                visible={isFilterModalVisible}
+                transparent={true}
+                animationType="slide"
+                onRequestClose={() => setIsFilterModalVisible(false)}
+            >
+                <TouchableOpacity 
+                    style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.5)', justifyContent: 'flex-end' }} 
+                    activeOpacity={1} 
+                    onPress={() => setIsFilterModalVisible(false)}
+                >
+                    <TouchableOpacity 
+                        activeOpacity={1} 
+                        style={{ 
+                            backgroundColor: theme.card, 
+                            borderTopLeftRadius: 30, 
+                            borderTopRightRadius: 30, 
+                            padding: 25, 
+                            paddingBottom: insets.bottom + 30 
+                        }}
+                    >
+                        <View style={{ width: 40, height: 5, backgroundColor: theme.border, borderRadius: 3, alignSelf: 'center', marginBottom: 20 }} />
+                        
+                        <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 25 }}>
+                            <Text style={{ fontSize: 22, fontWeight: '900', color: theme.text }}>Filter Exams</Text>
+                            <TouchableOpacity onPress={() => { setFilterTitle('All'); setFilterClass('All'); setIsFilterModalVisible(false); }}>
+                                <Text style={{ fontSize: 14, fontWeight: '800', color: theme.danger }}>Reset</Text>
+                            </TouchableOpacity>
+                        </View>
+
+                        <ScrollView showsVerticalScrollIndicator={false} style={{ maxHeight: 450 }}>
+                            <Text style={{ fontSize: 12, fontWeight: '800', color: theme.primary, textTransform: 'uppercase', letterSpacing: 1, marginBottom: 15 }}>Exam Name</Text>
+                            <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 10, marginBottom: 25 }}>
+                                {uniqueTitles.map((title) => (
+                                    <TouchableOpacity
+                                        key={title}
+                                        style={[
+                                            { paddingHorizontal: 18, paddingVertical: 12, borderRadius: 15, backgroundColor: theme.background, borderWidth: 1, borderColor: theme.border },
+                                            filterTitle === title && { backgroundColor: theme.primary, borderColor: theme.primary }
+                                        ]}
+                                        onPress={() => setFilterTitle(title)}
+                                    >
+                                        <Text style={[{ fontSize: 14, fontWeight: '700', color: theme.text }, filterTitle === title && { color: '#fff', fontWeight: '800' }]}>{title}</Text>
+                                    </TouchableOpacity>
+                                ))}
+                            </View>
+
+                            <Text style={{ fontSize: 12, fontWeight: '800', color: theme.primary, textTransform: 'uppercase', letterSpacing: 1, marginBottom: 15 }}>Class</Text>
+                            <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 10 }}>
+                                {uniqueClasses.map((cls) => (
+                                    <TouchableOpacity
+                                        key={cls}
+                                        style={[
+                                            { paddingHorizontal: 18, paddingVertical: 12, borderRadius: 15, backgroundColor: theme.background, borderWidth: 1, borderColor: theme.border },
+                                            filterClass === cls && { backgroundColor: theme.primary, borderColor: theme.primary }
+                                        ]}
+                                        onPress={() => setFilterClass(cls)}
+                                    >
+                                        <Text style={[{ fontSize: 14, fontWeight: '700', color: theme.text }, filterClass === cls && { color: '#fff', fontWeight: '800' }]}>{cls === 'All' ? 'All Classes' : `Class ${cls}`}</Text>
+                                    </TouchableOpacity>
+                                ))}
+                            </View>
+                        </ScrollView>
+
+                        <TouchableOpacity 
+                            style={{ backgroundColor: theme.primary, paddingVertical: 18, borderRadius: 20, alignItems: 'center', marginTop: 30 }}
+                            onPress={() => setIsFilterModalVisible(false)}
+                        >
+                            <Text style={{ color: '#fff', fontSize: 16, fontWeight: '900' }}>Apply Filters</Text>
+                        </TouchableOpacity>
+                    </TouchableOpacity>
+                </TouchableOpacity>
+            </Modal>
         </View>
     );
 
     const renderCreate = () => (
-        <View style={styles.container}>
+        <View style={[styles.container, { paddingTop: insets.top }]}>
             <View style={styles.modalHeader}>
-                <TouchableOpacity onPress={() => { setViewMode('list'); resetForm(); }}>
-                    <Ionicons name="arrow-back" size={24} color={theme.text} />
+                <TouchableOpacity style={styles.backBtnHeader} onPress={() => { setViewMode('list'); resetForm(); }}>
+                    <Ionicons name="chevron-back" size={22} color={theme.text} />
                 </TouchableOpacity>
                 <Text style={styles.modalTitle}>
-                    {creationStep === 1 ? 'Exam Configuration' : 'Exam Schedule'}
+                    {creationStep === 1 ? 'Configure' : 'Schedule'}
                 </Text>
-                <View style={{ width: 24 }} />
+                <View style={{ width: 40 }} />
             </View>
 
-            <ScrollView style={styles.createContent}>
+            <ScrollView style={styles.createContent} showsVerticalScrollIndicator={false}>
                 {creationStep === 1 ? (
                     <View>
                         <View style={styles.inputGroup}>
                             <Text style={styles.label}>Examination Title</Text>
                             <TextInput
                                 style={styles.input}
-                                placeholder="e.g. Annual Final Term 2026"
+                                placeholder="e.g. Final Term 2026"
                                 placeholderTextColor={theme.textLight}
                                 value={examName}
                                 onChangeText={setExamName}
@@ -784,38 +1049,82 @@ const AdmitCardScreen = () => {
                                 <View style={styles.rowHeader}>
                                     <Text style={styles.rowNum}>Date {i + 1}</Text>
                                     <TouchableOpacity onPress={() => setSchedule(schedule.filter((_, idx) => idx !== i))}>
-                                        <Ionicons name="close-circle" size={20} color={theme.danger} />
+                                        <Ionicons name="close-circle" size={24} color={theme.danger + '80'} />
                                     </TouchableOpacity>
                                 </View>
-                                <View style={styles.rowInputs}>
+                                
+                                <View style={[styles.rowInputs, { marginBottom: 12 }]}>
+                                    {/* Date Selection */}
+                                    <TouchableOpacity 
+                                        style={[styles.input, { flex: 1, justifyContent: 'center' }]} 
+                                        onPress={() => {
+                                            setActiveScheduleRowIdx(i);
+                                            setShowScheduleDatePicker(true);
+                                        }}
+                                    >
+                                        <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+                                            <Ionicons name="calendar-outline" size={18} color={theme.primary} style={{ marginRight: 8 }} />
+                                            <Text style={{ color: row.date ? theme.text : theme.textLight, fontSize: 14, fontWeight: '600' }}>
+                                                {row.date ? formatDateString(row.date) : 'Date'}
+                                            </Text>
+                                        </View>
+                                    </TouchableOpacity>
+
+                                    {/* Subject Input */}
                                     <TextInput
-                                        style={[styles.input, { flex: 1, marginRight: 5 }]}
-                                        placeholder="YYYY-MM-DD"
-                                        placeholderTextColor={theme.textLight}
-                                        value={row.date}
-                                        onChangeText={(v) => updateScheduleRow(i, 'date', v)}
-                                    />
-                                    <TextInput
-                                        style={[styles.input, { flex: 1 }]}
+                                        style={[styles.input, { flex: 1.2 }]}
                                         placeholder="Subject"
                                         placeholderTextColor={theme.textLight}
                                         value={row.subject}
                                         onChangeText={(v) => updateScheduleRow(i, 'subject', v)}
                                     />
                                 </View>
-                                <TextInput
-                                    style={[styles.input, { marginTop: 10 }]}
-                                    placeholder="Timing (e.g. 10AM - 1PM)"
-                                    placeholderTextColor={theme.textLight}
-                                    value={row.time}
-                                    onChangeText={(v) => updateScheduleRow(i, 'time', v)}
-                                />
+
+                                {/* Professional Time Pickers */}
+                                <View style={{ flexDirection: 'row', gap: 10 }}>
+                                    <TouchableOpacity 
+                                        style={[styles.input, { flex: 1, justifyContent: 'center', backgroundColor: isDark ? '#1a1a1a' : '#f8fafc' }]}
+                                        onPress={() => {
+                                            setActiveTimeRowIdx(i);
+                                            setShowStartTimePicker(true);
+                                        }}
+                                    >
+                                        <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+                                            <Ionicons name="time-outline" size={18} color="#10b981" style={{ marginRight: 8 }} />
+                                            <View>
+                                                <Text style={{ fontSize: 9, color: theme.textLight, fontWeight: '800', textTransform: 'uppercase' }}>Start</Text>
+                                                <Text style={{ color: row.startTime ? theme.text : theme.textLight, fontSize: 14, fontWeight: '700' }}>
+                                                    {row.startTime || '--:--'}
+                                                </Text>
+                                            </View>
+                                        </View>
+                                    </TouchableOpacity>
+
+                                    <TouchableOpacity 
+                                        style={[styles.input, { flex: 1, justifyContent: 'center', backgroundColor: isDark ? '#1a1a1a' : '#f8fafc' }]}
+                                        onPress={() => {
+                                            setActiveTimeRowIdx(i);
+                                            setShowEndTimePicker(true);
+                                        }}
+                                    >
+                                        <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+                                            <Ionicons name="time-outline" size={18} color="#ef4444" style={{ marginRight: 8 }} />
+                                            <View>
+                                                <Text style={{ fontSize: 9, color: theme.textLight, fontWeight: '800', textTransform: 'uppercase' }}>End</Text>
+                                                <Text style={{ color: row.endTime ? theme.text : theme.textLight, fontSize: 14, fontWeight: '700' }}>
+                                                    {row.endTime || '--:--'}
+                                                </Text>
+                                            </View>
+                                        </View>
+                                    </TouchableOpacity>
+                                </View>
                             </View>
                         ))}
                         <TouchableOpacity style={styles.addRowBtn} onPress={addScheduleRow}>
-                            <Ionicons name="add" size={20} color={theme.primary} />
-                            <Text style={styles.addRowBtnText}>Add Subject</Text>
+                            <Ionicons name="add-circle" size={24} color={theme.primary} />
+                            <Text style={styles.addRowBtnText}>Add New Subject</Text>
                         </TouchableOpacity>
+                        <View style={{ height: 100 }} />
                     </View>
                 )}
             </ScrollView>
@@ -833,23 +1142,70 @@ const AdmitCardScreen = () => {
                         <TouchableOpacity style={styles.secondaryBtn} onPress={() => setCreationStep(1)}>
                             <Text style={styles.secondaryBtnText}>Back</Text>
                         </TouchableOpacity>
-                        <TouchableOpacity style={[styles.primaryBtn, { flex: 1, marginLeft: 10 }]} onPress={handleCreateEvent}>
+                        <TouchableOpacity style={[styles.primaryBtn, { flex: 1 }]} onPress={handleCreateEvent}>
                             <Text style={styles.primaryBtnText}>Finalize & Create</Text>
                         </TouchableOpacity>
                     </View>
                 )}
             </View>
+
+            {showScheduleDatePicker && (
+                <DateTimePicker
+                    value={activeScheduleRowIdx !== null && schedule[activeScheduleRowIdx].date ? new Date(schedule[activeScheduleRowIdx].date) : new Date()}
+                    mode="date"
+                    display="default"
+                    onChange={(event, date) => {
+                        setShowScheduleDatePicker(false);
+                        if (date && activeScheduleRowIdx !== null) {
+                            const dateStr = date.toISOString().split('T')[0];
+                            updateScheduleRow(activeScheduleRowIdx, 'date', dateStr);
+                        }
+                    }}
+                />
+            )}
+
+            {showStartTimePicker && (
+                <DateTimePicker
+                    value={new Date()}
+                    mode="time"
+                    is24Hour={false}
+                    display="default"
+                    onChange={(event, date) => {
+                        setShowStartTimePicker(false);
+                        if (date && activeTimeRowIdx !== null) {
+                            const timeStr = date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', hour12: true });
+                            updateScheduleRow(activeTimeRowIdx, 'startTime', timeStr);
+                        }
+                    }}
+                />
+            )}
+
+            {showEndTimePicker && (
+                <DateTimePicker
+                    value={new Date()}
+                    mode="time"
+                    is24Hour={false}
+                    display="default"
+                    onChange={(event, date) => {
+                        setShowEndTimePicker(false);
+                        if (date && activeTimeRowIdx !== null) {
+                            const timeStr = date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', hour12: true });
+                            updateScheduleRow(activeTimeRowIdx, 'endTime', timeStr);
+                        }
+                    }}
+                />
+            )}
         </View>
     );
 
     const renderDetails = () => (
-        <View style={styles.container}>
-            <View style={[styles.modalHeader, { backgroundColor: 'transparent', borderBottomWidth: 0, paddingTop: 50 }]}>
-                <TouchableOpacity onPress={() => { setViewMode('list'); setIsSelectionMode(false); }} style={{ padding: 5 }}>
-                    <Ionicons name="arrow-back" size={28} color={theme.text} />
+        <View style={[styles.container, { paddingTop: insets.top }]}>
+            <View style={styles.modalHeader}>
+                <TouchableOpacity style={styles.backBtnHeader} onPress={() => { setViewMode('list'); setIsSelectionMode(false); }}>
+                    <Ionicons name="chevron-back" size={22} color={theme.text} />
                 </TouchableOpacity>
                 <View style={{ flex: 1, marginLeft: 15 }}>
-                    <Text style={[styles.modalTitle, { fontSize: 22, fontWeight: '900' }]} numberOfLines={1}>{currentEvent?.exam_name}</Text>
+                    <Text style={styles.modalTitle} numberOfLines={1}>{currentEvent?.exam_name}</Text>
                 </View>
                 <TouchableOpacity 
                     onPress={() => {
@@ -866,7 +1222,7 @@ const AdmitCardScreen = () => {
                 </TouchableOpacity>
             </View>
 
-            <View style={[styles.tabBarContainer, { backgroundColor: 'transparent', borderBottomWidth: 0 }]}>
+            <View style={styles.tabBarContainer}>
                 <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.tabBar}>
                     {currentEvent?.classes.map((cs, i) => {
                         const key = `${cs.class}-${cs.section}`;
@@ -886,18 +1242,18 @@ const AdmitCardScreen = () => {
             </View>
 
             {isSelectionMode && (
-                <View style={[styles.selectionHeader, { backgroundColor: 'transparent', borderBottomWidth: 0, paddingTop: 0 }]}>
-                    <Text style={[styles.selectionHeaderText, { fontSize: 16 }]}>
-                        {getSelectedCount()} Identities Selected
+                <View style={styles.selectionHeader}>
+                    <Text style={styles.selectionHeaderText}>
+                        {getSelectedCount()} Selected
                     </Text>
                     <TouchableOpacity onPress={() => {
                         const allSelected = filteredStudents.every(s => selectionMap[s.id]);
                         const newMap = { ...selectionMap };
                         filteredStudents.forEach(s => newMap[s.id] = !allSelected);
                         setSelectionMap(newMap);
-                    }} style={{ paddingVertical: 5, paddingHorizontal: 10 }}>
-                        <Text style={{ color: theme.primary, fontWeight: '900', fontSize: 15 }}>
-                            {filteredStudents.every(s => selectionMap[s.id]) ? 'UNSELECT ALL' : 'SELECT ALL'}
+                    }}>
+                        <Text style={{ color: theme.primary, fontWeight: '900', fontSize: 14 }}>
+                            {filteredStudents.every(s => selectionMap[s.id]) ? 'DESELECT ALL' : 'SELECT ALL'}
                         </Text>
                     </TouchableOpacity>
                 </View>
@@ -958,7 +1314,7 @@ const AdmitCardScreen = () => {
                     ListEmptyComponent={
                         <View style={{ alignItems: 'center', marginTop: 100 }}>
                             <Ionicons name="people-outline" size={60} color={theme.border} />
-                            <Text style={{ color: theme.textLight, marginTop: 15, fontSize: 16 }}>No students in this class</Text>
+                            <Text style={{ color: theme.textLight, marginTop: 15, fontSize: 16 }}>No students found</Text>
                         </View>
                     }
                 />
@@ -972,7 +1328,7 @@ const AdmitCardScreen = () => {
                         ) : (
                             <>
                                 <Ionicons name="cloud-download-outline" size={24} color="#fff" style={{ marginRight: 10 }} />
-                                <Text style={styles.downloadBtnText}>Bundle {getSelectedCount()} Identities</Text>
+                                <Text style={styles.downloadBtnText}>Generate Bundle ({getSelectedCount()})</Text>
                             </>
                         )}
                     </TouchableOpacity>
@@ -982,15 +1338,12 @@ const AdmitCardScreen = () => {
     );
 
     const renderIndividualPreview = () => (
-        <View style={styles.container}>
-            <View style={styles.modalHeader}>
+        <View style={[styles.container, { paddingTop: insets.top }]}>
+            <View style={{ flexDirection: 'row', alignItems: 'center', paddingHorizontal: 20, paddingVertical: 15 }}>
                 <TouchableOpacity onPress={() => setViewMode('event-details')}>
-                    <Ionicons name="arrow-back" size={24} color={theme.text} />
+                    <Ionicons name="chevron-back" size={28} color={theme.text} />
                 </TouchableOpacity>
-                <Text style={styles.modalTitle}>Admit Card Preview</Text>
-                <TouchableOpacity onPress={generatePDF} style={{ padding: 4 }}>
-                    <Ionicons name="share-social-outline" size={24} color={theme.primary} />
-                </TouchableOpacity>
+                <Text style={[styles.modalTitle, { marginLeft: 12 }]}>Preview</Text>
             </View>
 
             <ScrollView style={styles.previewScroll} showsVerticalScrollIndicator={false}>
@@ -999,11 +1352,11 @@ const AdmitCardScreen = () => {
                         {/* Professional Header Section */}
                         <View style={styles.paperHeader}>
                             {/* Logo and Name Row */}
-                            <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'center', width: '100%', marginBottom: 5, marginTop: -10 }}>
+                            <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'center', width: '100%', marginBottom: 5 }}>
                                 {instProfile?.logo_url || instProfile?.institute_logo ? (
                                         <Image 
                                             source={{ uri: getFullImageUrl(instProfile.logo_url || instProfile.institute_logo) || '' }} 
-                                            style={{ width: 50, height: 50, resizeMode: 'contain', marginRight: 12, marginTop: 12 }} 
+                                            style={{ width: 50, height: 50, resizeMode: 'contain', marginRight: 12 }} 
                                         />
                                     ) : null}
                                 <Text 
@@ -1017,23 +1370,14 @@ const AdmitCardScreen = () => {
                             
                             {/* Affiliation Row */}
                             {instProfile?.affiliation && (
-                                <Text style={{ 
-                                    fontSize: 9.5, 
-                                    fontWeight: '700', 
-                                    color: '#333', 
-                                    marginTop: -25, 
-                                    paddingLeft: 50,
-                                    textAlign: 'center', 
-                                    marginBottom: 8
-                                }}>
+                                <Text style={{ fontSize: 10, fontWeight: '700', color: '#333', textAlign: 'center', marginBottom: 8 }}>
                                     {instProfile.affiliation}
                                 </Text>
                             )}
 
                             {/* Detailed Address Row */}
-                            <Text style={[styles.paperInstSub, { fontSize: 9.5, marginTop: -8, paddingLeft: 40 }]}>
+                            <Text style={styles.paperInstSub}>
                                 {instProfile?.address || instProfile?.institute_address}
-                                {instProfile?.landmark ? ` ${instProfile.landmark}` : ''}
                                 {"\n"}{instProfile?.district} {instProfile?.state} {instProfile?.pincode}
                             </Text>
 
@@ -1048,6 +1392,7 @@ const AdmitCardScreen = () => {
                                 <View style={styles.paperTableRow}><Text style={styles.paperLabel}>STUDENT NAME</Text><Text style={styles.paperValue}>{selectedStudent?.name}</Text></View>
                                 <View style={styles.paperTableRow}><Text style={styles.paperLabel}>CLASS & SECTION</Text><Text style={styles.paperValue}>{selectedStudent?.class} - {selectedStudent?.section}</Text></View>
                                 <View style={styles.paperTableRow}><Text style={styles.paperLabel}>ROLL NUMBER</Text><Text style={styles.paperValue}>{selectedStudent?.roll_no || 'TBD'}</Text></View>
+                                <View style={styles.paperTableRow}><Text style={styles.paperLabel}>DATE OF BIRTH</Text><Text style={styles.paperValue}>{formatDateString(selectedStudent?.dob)}</Text></View>
                                 <View style={styles.paperTableRow}><Text style={styles.paperLabel}>FATHER'S NAME</Text><Text style={styles.paperValue}>{selectedStudent?.father_name}</Text></View>
                                 <View style={styles.paperTableRow}><Text style={styles.paperLabel}>MOBILE NO.</Text><Text style={styles.paperValue}>{selectedStudent?.mobile}</Text></View>
                             </View>
@@ -1071,7 +1416,7 @@ const AdmitCardScreen = () => {
                                 </View>
                                 {currentEvent?.schedule.map((row, idx) => (
                                     <View key={idx} style={styles.paperGridRow}>
-                                        <View style={styles.paperGridCell}><Text style={styles.paperGridText}>{formatDate(row.date)} (${row.day})</Text></View>
+                                        <View style={styles.paperGridCell}><Text style={styles.paperGridText}>{`${String(formatDateString(row.date)).trim()} (${String(row.day).trim()})`}</Text></View>
                                         <View style={styles.paperGridCell}><Text style={styles.paperGridText}>{row.subject}</Text></View>
                                         <View style={styles.paperGridCell}><Text style={styles.paperGridText}>{row.time}</Text></View>
                                     </View>
@@ -1105,13 +1450,13 @@ const AdmitCardScreen = () => {
 
     return (
         <View style={{ flex: 1 }}>
-            <StatusBar barStyle={theme.statusBarStyle} />
+            <StatusBar barStyle={theme.statusBarStyle} backgroundColor="transparent" translucent={true} />
             {viewMode === 'list' && renderList()}
             {viewMode === 'create' && renderCreate()}
             {viewMode === 'event-details' && renderDetails()}
             {viewMode === 'individual-preview' && renderIndividualPreview()}
             {isGeneratingPDF && (
-                <View style={[styles.modalOverlay, { position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, backgroundColor: 'rgba(0,0,0,0.7)', justifyContent: 'center', alignItems: 'center', zIndex: 9999 }]}>
+                <View style={styles.modalOverlay}>
                     <ActivityIndicator size="large" color={theme.primary} />
                     <Text style={{ color: '#fff', marginTop: 15, fontWeight: 'bold' }}>Preparing High Quality PDF...</Text>
                 </View>

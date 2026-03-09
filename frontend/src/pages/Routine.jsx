@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import axios from 'axios';
 import { toast } from 'react-toastify';
 import { API_ENDPOINTS } from '../config';
@@ -18,6 +18,8 @@ const Routine = () => {
     const instituteId = userType === 'principal' ? userData.id : (userData.institute_id || userData.id);
 
     const [overview, setOverview] = useState([]);
+    const [showFilters, setShowFilters] = useState(false);
+    const [filterValues, setFilterValues] = useState({ class: '', section: '' });
     const [classes, setClasses] = useState([]);
     const [rawStudents, setRawStudents] = useState([]);
     const [sections, setSections] = useState([]);
@@ -121,6 +123,14 @@ const Routine = () => {
     useEffect(() => {
         fetchData();
     }, []);
+
+    const filteredOverview = useMemo(() => {
+        return overview.filter(r => {
+            const matchesClass = !filterValues.class || String(r.class_name) === String(filterValues.class);
+            const matchesSection = !filterValues.section || r.section.toLowerCase().includes(filterValues.section.toLowerCase());
+            return matchesClass && matchesSection;
+        });
+    }, [overview, filterValues]);
 
     const handleTargetChange = (field, value) => {
         const newTarget = { ...target, [field]: value };
@@ -244,19 +254,125 @@ const Routine = () => {
                     flexWrap: 'wrap',
                     gap: '20px'
                 }}>
-                    <h1 style={{
-                        color: currentTheme.text,
-                        fontSize: '36px',
-                        fontWeight: '700',
-                        margin: 0,
-                        letterSpacing: '-0.5px'
-                    }}>
-                        📚 Routine Manager
-                    </h1>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '20px' }}>
+                        <h1 style={{
+                            color: currentTheme.text,
+                            fontSize: '32px',
+                            fontWeight: '800',
+                            margin: 0,
+                            letterSpacing: '-1px'
+                        }}>
+                            📚 Routine Manager
+                        </h1>
+                        <button 
+                            className={`btn-filter-toggle ${showFilters ? 'active' : ''}`}
+                            onClick={() => setShowFilters(!showFilters)}
+                            style={{
+                                background: showFilters ? '#3b82f6' : (isDarkMode ? 'rgba(255,255,255,0.1)' : '#f1f5f9'),
+                                color: showFilters ? 'white' : (isDarkMode ? '#94a3b8' : '#64748b'),
+                                border: 'none',
+                                width: '44px',
+                                height: '44px',
+                                borderRadius: '12px',
+                                display: 'flex',
+                                alignItems: 'center',
+                                justifyContent: 'center',
+                                cursor: 'pointer',
+                                transition: 'all 0.3s ease'
+                            }}
+                            title="Filter Routines"
+                        >
+                            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                                <polygon points="22 3 2 3 10 12.46 10 19 14 21 14 12.46 22 3"></polygon>
+                            </svg>
+                        </button>
+                    </div>
 
                     <div style={{ display: 'flex', gap: '15px', alignItems: 'center' }}>
+                        {(userType === 'principal' || userType === 'teacher' || userData.special_permission) && (
+                            <button
+                                onClick={startBuilder}
+                                className="btn-create-routine"
+                            >
+                                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round">
+                                    <line x1="12" y1="5" x2="12" y2="19"></line>
+                                    <line x1="5" y1="12" x2="19" y2="12"></line>
+                                </svg>
+                                Create New Routine
+                            </button>
+                        )}
                     </div>
                 </div>
+
+                {showFilters && (
+                    <div className="rd-filter-bar animate-slide-down" style={{
+                        display: 'flex',
+                        alignItems: 'flex-end',
+                        gap: '20px',
+                        marginBottom: '30px',
+                        background: isDarkMode ? '#1e293b' : 'white',
+                        padding: '20px',
+                        borderRadius: '16px',
+                        border: `1px solid ${isDarkMode ? 'rgba(255,255,255,0.1)' : '#e2e8f0'}`,
+                        boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.05)'
+                    }}>
+                        <div className="filter-group" style={{ flex: 1, display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                            <label style={{ fontSize: '12px', fontWeight: '700', color: '#64748b', textTransform: 'uppercase' }}>Class</label>
+                            <select 
+                                value={filterValues.class}
+                                onChange={(e) => setFilterValues({...filterValues, class: e.target.value})}
+                                style={{
+                                    padding: '10px 14px',
+                                    borderRadius: '10px',
+                                    border: `1.5px solid ${isDarkMode ? 'rgba(255,255,255,0.1)' : '#e2e8f0'}`,
+                                    background: isDarkMode ? '#0f172a' : 'white',
+                                    color: isDarkMode ? 'white' : '#1e293b',
+                                    fontSize: '14px',
+                                    fontWeight: '600'
+                                }}
+                            >
+                                <option value="">All Classes</option>
+                                {classes.map(c => <option key={c} value={c}>Class {c}</option>)}
+                            </select>
+                        </div>
+                        <div className="filter-group" style={{ flex: 1, display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                            <label style={{ fontSize: '12px', fontWeight: '700', color: '#64748b', textTransform: 'uppercase' }}>Section</label>
+                            <input 
+                                type="text" 
+                                placeholder="e.g. A" 
+                                value={filterValues.section}
+                                onChange={(e) => setFilterValues({...filterValues, section: e.target.value})}
+                                style={{
+                                    padding: '10px 14px',
+                                    borderRadius: '10px',
+                                    border: `1.5px solid ${isDarkMode ? 'rgba(255,255,255,0.1)' : '#e2e8f0'}`,
+                                    background: isDarkMode ? '#0f172a' : 'white',
+                                    color: isDarkMode ? 'white' : '#1e293b',
+                                    fontSize: '14px',
+                                    fontWeight: '600'
+                                }}
+                            />
+                        </div>
+                        <button 
+                            className="btn-clear-filters" 
+                            onClick={() => setFilterValues({class: '', section: ''})}
+                            style={{
+                                padding: '10px 20px',
+                                background: isDarkMode ? 'rgba(255,255,255,0.1)' : '#f1f5f9',
+                                color: '#64748b',
+                                border: 'none',
+                                borderRadius: '10px',
+                                fontWeight: '700',
+                                cursor: 'pointer',
+                                transition: 'all 0.2s',
+                                fontSize: '14px',
+                                height: '42px'
+                            }}
+                        >
+                            Clear
+                        </button>
+                    </div>
+                )}
 
                 {/* Builder Modal (Create/Edit/View) */}
                 {isBuilderOpen && (
@@ -532,36 +648,6 @@ const Routine = () => {
                 {/* Routine Cards Grid */}
                 {!isBuilderOpen && (
                     <div style={{ position: 'relative' }}>
-                        {(userType === 'principal' || userType === 'teacher' || userData.special_permission) && (
-                            <button
-                                onClick={startBuilder}
-                                style={{
-                                    position: 'fixed',
-                                    bottom: '40px',
-                                    right: '40px',
-                                    width: '64px',
-                                    height: '64px',
-                                    borderRadius: '50%',
-                                    background: currentTheme.accent,
-                                    color: 'white',
-                                    border: 'none',
-                                    fontSize: '32px',
-                                    cursor: 'pointer',
-                                    boxShadow: '0 10px 30px rgba(0,0,0,0.3)',
-                                    display: 'flex',
-                                    alignItems: 'center',
-                                    justifyContent: 'center',
-                                    zIndex: 1000,
-                                    transition: 'all 0.3s ease'
-                                }}
-                                onMouseOver={e => e.currentTarget.style.transform = 'scale(1.1) rotate(90deg)'}
-                                onMouseOut={e => e.currentTarget.style.transform = 'scale(1) rotate(0deg)'}
-                                title="Create New Routine"
-                            >
-                                +
-                            </button>
-                        )}
-
                         {overview.length === 0 ? (
                             <div style={{
                                 textAlign: 'center',
@@ -573,135 +659,60 @@ const Routine = () => {
                                 <h3 style={{ color: currentTheme.text, fontSize: '24px', marginBottom: '10px' }}>No Routines Created</h3>
                                 <p style={{ color: currentTheme.textSecondary, fontSize: '16px' }}>Get started by creating your first class routine.</p>
                             </div>
-                        ) : (
+                        ) : filteredOverview.length === 0 ? (
                             <div style={{
-                                display: 'grid',
-                                gridTemplateColumns: 'repeat(auto-fill, minmax(320px, 1fr))',
-                                gap: '25px'
+                                textAlign: 'center',
+                                padding: '80px 20px',
+                                borderRadius: '20px',
+                                border: `2px dashed ${currentTheme.border}`
                             }}>
-                                {overview.map((r, idx) => (
+                                <div style={{ fontSize: '64px', marginBottom: '20px' }}>🔍</div>
+                                <h3 style={{ color: currentTheme.text, fontSize: '24px', marginBottom: '10px' }}>No Match Found</h3>
+                                <p style={{ color: currentTheme.textSecondary, fontSize: '16px' }}>Adjust your filters to see routines.</p>
+                            </div>
+                        ) : (
+                            <div className="routine-grid">
+                                {filteredOverview.map((r, idx) => (
                                     <div
                                         key={idx}
+                                        className="routine-card"
                                         onClick={() => handleViewRoutine(r)}
-                                        style={{
-                                            background: currentTheme.cardBg,
-                                            borderRadius: '24px',
-                                            padding: '30px',
-                                            cursor: 'pointer',
-                                            border: `1px solid ${currentTheme.border}`,
-                                            boxShadow: currentTheme.shadow,
-                                            transition: 'all 0.4s cubic-bezier(0.16, 1, 0.3, 1)',
-                                            position: 'relative',
-                                            display: 'flex',
-                                            flexDirection: 'column',
-                                            gap: '12px'
-                                        }}
-                                        onMouseOver={e => {
-                                            e.currentTarget.style.transform = 'translateY(-8px)';
-                                            e.currentTarget.style.boxShadow = isDarkMode ? '0 15px 40px rgba(0, 0, 0, 0.4)' : '0 20px 25px -5px rgba(0, 0, 0, 0.1)';
-                                            if (!isDarkMode) e.currentTarget.style.borderColor = currentTheme.accent;
-                                        }}
-                                        onMouseOut={e => {
-                                            e.currentTarget.style.transform = 'translateY(0)';
-                                            e.currentTarget.style.boxShadow = currentTheme.shadow;
-                                            e.currentTarget.style.borderColor = currentTheme.border;
-                                        }}
                                     >
-                                        {!isDarkMode && (
-                                            <div style={{
-                                                position: 'absolute',
-                                                top: 0,
-                                                left: 0,
-                                                right: 0,
-                                                height: '4px',
-                                                background: currentTheme.accent,
-                                                borderRadius: '24px 24px 0 0'
-                                            }}></div>
-                                        )}
-
-                                        {(userType === 'principal' || userType === 'teacher' || userData.special_permission) && (
-                                            <div style={{
-                                                position: 'absolute',
-                                                top: '20px',
-                                                right: '20px'
-                                            }}>
-                                                <button
-                                                    onClick={(e) => handleDeleteRoutine(r, e)}
-                                                    style={{
-                                                        background: 'rgba(229, 62, 62, 0.1)',
-                                                        color: '#e53e3e',
-                                                        border: 'none',
-                                                        padding: '10px',
-                                                        borderRadius: '12px',
-                                                        cursor: 'pointer',
-                                                        fontSize: '14px',
-                                                        fontWeight: '600',
-                                                        transition: 'all 0.2s ease'
-                                                    }}
-                                                    onMouseOver={e => {
-                                                        e.currentTarget.style.background = '#e53e3e';
-                                                        e.currentTarget.style.color = 'white';
-                                                    }}
-                                                    onMouseOut={e => {
-                                                        e.currentTarget.style.background = 'rgba(229, 62, 62, 0.1)';
-                                                        e.currentTarget.style.color = '#e53e3e';
-                                                    }}
-                                                >
-                                                    🗑️
-                                                </button>
+                                        <div className="routine-card-header">
+                                            <div className="routine-icon-box">
+                                                <span>📚</span>
                                             </div>
-                                        )}
+                                            
+                                            {(userType === 'principal' || userType === 'teacher' || userData.special_permission) && (
+                                                <div className="routine-actions">
+                                                    <button
+                                                        onClick={(e) => handleDeleteRoutine(r, e)}
+                                                        className="btn-delete-routine"
+                                                        title="Delete Routine"
+                                                    >
+                                                        🗑️
+                                                    </button>
+                                                </div>
+                                            )}
+                                        </div>
 
-                                        <div style={{ fontSize: '42px', marginBottom: '8px' }}>📚</div>
+                                        <div className="routine-info">
+                                            <h3>Class {r.class_name}</h3>
+                                            <p>Section {r.section}</p>
+                                        </div>
 
-                                        <h3 style={{
-                                            color: currentTheme.text,
-                                            fontSize: '20px',
-                                            fontWeight: '800',
-                                            margin: 0,
-                                            letterSpacing: '-0.5px'
-                                        }}>
-                                            Class {r.class_name}
-                                        </h3>
+                                        <div className={`routine-status-badge ${r.is_published ? 'status-published' : 'status-draft'}`}>
+                                            <div className="status-dot"></div>
+                                            <span>{r.is_published ? 'Published' : 'Draft'}</span>
+                                        </div>
 
-                                        <p style={{
-                                            color: currentTheme.textSecondary,
-                                            fontSize: '15px',
-                                            margin: 0,
-                                            fontWeight: '600',
-                                            display: 'flex',
-                                            alignItems: 'center',
-                                            gap: '6px'
-                                        }}>
-                                            Section {r.section}
-                                        </p>
-
-                                        <div style={{
-                                            display: 'inline-flex',
-                                            alignItems: 'center',
-                                            gap: '8px',
-                                            padding: '6px 12px',
-                                            borderRadius: '100px',
-                                            background: r.is_published ? 'rgba(16, 185, 129, 0.1)' : 'rgba(245, 158, 11, 0.1)',
-                                            width: 'fit-content',
-                                            marginTop: '10px'
-                                        }}>
-                                            <div style={{
-                                                width: '8px',
-                                                height: '8px',
-                                                borderRadius: '50%',
-                                                background: r.is_published ? '#10b981' : '#f59e0b',
-                                                boxShadow: `0 0 10px ${r.is_published ? '#10b981' : '#f59e0b'}`
-                                            }}></div>
-                                            <span style={{
-                                                fontSize: '12px',
-                                                fontWeight: '700',
-                                                color: r.is_published ? '#10b981' : '#f59e0b',
-                                                textTransform: 'uppercase',
-                                                letterSpacing: '0.5px'
-                                            }}>
-                                                {r.is_published ? 'Published' : 'Draft'}
-                                            </span>
+                                        <div className="routine-footer">
+                                            <div className="view-btn-arrow">
+                                                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round">
+                                                    <line x1="5" y1="12" x2="19" y2="12"></line>
+                                                    <polyline points="12 5 19 12 12 19"></polyline>
+                                                </svg>
+                                            </div>
                                         </div>
                                     </div>
                                 ))}

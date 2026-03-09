@@ -40,8 +40,9 @@ export default function AttendanceIndex() {
     const fetchAttendanceStatus = async () => {
         try {
             const token = await AsyncStorage.getItem('token');
+            const storedSessionId = await AsyncStorage.getItem('selectedSessionId');
             const userData = await AsyncStorage.getItem('userData');
-            const sessionId = userData ? JSON.parse(userData).current_session_id : null;
+            const sessionId = storedSessionId || (userData ? JSON.parse(userData).current_session_id : null);
             const dateStr = formatDateForAPI(selectedDate);
 
             const response = await axios.get(
@@ -62,8 +63,9 @@ export default function AttendanceIndex() {
     const fetchClassSections = async () => {
         try {
             const token = await AsyncStorage.getItem('token');
+            const storedSessionId = await AsyncStorage.getItem('selectedSessionId');
             const userData = await AsyncStorage.getItem('userData');
-            const sessionId = userData ? JSON.parse(userData).current_session_id : null;
+            const sessionId = storedSessionId || (userData ? JSON.parse(userData).current_session_id : null);
 
             const response = await axios.get(
                 `${API_ENDPOINTS.PRINCIPAL}/student/list`,

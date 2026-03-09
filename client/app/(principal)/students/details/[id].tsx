@@ -10,8 +10,38 @@ import DateTimePicker from '@react-native-community/datetimepicker';
 import { Ionicons } from '@expo/vector-icons';
 import { useTheme } from '../../../../context/ThemeContext';
 import { API_ENDPOINTS } from '../../../../constants/Config';
-import FeeHistoryBottomSheet from '../../../../components/FeeHistoryBottomSheet';
 import AttendanceHistoryBottomSheet from '../../../../components/AttendanceHistoryBottomSheet';
+import MonthlyTransactionBottomSheet from '../../../../components/MonthlyTransactionBottomSheet';
+import Animated, { useSharedValue, useAnimatedStyle, withSpring, interpolateColor } from 'react-native-reanimated';
+
+const ModernToggle = ({ value, onValueChange, activeColor }: { value: boolean, onValueChange: (v: boolean) => void, activeColor: string }) => {
+    const translateX = useSharedValue(value ? 22 : 2);
+    
+    useEffect(() => {
+        translateX.value = withSpring(value ? 22 : 2, { damping: 15, stiffness: 150 });
+    }, [value]);
+
+    const animatedThumbStyle = useAnimatedStyle(() => ({
+        transform: [{ translateX: translateX.value }]
+    }));
+
+    const animatedTrackStyle = useAnimatedStyle(() => {
+        const backgroundColor = interpolateColor(
+            translateX.value,
+            [2, 22],
+            ['#E9E9EB', activeColor]
+        );
+        return { backgroundColor };
+    });
+
+    return (
+        <TouchableOpacity activeOpacity={1} onPress={() => onValueChange(!value)}>
+            <Animated.View style={[{ width: 50, height: 28, borderRadius: 15, justifyContent: 'center', paddingHorizontal: 2 }, animatedTrackStyle]}>
+                <Animated.View style={[{ width: 24, height: 24, borderRadius: 12, backgroundColor: '#fff', elevation: 3, shadowColor: '#000', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.2, shadowRadius: 2 }, animatedThumbStyle]} />
+            </Animated.View>
+        </TouchableOpacity>
+    );
+};
 
 export default function StudentDetails() {
     const router = useRouter();
@@ -26,18 +56,34 @@ export default function StudentDetails() {
     const [originalData, setOriginalData] = useState<any>(null);
     const [formData, setFormData] = useState<any>({});
     const [showDatePicker, setShowDatePicker] = useState(false);
+    const [showAdmissionDatePicker, setShowAdmissionDatePicker] = useState(false);
     const [photo, setPhoto] = useState<any>(null);
     const [deletePhoto, setDeletePhoto] = useState(false);
 
     // Bottom Sheet States
-    const [isFeesVisible, setIsFeesVisible] = useState(false);
     const [isAttendanceVisible, setIsAttendanceVisible] = useState(false);
+    const [isFeesHistoryVisible, setIsFeesHistoryVisible] = useState(false);
+    const [fullFeesData, setFullFeesData] = useState<any>(null);
     const [instituteInfo, setInstituteInfo] = useState<any>(null);
 
     useEffect(() => {
         fetchStudentDetails();
+        fetchFullFeesData();
         loadInstituteInfo();
     }, [id]);
+
+    const fetchFullFeesData = async () => {
+        try {
+            const token = await AsyncStorage.getItem('token');
+            const response = await axios.get(
+                `${API_ENDPOINTS.PRINCIPAL}/student/${id}/fees-full`,
+                { headers: { Authorization: `Bearer ${token}` } }
+            );
+            setFullFeesData(response.data);
+        } catch (error) {
+            console.error('Error fetching full fees:', error);
+        }
+    };
 
     const loadInstituteInfo = async () => {
         try {
@@ -114,6 +160,7 @@ export default function StudentDetails() {
             data.append('student_id', id as string);
             data.append('name', formData.name);
             data.append('dob', formData.dob.toISOString().split('T')[0]);
+            data.append('admission_date', formData.admission_date.toISOString().split('T')[0]);
             data.append('mobile', formData.mobile);
             data.append('email', formData.email);
             data.append('class', formData.class);
@@ -124,6 +171,8 @@ export default function StudentDetails() {
             data.append('father_name', formData.father_name);
             data.append('mother_name', formData.mother_name);
             data.append('transport_facility', String(formData.transport_facility));
+            data.append('monthly_fees', formData.monthly_fees);
+            data.append('transport_fees', formData.transport_fees);
 
             if (photo) {
                 data.append('photo', {
@@ -219,23 +268,9 @@ export default function StudentDetails() {
 
         actionButtonsRow: {
             flexDirection: 'row',
-            justifyContent: 'space-between',
+            justifyContent: 'center',
             gap: 12,
             marginBottom: 25,
-        },
-        feesBtn: {
-            flex: 1,
-            backgroundColor: theme.primary,
-            flexDirection: 'row',
-            alignItems: 'center',
-            justifyContent: 'center',
-            paddingVertical: 12,
-            borderRadius: 16,
-            shadowColor: theme.primary,
-            shadowOffset: { width: 0, height: 4 },
-            shadowOpacity: 0.2,
-            shadowRadius: 8,
-            elevation: 4,
         },
         attendanceBtn: {
             flex: 1,
@@ -247,12 +282,6 @@ export default function StudentDetails() {
             borderRadius: 16,
             borderWidth: 1,
             borderColor: isDark ? '#4A2B70' : '#E1BEE7',
-        },
-        feesBtnText: {
-            color: '#fff',
-            fontWeight: '800',
-            fontSize: 13,
-            marginLeft: 8,
         },
         attendanceBtnText: {
             color: isDark ? '#D1C4E9' : '#9C27B0',
@@ -383,7 +412,7 @@ export default function StudentDetails() {
                 )}
             </View>
 
-            <ScrollView style={styles.content} showsVerticalScrollIndicator={false} contentContainerStyle={{ paddingBottom: 40 }}>
+            <ScrollView style={styles.content} showsVerticalScrollIndicator={false} contentContainerStyle={{ paddingBottom: Math.max(40, insets.bottom + 20) }}>
                 <View style={styles.profileCard}>
                     <TouchableOpacity style={styles.avatarWrapper} onPress={isEditing ? pickImage : undefined} activeOpacity={isEditing ? 0.7 : 1}>
                         {(photo || originalData?.photo_url) ? (
@@ -405,19 +434,19 @@ export default function StudentDetails() {
                     <>
                         <View style={styles.actionButtonsRow}>
                             <TouchableOpacity 
-                                style={styles.feesBtn}
-                                onPress={() => setIsFeesVisible(true)}
-                            >
-                                <Ionicons name="receipt" size={18} color="#fff" />
-                                <Text style={styles.feesBtnText}>FEES HISTORY</Text>
-                            </TouchableOpacity>
-
-                            <TouchableOpacity 
                                 style={styles.attendanceBtn}
                                 onPress={() => setIsAttendanceVisible(true)}
                             >
                                 <Ionicons name="calendar" size={18} color={isDark ? '#D1C4E9' : '#9C27B0'} />
                                 <Text style={styles.attendanceBtnText}>ATTENDANCE</Text>
+                            </TouchableOpacity>
+
+                            <TouchableOpacity 
+                                style={[styles.attendanceBtn, { backgroundColor: isDark ? '#1B2C1B' : '#E8F5E9', borderColor: isDark ? '#27AE60' : '#C8E6C9' }]}
+                                onPress={() => setIsFeesHistoryVisible(true)}
+                            >
+                                <Ionicons name="receipt-outline" size={18} color={isDark ? '#81C784' : '#2E7D32'} />
+                                <Text style={[styles.attendanceBtnText, { color: isDark ? '#81C784' : '#2E7D32' }]}>FEES HISTORY</Text>
                             </TouchableOpacity>
                         </View>
 
@@ -462,16 +491,30 @@ export default function StudentDetails() {
                                 <InputItem icon="school-outline" label="Class" value={formData.class} onChange={(t: string) => setFormData({ ...formData, class: t })} />
                                 <InputItem icon="grid-outline" label="Section" value={formData.section} onChange={(t: string) => setFormData({ ...formData, section: t })} />
                                 <InputItem icon="list-outline" label="Roll Number" value={formData.roll_no} onChange={(t: string) => setFormData({ ...formData, roll_no: t })} />
+                                <InputItem icon="calendar-outline" label="Admission Date" value={formatDate(formData.admission_date)} onTouch={() => setShowAdmissionDatePicker(true)} />
                             </>
                         ) : (
                             <>
                                 <DetailItem icon="school-outline" label="Class" value={originalData?.class} />
                                 <DetailItem icon="grid-outline" label="Section" value={originalData?.section} />
                                 <DetailItem icon="list-outline" label="Roll Number" value={originalData?.roll_no} />
+                                <DetailItem icon="calendar-outline" label="Admission Date" value={originalData?.admission_date} />
                             </>
                         )}
                     </View>
                 </View>
+
+                {showAdmissionDatePicker && (
+                    <DateTimePicker
+                        value={formData.admission_date || new Date()}
+                        mode="date"
+                        display="default"
+                        onChange={(event, date) => {
+                            setShowAdmissionDatePicker(false);
+                            if (date) setFormData({ ...formData, admission_date: date });
+                        }}
+                    />
+                )}
 
                 <View style={styles.section}>
                     <Text style={styles.sectionTitle}>Parent Information</Text>
@@ -491,6 +534,27 @@ export default function StudentDetails() {
                 </View>
 
                 <View style={styles.section}>
+                    <Text style={styles.sectionTitle}>Financial Information</Text>
+                    <View style={styles.detailsContainer}>
+                        {isEditing ? (
+                            <>
+                                <InputItem icon="cash-outline" label="Monthly Tuition Fee" value={String(formData.monthly_fees || '')} onChange={(t: string) => setFormData({ ...formData, monthly_fees: t })} keyboardType="numeric" />
+                                {formData.transport_facility && (
+                                    <InputItem icon="bus-outline" label="Monthly Transport Fee" value={String(formData.transport_fees || '')} onChange={(t: string) => setFormData({ ...formData, transport_fees: t })} keyboardType="numeric" />
+                                )}
+                            </>
+                        ) : (
+                            <>
+                                <DetailItem icon="cash-outline" label="Monthly Tuition Fee" value={`₹${parseFloat(originalData?.monthly_fees || 0).toLocaleString()}`} />
+                                {originalData?.transport_facility && (
+                                    <DetailItem icon="bus-outline" label="Monthly Transport Fee" value={`₹${parseFloat(originalData?.transport_fees || 0).toLocaleString()}`} />
+                                )}
+                            </>
+                        )}
+                    </View>
+                </View>
+
+                <View style={styles.section}>
                     <Text style={styles.sectionTitle}>Residence & Facilities</Text>
                     <View style={styles.detailsContainer}>
                         {isEditing ? (
@@ -498,13 +562,15 @@ export default function StudentDetails() {
                                 <InputItem icon="location-outline" label="Complete Address" value={formData.address} onChange={(t: string) => setFormData({ ...formData, address: t })} multiline />
                                 <View style={{ padding: 15, flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
                                     <View style={{ flexDirection: 'row', alignItems: 'center' }}>
-                                        <Ionicons name="bus-outline" size={18} color={theme.primary} style={{ marginRight: 8 }} />
+                                        <View style={{ width: 32, height: 32, borderRadius: 8, backgroundColor: theme.primary + '10', justifyContent: 'center', alignItems: 'center', marginRight: 10 }}>
+                                            <Ionicons name="bus-outline" size={18} color={theme.primary} />
+                                        </View>
                                         <Text style={styles.detailLabel}>Transport Facility</Text>
                                     </View>
-                                    <Switch
+                                    <ModernToggle
                                         value={formData.transport_facility}
                                         onValueChange={(v) => setFormData({ ...formData, transport_facility: v })}
-                                        trackColor={{ false: '#ddd', true: theme.primary }}
+                                        activeColor={theme.primary}
                                     />
                                 </View>
                             </>
@@ -538,20 +604,25 @@ export default function StudentDetails() {
             </ScrollView>
 
             {originalData && (
-                <FeeHistoryBottomSheet 
-                    visible={isFeesVisible}
-                    onClose={() => setIsFeesVisible(false)}
-                    student={originalData}
-                    institute={instituteInfo}
-                />
-            )}
-            {originalData && (
                 <AttendanceHistoryBottomSheet 
                     visible={isAttendanceVisible}
                     onClose={() => setIsAttendanceVisible(false)}
                     student={originalData}
                 />
             )}
+
+            <MonthlyTransactionBottomSheet 
+                isOpen={isFeesHistoryVisible}
+                onClose={() => setIsFeesHistoryVisible(false)}
+                data={{
+                    student: originalData,
+                    payments: fullFeesData?.payments || [],
+                    extra_charges: fullFeesData?.extra_charges || [],
+                    fee_structure: fullFeesData?.fee_structure,
+                    activated_months: fullFeesData?.activated_months || [],
+                    one_time_fees: fullFeesData?.one_time_fees || []
+                }}
+            />
         </View>
     );
 }

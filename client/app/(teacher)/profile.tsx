@@ -32,13 +32,23 @@ export default function TeacherProfile() {
         try {
             console.log('[TeacherProfile] Fetching profile...');
             const data = await AsyncStorage.getItem('teacherData');
+            const storedSessionId = await AsyncStorage.getItem('selectedSessionId');
+            
             console.log('[TeacherProfile] teacherData from storage:', data ? 'found' : 'missing');
             if (data) {
                 const token = await AsyncStorage.getItem('teacherToken');
+                const teacher = JSON.parse(data);
+                const sessionId = storedSessionId || teacher.current_session_id;
+
                 const url = `${API_ENDPOINTS.AUTH.TEACHER}/profile`;
                 const response = await axios.get(
                     url,
-                    { headers: { Authorization: `Bearer ${token}` } }
+                    { 
+                        headers: { 
+                            Authorization: `Bearer ${token}`,
+                            'x-academic-session-id': sessionId?.toString()
+                        } 
+                    }
                 );
                 const profileData = response.data.teacher || response.data.profile;
                 console.log('[TeacherProfile] profile fetched:', profileData?.name);

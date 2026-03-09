@@ -13,6 +13,7 @@ import {
     Platform,
     BackHandler,
 } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import axios from 'axios';
 import AsyncStorage from '@react-native-async-storage/async-storage';
@@ -68,6 +69,7 @@ const StudentAdmitCardScreen = () => {
     const router = useRouter();
     const { id: deepLinkId } = useLocalSearchParams();
     const { theme, isDark } = useTheme();
+    const insets = useSafeAreaInsets();
     
     const [loading, setLoading] = useState(true);
     const [admitCards, setAdmitCards] = useState<AdmitCardEvent[]>([]);
@@ -96,17 +98,24 @@ const StudentAdmitCardScreen = () => {
     const loadData = async () => {
         try {
             setLoading(true);
-            const [storedStudentData, token] = await Promise.all([
+            const [storedStudentData, token, storedSessionId] = await Promise.all([
                 AsyncStorage.getItem('studentData'),
-                AsyncStorage.getItem('studentToken')
+                AsyncStorage.getItem('studentToken'),
+                AsyncStorage.getItem('selectedSessionId')
             ]);
 
             if (storedStudentData) {
                 setStudentData(JSON.parse(storedStudentData));
             }
 
+            const student = storedStudentData ? JSON.parse(storedStudentData) : null;
+            const sessionId = storedSessionId || (student ? student.current_session_id : null);
+
             const response = await axios.get(`${API_ENDPOINTS.ADMIT_CARD}/my-cards`, {
-                headers: { Authorization: `Bearer ${token}` }
+                headers: { 
+                    Authorization: `Bearer ${token}`,
+                    'x-academic-session-id': sessionId?.toString()
+                }
             });
             const cards = response.data || [];
             setAdmitCards(cards);
@@ -179,65 +188,60 @@ const StudentAdmitCardScreen = () => {
                 selectedCard.pincode
             ].filter(Boolean).join(' ');
 
+            const formatDateString = (dateStr: string | null | undefined): string => {
+                if (!dateStr) return '';
+                try {
+                    const date = new Date(dateStr);
+                    if (isNaN(date.getTime())) return dateStr;
+                    const d = date.getDate().toString().padStart(2, '0');
+                    const m = (date.getMonth() + 1).toString().padStart(2, '0');
+                    const y = date.getFullYear();
+                    return `${d}-${m}-${y}`;
+                } catch (e) { return dateStr || ''; }
+            };
+
             const htmlContent = `
                 <html>
                 <head>
                     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
                     <style>
                         @page { size: A4; margin: 0; }
-                        body { font-family: 'Helvetica Neue', Helvetica, Arial, sans-serif; padding: 0; margin: 0; color: #333; background: #fff; }
-                        
+                        body { font-family: 'Helvetica', Arial, sans-serif; margin: 0; padding: 0; background: #fff; }
                         .page-container {
-                            width: 210mm;
-                            height: 297mm;
-                            padding: 25px 35px;
-                            box-sizing: border-box;
-                            display: flex;
-                            flex-direction: column;
-                            background: #fff;
+                            width: 210mm; height: 297mm; padding: 25px 35px; box-sizing: border-box;
+                            display: flex; flex-direction: column; background: #fff; position: relative;
                         }
-                        
+                        .inner-border { position: absolute; top: 10px; left: 10px; right: 10px; bottom: 10px; border: 1px solid #333; pointer-events: none; }
                         .header-container { display: flex; flex-direction: row; align-items: center; justify-content: center; margin-bottom: 5px; }
                         .logo { width: 65px; height: 65px; margin-right: 15px; border-radius: 8px; }
                         .institute-info { text-align: center; }
-                        
                         .institute-name { font-size: 28px; font-weight: 900; color: #1A237E; margin: 0; text-transform: uppercase; letter-spacing: 1px; }
-                        .affiliation-text { font-size: 13px; color: #444; margin: 0; margin-top: 4px; margin-left: 20px; font-weight: 700; }
+                        .affiliation-text { font-size: 13px; color: #444; margin: 0; margin-top: 4px; font-weight: 700; }
                         .address-text { font-size: 12px; color: #666; margin-top: 4px; font-weight: 600; text-align: center; }
-                        
                         .divider { height: 2px; background-color: #000; margin: 12px 0; }
-                        
-                        .exam-box { 
-                            font-size: 22px; font-weight: 900; text-align: center; margin: 10px auto; 
-                            text-transform: uppercase; padding: 8px 45px; border: 2.5px solid #000; display: table; 
-                        }
-                        
+                        .exam-box { font-size: 22px; font-weight: 900; text-align: center; margin: 10px auto; text-transform: uppercase; padding: 8px 45px; border: 2.5px solid #000; display: table; }
                         .details-section { display: flex; flex-direction: row; justify-content: space-between; margin: 20px 0; }
                         .info-table { width: 72%; border-collapse: collapse; }
                         .info-table td { padding: 8px 0; font-size: 15px; border-bottom: 1px solid #f0f0f0; }
                         .label { font-weight: bold; width: 170px; color: #555; font-size: 12px; text-transform: uppercase; }
                         .value { font-weight: 900; color: #000; font-size: 17px; }
-                        
                         .photo-box { width: 130px; height: 160px; border: 2.5px solid #000; display: flex; align-items: center; justify-content: center; background: #fff; overflow: hidden; }
                         .photo-box img { width: 100%; height: 100%; object-fit: cover; }
-                        
                         .timetable-section { width: 100%; margin-top: 10px; }
                         .section-title { font-weight: 900; text-decoration: underline; font-size: 14px; margin-bottom: 10px; }
-                        
                         table.schedule { width: 100%; border-collapse: collapse; border: 2px solid #000; }
                         .schedule th { background-color: #f8f9fa; border: 1.5px solid #000; padding: 10px; text-align: left; font-size: 13px; font-weight: 900; }
                         .schedule td { border: 1.5px solid #000; padding: 10px; font-size: 13px; font-weight: bold; }
-                        
                         .instructions { border: 2px solid #000; padding: 15px; border-radius: 8px; margin-top: 20px; background: #fafafa; }
                         .inst-title { font-weight: 900; font-size: 13px; text-decoration: underline; margin-bottom: 8px; }
                         .inst-list { font-size: 12px; font-weight: bold; margin: 0; padding-left: 20px; line-height: 1.4; }
-                        
                         .signature-section { margin-top: auto; padding-top: 40px; display: flex; justify-content: space-between; padding-bottom: 20px; }
                         .sig-line { border-top: 2px solid #000; width: 200px; text-align: center; font-size: 12px; font-weight: 900; padding-top: 8px; text-transform: uppercase; }
                     </style>
                 </head>
                 <body>
                     <div class="page-container">
+                        <div class="inner-border"></div>
                         <div class="header-container">
                             ${instLogoB64 ? `<img src="${instLogoB64}" class="logo" />` : ''}
                             <div class="institute-info">
@@ -246,16 +250,14 @@ const StudentAdmitCardScreen = () => {
                                 <p class="address-text">${fullAddress}</p>
                             </div>
                         </div>
-
                         <div class="divider"></div>
-                        
                         <div class="exam-box">${selectedCard.exam_name}</div>
-
                         <div class="details-section">
                             <table class="info-table">
                                 <tr><td class="label">Student Name</td><td class="value">${studentData.name}</td></tr>
                                 <tr><td class="label">Class & Section</td><td class="value">${studentData.class} - ${studentData.section}</td></tr>
                                 <tr><td class="label">Roll Number</td><td class="value">${studentData.roll_no || 'TBD'}</td></tr>
+                                <tr><td class="label">Date of Birth</td><td class="value">${formatDateString((studentData as any).dob)}</td></tr>
                                 <tr><td class="label">Father's Name</td><td class="value">${studentData.father_name}</td></tr>
                                 <tr><td class="label">Contact Number</td><td class="value">${studentData.mobile}</td></tr>
                             </table>
@@ -263,7 +265,6 @@ const StudentAdmitCardScreen = () => {
                                 ${studentPhotoB64 ? `<img src="${studentPhotoB64}" />` : '<div style="font-size: 10px; color: #999; font-weight: bold; text-align: center;">AFFIX PHOTO</div>'}
                             </div>
                         </div>
-
                         <div class="timetable-section">
                             <div class="section-title">EXAMINATION TIMETABLE</div>
                             <table class="schedule">
@@ -277,7 +278,7 @@ const StudentAdmitCardScreen = () => {
                                 <tbody>
                                     ${selectedCard.schedule.map(row => `
                                         <tr>
-                                            <td>${formatDate(row.date)} (${row.day})</td>
+                                            <td>${formatDateString(row.date)} (${row.day})</td>
                                             <td>${row.subject}</td>
                                             <td>${row.time}</td>
                                         </tr>
@@ -285,7 +286,6 @@ const StudentAdmitCardScreen = () => {
                                 </tbody>
                             </table>
                         </div>
-
                         <div class="instructions">
                             <div class="inst-title">IMPORTANT INSTRUCTIONS:</div>
                             <ol class="inst-list">
@@ -295,7 +295,6 @@ const StudentAdmitCardScreen = () => {
                                 <li>The card must be signed by the invigilator during every examination session.</li>
                             </ol>
                         </div>
-
                         <div class="signature-section">
                             <div class="sig-line">TEACHER'S SIGNATURE</div>
                             <div class="sig-line">PRINCIPAL'S SIGNATURE</div>
@@ -326,23 +325,60 @@ const StudentAdmitCardScreen = () => {
 
     const styles = useMemo(() => StyleSheet.create({
         container: { flex: 1, backgroundColor: theme.background },
-        header: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: 20, paddingTop: 60, paddingBottom: 20, backgroundColor: theme.card },
-        headerTitle: { fontSize: 22, fontWeight: 'bold', color: theme.text, marginLeft: 15 },
+        header: { 
+            flexDirection: 'row', 
+            alignItems: 'center', 
+            paddingHorizontal: 24, 
+            paddingTop: insets.top + 10, 
+            paddingBottom: 15, 
+            backgroundColor: 'transparent' 
+        },
+        backBtn: { 
+            width: 40, 
+            height: 40, 
+            borderRadius: 12, 
+            backgroundColor: isDark ? '#333' : '#f4f4f5', 
+            justifyContent: 'center', 
+            alignItems: 'center' 
+        },
+        headerTitle: { fontSize: 24, fontWeight: '900', color: theme.text, letterSpacing: -0.5, marginLeft: 16 },
         listContent: { padding: 20 },
-        card: { backgroundColor: theme.card, borderRadius: 20, padding: 20, marginBottom: 15, borderWidth: 1, borderColor: theme.border, elevation: 3, shadowColor: '#000', shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.1, shadowRadius: 6, flexDirection: 'row', alignItems: 'center' },
-        cardIcon: { width: 50, height: 50, borderRadius: 12, backgroundColor: isDark ? '#1a2a33' : '#e3f2fd', justifyContent: 'center', alignItems: 'center', marginRight: 15 },
-        cardTitle: { fontSize: 18, fontWeight: 'bold', color: theme.text, marginBottom: 4 },
-        cardSubtitle: { fontSize: 13, color: theme.textLight },
+        card: { 
+            backgroundColor: theme.card, 
+            borderRadius: 24, 
+            padding: 20, 
+            marginBottom: 16, 
+            borderWidth: 1, 
+            borderColor: theme.border, 
+            elevation: 4, 
+            shadowColor: '#000', 
+            shadowOffset: { width: 0, height: 4 }, 
+            shadowOpacity: isDark ? 0.3 : 0.05, 
+            shadowRadius: 12, 
+            flexDirection: 'row', 
+            alignItems: 'center' 
+        },
+        cardIcon: { 
+            width: 56, 
+            height: 56, 
+            borderRadius: 18, 
+            backgroundColor: isDark ? theme.primary + '20' : theme.primary + '10', 
+            justifyContent: 'center', 
+            alignItems: 'center', 
+            marginRight: 16 
+        },
+        cardTitle: { fontSize: 18, fontWeight: '800', color: theme.text, marginBottom: 4 },
+        cardSubtitle: { fontSize: 13, color: theme.textLight, fontWeight: '600' },
         emptyState: { flex: 1, justifyContent: 'center', alignItems: 'center', marginTop: 100 },
-        emptyText: { fontSize: 16, color: theme.textLight, marginTop: 15 },
+        emptyText: { fontSize: 16, color: theme.textLight, marginTop: 15, fontWeight: '600' },
         
         // Preview Styles
-        previewScroll: { flex: 1, backgroundColor: isDark ? '#000' : '#f0f2f5' },
+        previewScroll: { flex: 1, backgroundColor: isDark ? theme.background : '#f0f2f5' },
         previewContainer: { padding: 20, alignItems: 'center' },
         admitCardPaper: {
             width: width - 40,
-            backgroundColor: '#fff',
-            padding: 20,
+            backgroundColor: '#fff', // Keep paper white for traditional look
+            padding: 24,
             borderWidth: 2,
             borderColor: '#000',
             elevation: 10,
@@ -379,16 +415,18 @@ const StudentAdmitCardScreen = () => {
     }), [theme, isDark]);
 
     const renderList = () => (
-        <View style={styles.container}>
+        <View style={{ flex: 1, backgroundColor: theme.background }}>
             <View style={styles.header}>
-                <TouchableOpacity onPress={() => router.back()}>
-                    <Ionicons name="arrow-back" size={28} color={theme.text} />
+                <TouchableOpacity style={styles.backBtn} onPress={() => router.back()}>
+                    <Ionicons name="arrow-back" size={24} color={theme.text} />
                 </TouchableOpacity>
                 <Text style={styles.headerTitle}>My Admit Cards</Text>
             </View>
 
             {loading ? (
-                <ActivityIndicator size="large" color={theme.primary} style={{ marginTop: 50 }} />
+                <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center' }}>
+                    <ActivityIndicator size="large" color={theme.primary} />
+                </View>
             ) : admitCards.length === 0 ? (
                 <View style={styles.emptyState}>
                     <Ionicons name="document-text-outline" size={80} color={theme.border} />
@@ -421,16 +459,31 @@ const StudentAdmitCardScreen = () => {
     );
 
     const renderPreview = () => (
-        <View style={styles.container}>
+        <View style={{ flex: 1, backgroundColor: theme.background }}>
             <View style={styles.header}>
-                <TouchableOpacity onPress={() => setViewMode('list')}>
-                    <Ionicons name="arrow-back" size={28} color={theme.text} />
+                <TouchableOpacity style={styles.backBtn} onPress={() => setViewMode('list')}>
+                    <Ionicons name="arrow-back" size={24} color={theme.text} />
                 </TouchableOpacity>
                 <Text style={[styles.headerTitle, { flex: 1 }]} numberOfLines={1}>Admit Card Preview</Text>
-                <TouchableOpacity onPress={generatePDF} style={{ padding: 4 }}>
-                    <Ionicons name="share-social-outline" size={24} color={theme.primary} />
+                <TouchableOpacity 
+                    onPress={generatePDF} 
+                    style={[styles.backBtn, { backgroundColor: theme.primary }]}
+                    disabled={isGeneratingPDF}
+                >
+                    {isGeneratingPDF ? (
+                        <ActivityIndicator size="small" color="#fff" />
+                    ) : (
+                        <Ionicons name="download-outline" size={24} color="#fff" />
+                    )}
                 </TouchableOpacity>
             </View>
+
+            {isGeneratingPDF && (
+                <View style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, backgroundColor: 'rgba(0,0,0,0.7)', justifyContent: 'center', alignItems: 'center', zIndex: 1000 }}>
+                    <ActivityIndicator size="large" color={theme.primary} />
+                    <Text style={{ color: '#fff', marginTop: 15, fontWeight: '900' }}>Generating PDF...</Text>
+                </View>
+            )}
 
             <ScrollView style={styles.previewScroll} showsVerticalScrollIndicator={false}>
                 <View style={styles.previewContainer}>
@@ -510,7 +563,7 @@ const StudentAdmitCardScreen = () => {
                                 </View>
                                 {selectedCard?.schedule.map((row, idx) => (
                                     <View key={idx} style={styles.paperGridRow}>
-                                        <View style={styles.paperGridCell}><Text style={styles.paperGridText}>{formatDate(row.date)} (${row.day})</Text></View>
+                                        <View style={styles.paperGridCell}><Text style={styles.paperGridText}>{`${String(formatDate(row.date)).trim()} (${String(row.day).trim()})`}</Text></View>
                                         <View style={styles.paperGridCell}><Text style={styles.paperGridText}>{row.subject}</Text></View>
                                         <View style={styles.paperGridCell}><Text style={styles.paperGridText}>{row.time}</Text></View>
                                     </View>

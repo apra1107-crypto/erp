@@ -60,44 +60,6 @@ const migrateTables = async () => {
             }
         }
 
-        // 3. Special handling for Fees tables
-        const feeTables = ['fees', 'occasional_fees', 'fee_receipts'];
-        
-        for (const table of feeTables) {
-             const tableExists = await pool.query(`
-                SELECT EXISTS (
-                    SELECT FROM information_schema.tables 
-                    WHERE table_name = '${table}'
-                );
-            `);
-
-            if (tableExists.rows[0].exists) {
-                const colCheck = await pool.query(`
-                    SELECT column_name FROM information_schema.columns 
-                    WHERE table_name = '${table}' AND column_name = 'session_id'
-                `);
-
-                if (colCheck.rows.length === 0) {
-                     console.log(`⚡ Adding session_id to ${table}...`);
-                     await pool.query(`ALTER TABLE ${table} ADD COLUMN session_id INTEGER`);
-                     await pool.query(`
-                        ALTER TABLE ${table} 
-                        ADD CONSTRAINT fk_${table}_session 
-                        FOREIGN KEY (session_id) REFERENCES academic_sessions(id)
-                    `);
-
-                    for (const [instId, sessionId] of Object.entries(sessionMap)) {
-                        await pool.query(`
-                            UPDATE ${table} 
-                            SET session_id = $1 
-                            WHERE institute_id = $2 AND session_id IS NULL
-                        `, [sessionId, instId]);
-                    }
-                    console.log(`✅ Migrated data for ${table}`);
-                }
-            }
-        }
-
         console.log('🎉 Phase 2 Migration Complete!');
         process.exit(0);
 

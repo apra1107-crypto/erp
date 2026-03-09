@@ -272,23 +272,23 @@
     display: grid;
     grid-template-columns: 1fr 1fr;
     gap: 1.5rem;
+    margin-bottom: 2.5rem;
 }
 
 .s-stat-card {
-    background: white;
+    background: var(--bg-primary);
     padding: 1.5rem;
     border-radius: 28px;
     display: flex;
     gap: 1.25rem;
     align-items: center;
-    border: 1px solid rgba(0, 0, 0, 0.02);
+    border: 1.5px solid var(--border-color);
     box-shadow: 0 4px 15px rgba(0, 0, 0, 0.03);
+    cursor: pointer;
+    transition: all 0.3s;
 }
 
-.theme-dark .s-stat-card {
-    background: #0f172a;
-    border-color: rgba(255, 255, 255, 0.03);
-}
+.s-stat-card:hover { transform: translateY(-5px); border-color: #6366f1; }
 
 .s-icon {
     width: 50px;

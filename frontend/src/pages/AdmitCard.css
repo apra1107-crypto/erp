@@ -1,18 +1,114 @@
 /* AdmitCard.css - Professional Institutional Theme */
 
+.admit-card-container h2 {
+    color: #0f172a;
+}
+
+.admit-card-container h3,
+.admit-card-container h4 {
+    color: #1e293b;
+}
+
+.theme-dark .admit-card-container h2,
+.theme-dark .admit-card-container h3,
+.theme-dark .admit-card-container h4 {
+    color: #f8fafc;
+}
+
+.theme-dark .pill-chip {
+    border-color: rgba(255, 255, 255, 0.1);
+    color: #94a3b8;
+}
+
+.theme-dark .pill-chip:hover {
+    border-color: #6366f1;
+    color: #6366f1;
+}
+
+.theme-dark .pill-chip.selected {
+    background: #6366f1;
+    color: white;
+}
+
+.theme-dark .btn-secondary {
+    background: rgba(255, 255, 255, 0.05);
+    color: #cbd5e1;
+}
+
+.theme-dark .btn-secondary:hover {
+    background: rgba(255, 255, 255, 0.1);
+}
+
+.theme-dark .exam-event-card {
+    background: #1e293b;
+    border-color: rgba(255, 255, 255, 0.05);
+}
+
+.theme-dark .event-title-stack h3 {
+    color: #f8fafc;
+}
+
+.theme-dark .loader-box {
+    color: #94a3b8;
+}
+
+.theme-dark .selected-card {
+    background: rgba(99, 102, 241, 0.1) !important;
+    border-color: #6366f1 !important;
+}
+
 .admit-card-container {
-    padding: 24px;
+    padding: 0 24px 24px 24px;
     height: 100%;
     background-color: transparent;
     font-family: 'Outfit', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+}
+
+.principal-dashboard .admit-card-container {
+    padding-top: 2rem;
 }
 
 /* Page Header */
 .page-header {
     display: flex;
     justify-content: space-between;
-    align-items: flex-end;
-    margin-bottom: 40px;
+    align-items: center;
+    margin-bottom: 1rem;
+    padding-top: 0;
+}
+
+.header-title-container {
+    display: flex;
+    align-items: center;
+    gap: 1.5rem;
+}
+
+.back-btn-minimal {
+    background: transparent;
+    border: none;
+    color: var(--text-primary, #0f172a);
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 4px;
+    transition: all 0.2s ease;
+    border-radius: 8px;
+}
+
+.theme-dark .back-btn-minimal {
+    color: #f8fafc;
+}
+
+.back-btn-minimal:hover {
+    background: rgba(99, 102, 241, 0.1);
+    color: #6366f1;
+    transform: translateX(-3px);
+}
+
+.back-btn-minimal svg {
+    width: 24px;
+    height: 24px;
 }
 
 .page-header h2 {
@@ -47,18 +143,21 @@
     display: flex;
     align-items: flex-start;
     justify-content: center;
-    padding: 60px 20px;
+    padding: 120px 20px 60px 20px;
     overflow-y: auto;
 }
 
 .creation-flow-card {
     width: 100%;
-    max-width: 900px;
+    max-width: 800px;
+    max-height: 85vh;
     background: #ffffff;
     border-radius: 32px;
     box-shadow: 0 50px 100px -20px rgba(0, 0, 0, 0.15);
     border: 1px solid #e2e8f0;
     overflow: hidden;
+    display: flex;
+    flex-direction: column;
     animation: dialogAppear 0.4s cubic-bezier(0.16, 1, 0.3, 1);
 }
 
@@ -80,11 +179,12 @@
 }
 
 .creation-header {
-    padding: 32px 40px;
+    padding: 24px 40px;
     border-bottom: 1px solid #f1f5f9;
     display: flex;
     justify-content: space-between;
     align-items: center;
+    flex-shrink: 0;
 }
 
 .theme-dark .creation-header {
@@ -93,7 +193,7 @@
 
 .creation-header h3 {
     margin: 0;
-    font-size: 24px;
+    font-size: 22px;
     font-weight: 800;
     color: #0f172a;
 }
@@ -105,8 +205,8 @@
 .close-btn {
     background: rgba(15, 23, 42, 0.05);
     border: none;
-    width: 40px;
-    height: 40px;
+    width: 36px;
+    height: 36px;
     border-radius: 50%;
     cursor: pointer;
     display: flex;
@@ -126,7 +226,9 @@
 }
 
 .creation-content {
-    padding: 40px;
+    padding: 32px 40px;
+    overflow-y: auto;
+    flex: 1;
 }
 
 /* Stepper */
@@ -205,6 +307,97 @@
     box-shadow: 0 0 0 4px rgba(99, 102, 241, 0.1);
 }
 
+.multi-select-container {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+    background: #f8fafc;
+    padding: 16px;
+    border-radius: 20px;
+    border: 2px solid #e2e8f0;
+}
+
+.theme-dark .multi-select-container {
+    background: rgba(255, 255, 255, 0.02);
+    border-color: rgba(255, 255, 255, 0.1);
+}
+
+.selected-tags-area {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    min-height: 40px;
+    align-items: center;
+}
+
+.selected-tag {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    background: #6366f1;
+    color: white;
+    padding: 6px 12px;
+    border-radius: 10px;
+    font-size: 13px;
+    font-weight: 700;
+    animation: tagIn 0.2s ease-out;
+}
+
+@keyframes tagIn {
+    from { opacity: 0; transform: scale(0.9); }
+    to { opacity: 1; transform: scale(1); }
+}
+
+.tag-remove {
+    background: rgba(255, 255, 255, 0.2);
+    border: none;
+    color: white;
+    width: 18px;
+    height: 18px;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    font-size: 10px;
+    transition: 0.2s;
+}
+
+.tag-remove:hover {
+    background: white;
+    color: #6366f1;
+}
+
+.placeholder-text {
+    color: #94a3b8;
+    font-size: 14px;
+    font-style: italic;
+}
+
+.premium-select {
+    padding: 12px 16px;
+    border-radius: 12px;
+    border: 1.5px solid #cbd5e1;
+    background: #ffffff;
+    color: #0f172a;
+    font-size: 14px;
+    font-weight: 700;
+    cursor: pointer;
+    outline: none;
+    transition: all 0.2s;
+}
+
+.theme-dark .premium-select {
+    background: #0f172a;
+    color: #f8fafc;
+    border-color: rgba(255, 255, 255, 0.1);
+}
+
+.premium-select:focus {
+    border-color: #6366f1;
+    box-shadow: 0 0 0 3px rgba(99, 102, 241, 0.1);
+}
+
 .class-chips-box {
     display: flex;
     flex-wrap: wrap;
@@ -232,10 +425,15 @@
 }
 
 .pill-chip.selected {
-    background: #6366f1;
-    border-color: #6366f1;
-    color: white;
+    background: #6366f1 !important;
+    border-color: #6366f1 !important;
+    color: #ffffff !important;
     box-shadow: 0 10px 20px rgba(99, 102, 241, 0.2);
+}
+
+.theme-dark .pill-chip.selected {
+    background: #6366f1 !important;
+    color: #ffffff !important;
 }
 
 /* Schedule Builder List (No Tables) */
@@ -247,7 +445,7 @@
 
 .schedule-row-card {
     display: grid;
-    grid-template-columns: 140px 140px 1fr 1fr 50px;
+    grid-template-columns: 120px 100px 2.5fr 1.8fr 44px; /* Prioritize Subject Name width */
     gap: 12px;
     align-items: end;
     background: #f8fafc;
@@ -349,8 +547,8 @@
     display: flex;
     justify-content: flex-end;
     gap: 12px;
-    margin-top: 40px;
-    padding-top: 32px;
+    margin-top: 20px;
+    padding-top: 24px;
     border-top: 1px solid #f1f5f9;
 }
 
@@ -665,13 +863,38 @@
 /* Selection Styles */
 .selected-card {
     border-color: #6366f1 !important;
+    background: rgba(99, 102, 241, 0.05) !important;
     box-shadow: 0 0 0 2px rgba(99, 102, 241, 0.2), 0 20px 40px -10px rgba(0, 0, 0, 0.1) !important;
 }
 
-.active-select {
-    background: #6366f1 !important;
-    color: white !important;
+.theme-dark .selected-card {
+    background: rgba(99, 102, 241, 0.15) !important;
     border-color: #6366f1 !important;
+}
+
+.card-checkbox {
+    position: absolute;
+    top: 15px;
+    right: 15px;
+    width: 24px;
+    height: 24px;
+    borderRadius: 6px;
+    border: 2px solid #6366f1;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 5;
+    background: transparent;
+}
+
+.card-checkbox.active {
+    background: #6366f1;
+}
+
+.card-checkbox span {
+    color: white !important;
+    font-size: 14px;
+    font-weight: bold;
 }
 
 @keyframes fadeIn {
@@ -840,4 +1063,429 @@
 .export-option-text div:last-child {
     font-size: 0.8rem;
     opacity: 0.6;
+}
+/* Modern Toggle Mini for Admit Cards */
+.modern-toggle-mini {
+    width: 32px;
+    height: 18px;
+    background: #e2e8f0;
+    border-radius: 10px;
+    position: relative;
+    cursor: pointer;
+    transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.modern-toggle-mini.active {
+    background: #10b981;
+}
+
+.toggle-thumb-mini {
+    width: 14px;
+    height: 14px;
+    background: white;
+    border-radius: 50%;
+    position: absolute;
+    top: 2px;
+    left: 2px;
+    transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+    box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+}
+
+.active .toggle-thumb-mini {
+    left: calc(100% - 16px);
+}
+
+/* Modern Pill-Based Class Selection System */
+.pill-selection-system {
+    display: flex;
+    flex-direction: column;
+    gap: 1.25rem;
+    background: rgba(0, 0, 0, 0.02);
+    padding: 1.25rem;
+    border-radius: 20px;
+    border: 1px solid var(--border-color);
+}
+
+.selection-summary-strip {
+    display: flex;
+    align-items: flex-start;
+    gap: 1rem;
+    padding-bottom: 1rem;
+    border-bottom: 1.5px dashed var(--border-color);
+}
+
+.summary-label { font-size: 0.75rem; font-weight: 800; color: var(--text-secondary); text-transform: uppercase; margin-top: 6px; }
+.summary-tags { display: flex; flex-wrap: wrap; gap: 0.5rem; }
+.mini-tag { 
+    background: #6366f1; 
+    color: white; 
+    padding: 4px 10px; 
+    border-radius: 8px; 
+    font-size: 0.8rem; 
+    font-weight: 700; 
+    display: flex; 
+    align-items: center; 
+    gap: 6px; 
+}
+.mini-tag i { cursor: pointer; font-style: normal; opacity: 0.7; }
+.none-text { font-size: 0.85rem; color: var(--text-secondary); font-style: italic; }
+
+.class-pills-row {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.75rem;
+}
+
+.class-main-pill {
+    background: white;
+    border: 1.5px solid var(--border-color);
+    padding: 10px 18px;
+    border-radius: 14px;
+    font-weight: 700;
+    font-size: 0.9rem;
+    color: var(--text-primary);
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    transition: all 0.3s ease;
+}
+
+.class-main-pill:hover { border-color: #6366f1; transform: translateY(-2px); }
+.class-main-pill.expanded { background: #6366f1; color: white; border-color: #6366f1; box-shadow: 0 8px 20px rgba(99, 102, 241, 0.25); }
+.class-main-pill.has-selection { border-color: #6366f1; background: #6366f108; }
+
+.section-reveal-box {
+    background: white;
+    border: 1.5px solid #6366f1;
+    border-radius: 18px;
+    padding: 1.25rem;
+    box-shadow: 0 12px 30px rgba(99, 102, 241, 0.1);
+}
+
+.reveal-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem; }
+.reveal-header span { font-size: 0.85rem; font-weight: 800; color: #6366f1; }
+.done-btn-pill { background: #10b981; color: white; border: none; padding: 6px 16px; border-radius: 10px; font-weight: 700; font-size: 0.8rem; cursor: pointer; }
+
+.section-pills-grid {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.75rem;
+}
+
+.section-pill {
+    background: #f1f5f9;
+    border: 1px solid #e2e8f0;
+    padding: 8px 20px;
+    border-radius: 12px;
+    font-weight: 800;
+    color: #475569;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    transition: all 0.2s;
+}
+
+.section-pill:hover { background: #e2e8f0; }
+.section-pill.active { background: #10b981; color: white; border-color: #10b981; box-shadow: 0 4px 12px rgba(16, 185, 129, 0.2); }
+
+/* Schedule Row Refinements */
+.schedule-time-actions-group {
+    display: flex;
+    align-items: flex-end;
+    gap: 0.75rem;
+    background: rgba(99, 102, 241, 0.03);
+    padding: 0.5rem 0.75rem;
+    border-radius: 12px;
+    border: 1px dashed var(--border-color);
+}
+
+.flex-2 {
+    flex: 2 !important;
+}
+
+.premium-input-small.clock-picker {
+    width: 130px !important;
+    cursor: pointer;
+}
+
+/* Ensure the native picker shows AM/PM in supporting browsers */
+.clock-picker::-webkit-datetime-edit-ampm-field {
+    display: inline-block !important;
+}
+
+/* Custom 12-Hour Time Picker Styles */
+.custom-time-picker-12 {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+}
+
+.time-parts-row {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    background: white;
+    padding: 4px 8px;
+    border-radius: 10px;
+    border: 1.5px solid var(--border-color);
+}
+
+.time-parts-row select {
+    border: none;
+    background: transparent;
+    font-size: 0.85rem;
+    font-weight: 700;
+    color: var(--text-primary);
+    cursor: pointer;
+    outline: none;
+    padding: 2px;
+}
+
+.time-parts-row span {
+    font-weight: 900;
+    color: #6366f1;
+    font-size: 0.85rem;
+}
+
+.period-select {
+    color: #6366f1 !important;
+    margin-left: 4px;
+    border-left: 1px solid var(--border-color) !important;
+    padding-left: 8px !important;
+}
+
+/* Modern Clock Picker Aesthetic Styles */
+.modern-clock-wrapper {
+    position: relative;
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+}
+
+.time-display-trigger {
+    background: white;
+    border: 1.5px solid var(--border-color);
+    padding: 6px 12px;
+    border-radius: 10px;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    cursor: pointer;
+    transition: all 0.2s;
+    min-width: 90px;
+    justify-content: center;
+}
+
+.time-display-trigger:hover { border-color: #6366f1; background: #6366f105; }
+.time-display-trigger.active { border-color: #6366f1; box-shadow: 0 0 0 3px rgba(99, 102, 241, 0.1); }
+
+.time-display-trigger .val { font-weight: 800; color: var(--text-primary); font-size: 0.9rem; }
+.time-display-trigger .period { font-weight: 900; color: #6366f1; font-size: 0.75rem; }
+
+.clock-popover {
+    position: absolute;
+    bottom: calc(100% + 12px);
+    left: 50%;
+    transform: translateX(-50%);
+    background: white;
+    border: 1px solid var(--border-color);
+    border-radius: 16px;
+    box-shadow: 0 15px 40px rgba(0, 0, 0, 0.15);
+    padding: 12px;
+    z-index: 1000;
+    width: 200px;
+}
+
+.popover-arrow {
+    position: absolute;
+    bottom: -6px;
+    left: 50%;
+    transform: translateX(-50%) rotate(45deg);
+    width: 12px;
+    height: 12px;
+    background: white;
+    border-right: 1px solid var(--border-color);
+    border-bottom: 1px solid var(--border-color);
+}
+
+.period-toggle-row {
+    display: flex;
+    background: #f1f5f9;
+    padding: 3px;
+    border-radius: 8px;
+    margin-bottom: 10px;
+}
+
+.period-toggle-row button {
+    flex: 1;
+    border: none;
+    padding: 4px;
+    font-size: 0.75rem;
+    font-weight: 800;
+    border-radius: 6px;
+    background: transparent;
+    color: #64748b;
+    cursor: pointer;
+}
+
+.period-toggle-row button.active { background: white; color: #6366f1; box-shadow: 0 2px 6px rgba(0,0,0,0.05); }
+
+.popover-grid {
+    display: grid;
+    gap: 4px;
+    margin-bottom: 8px;
+}
+
+.popover-grid.hours { grid-template-columns: repeat(4, 1fr); }
+.popover-grid.minutes { grid-template-columns: repeat(4, 1fr); margin-bottom: 0; padding-top: 8px; border-top: 1px solid #f1f5f9; }
+
+.popover-grid button {
+    border: none;
+    background: transparent;
+    padding: 6px 0;
+    border-radius: 6px;
+    font-size: 0.8rem;
+    font-weight: 700;
+    color: var(--text-primary);
+    cursor: pointer;
+    transition: all 0.2s;
+}
+
+.popover-grid button:hover { background: #f1f5f9; color: #6366f1; }
+.popover-grid button.selected { background: #6366f1; color: white; }
+
+/* Fix Clock Picker Visibility and Clipping */
+.creation-flow-card, .creation-content {
+    overflow: visible !important;
+}
+
+.clock-popover {
+    z-index: 9999 !important;
+}
+
+/* Ensure the scrollable list doesn't clip children either */
+.schedule-list {
+    overflow: visible !important;
+    padding-bottom: 50px; /* Buffer for popover space */
+}
+
+.flex-3 {
+    flex: 3 !important;
+}
+
+/* Admit Card Registry Search UI */
+.registry-search-hub {
+    display: flex;
+    align-items: center;
+    background: rgba(0, 0, 0, 0.03);
+    border-radius: 12px;
+    padding: 4px;
+    margin-left: 1rem;
+    border: 1.5px solid transparent;
+    transition: all 0.4s cubic-bezier(0.16, 1, 0.3, 1);
+    width: 44px;
+    overflow: hidden;
+}
+
+.registry-search-hub.active {
+    width: 300px;
+    background: white;
+    border-color: #6366f1;
+    box-shadow: 0 8px 20px rgba(99, 102, 241, 0.1);
+}
+
+.theme-dark .registry-search-hub.active {
+    background: #0f172a;
+}
+
+.filter-trigger-btn {
+    width: 36px;
+    height: 36px;
+    border-radius: 8px;
+    border: none;
+    background: transparent;
+    color: #64748b;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+    transition: all 0.2s;
+}
+
+.registry-search-hub.active .filter-trigger-btn {
+    color: #6366f1;
+}
+
+.registry-search-input {
+    border: none;
+    background: transparent;
+    padding: 0 12px;
+    font-size: 0.9rem;
+    font-weight: 600;
+    color: var(--text-primary);
+    outline: none;
+    width: 100%;
+    opacity: 0;
+    transition: opacity 0.3s;
+}
+
+.registry-search-hub.active .registry-search-input {
+    opacity: 1;
+}
+
+/* Admit Card Selection Filter Styles */
+.registry-filter-hub {
+    position: relative;
+    margin-left: 1rem;
+}
+
+.active-filter-dot {
+    position: absolute;
+    top: 2px;
+    right: 2px;
+    width: 8px;
+    height: 8px;
+    background: #ef4444;
+    border-radius: 50%;
+    border: 2px solid white;
+}
+
+.filter-dropdown-popover {
+    position: absolute;
+    top: calc(100% + 12px);
+    left: 0;
+    width: 240px;
+    background: white;
+    border: 1px solid var(--border-color);
+    border-radius: 16px;
+    box-shadow: 0 15px 40px rgba(0, 0, 0, 0.12);
+    z-index: 1000;
+    padding: 8px;
+    overflow: hidden;
+}
+
+.theme-dark .filter-dropdown-popover {
+    background: #1e293b;
+}
+
+.filter-option {
+    padding: 10px 16px;
+    border-radius: 10px;
+    font-size: 0.9rem;
+    font-weight: 600;
+    color: var(--text-primary);
+    cursor: pointer;
+    transition: all 0.2s;
+}
+
+.filter-option:hover {
+    background: var(--bg-secondary);
+    color: #6366f1;
+}
+
+.filter-option.selected {
+    background: #6366f110;
+    color: #6366f1;
 }

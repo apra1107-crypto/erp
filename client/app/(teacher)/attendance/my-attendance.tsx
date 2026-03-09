@@ -28,12 +28,22 @@ export default function MyAttendance() {
         try {
             setLoading(true);
             const token = await AsyncStorage.getItem('teacherToken');
+            const storedSessionId = await AsyncStorage.getItem('selectedSessionId');
+            const userDataStr = await AsyncStorage.getItem('teacherData');
+            const userData = userDataStr ? JSON.parse(userDataStr) : null;
+            const sessionId = storedSessionId || (userData ? userData.current_session_id : null);
+
             const month = currentMonth.getMonth() + 1;
             const year = currentMonth.getFullYear();
 
             const response = await axios.get(
                 `${API_ENDPOINTS.TEACHER_ATTENDANCE}/history?month=${month}&year=${year}`,
-                { headers: { Authorization: `Bearer ${token}` } }
+                { 
+                    headers: { 
+                        Authorization: `Bearer ${token}`,
+                        'x-academic-session-id': sessionId?.toString()
+                    } 
+                }
             );
 
             setAttendanceData(response.data || []);
@@ -98,33 +108,50 @@ export default function MyAttendance() {
     const styles = useMemo(() => StyleSheet.create({
         container: { flex: 1, backgroundColor: theme.background },
         header: {
-            backgroundColor: theme.card,
             paddingTop: insets.top + 10,
-            paddingBottom: 15,
+            paddingBottom: 10,
             paddingHorizontal: 20,
             flexDirection: 'row',
             alignItems: 'center',
-            borderBottomWidth: 1,
-            borderBottomColor: theme.border,
         },
-        backBtn: { padding: 5, marginRight: 15 },
-        headerTitle: { fontSize: 20, fontWeight: '900', color: theme.text },
+        backBtn: { 
+            width: 40, 
+            height: 40, 
+            borderRadius: 20, 
+            backgroundColor: theme.card, 
+            justifyContent: 'center', 
+            alignItems: 'center', 
+            marginRight: 15,
+            elevation: 2,
+            shadowColor: '#000',
+            shadowOffset: { width: 0, height: 2 },
+            shadowOpacity: 0.1,
+            shadowRadius: 4,
+        },
+        headerTitle: { fontSize: 24, fontWeight: '900', color: theme.text, letterSpacing: -0.5 },
         
         content: { flex: 1 },
         monthSelector: {
             flexDirection: 'row',
             justifyContent: 'space-between',
             alignItems: 'center',
-            padding: 20,
-            backgroundColor: theme.card,
-            marginHorizontal: 20,
-            marginTop: 20,
-            borderRadius: 20,
-            borderWidth: 1,
-            borderColor: theme.border,
+            paddingVertical: 15,
+            paddingHorizontal: 20,
+            marginTop: 10,
+            marginBottom: 5,
         },
-        monthText: { fontSize: 18, fontWeight: '800', color: theme.text },
-        navBtn: { padding: 8, borderRadius: 10, backgroundColor: theme.background, borderWidth: 1, borderColor: theme.border },
+        monthText: { fontSize: 18, fontWeight: '900', color: theme.text, letterSpacing: -0.5 },
+        navBtn: { 
+            width: 36, 
+            height: 36, 
+            borderRadius: 12, 
+            backgroundColor: theme.card, 
+            justifyContent: 'center', 
+            alignItems: 'center', 
+            borderWidth: 1, 
+            borderColor: theme.border,
+            elevation: 1,
+        },
 
         calendarCard: {
             backgroundColor: theme.card,
@@ -213,11 +240,11 @@ export default function MyAttendance() {
 
     return (
         <View style={styles.container}>
-            <StatusBar barStyle={theme.statusBarStyle} backgroundColor={theme.card} />
+            <StatusBar barStyle={theme.statusBarStyle} backgroundColor="transparent" translucent={true} />
 
             <View style={styles.header}>
                 <TouchableOpacity style={styles.backBtn} onPress={() => router.back()}>
-                    <Ionicons name="arrow-back" size={24} color={theme.text} />
+                    <Ionicons name="chevron-back" size={22} color={theme.text} />
                 </TouchableOpacity>
                 <Text style={styles.headerTitle}>My Attendance</Text>
             </View>

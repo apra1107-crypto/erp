@@ -6,117 +6,74 @@ import TeacherLogin from './TeacherLogin';
 import AdminLogin from './AdminLogin';
 
 const LoginDialog = ({ isOpen, onClose }) => {
-    const [selectedRole, setSelectedRole] = useState(null);
+    const [selectedRole, setSelectedRole] = useState('institute');
 
     if (!isOpen) return null;
 
-    const handleBackdropClick = (e) => {
-        if (e.target.className === 'login-overlay') {
-            handleClose();
-        }
-    };
+    const roles = [
+        { id: 'institute', title: 'Institute Portal', icon: 'M3 21h18M3 7l9-4 9 4M5 21V10M19 21V10M9 21v-6h6v6', color: 'blue', subtitle: 'For Principals & Owners' },
+        { id: 'teacher', title: 'Teacher Portal', icon: 'M16 3.13a4 4 0 0 1 0 7.75M7 19H3v-2a4 4 0 0 1 4-4m14 4h-4v-2a4 4 0 0 0-4-4m1-6a4 4 0 1 1-8 0 4 4 0 0 1 8 0z', color: 'purple', subtitle: 'Manage classes & attendance' },
+        { id: 'student', title: 'Student Portal', icon: 'M12 14l9-5-9-5-9 5 9 5z M12 14l6.16-3.422a12.083 12.083 0 01.665 6.479A9.916 9.916 0 0012 20.147a9.916 9.916 0 00-6.825-3.09 12.083 12.083 0 01.665-6.479L12 14z', color: 'pink', subtitle: 'View results & homework' },
+        { id: 'admin', title: 'Super Admin', icon: 'M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z', color: 'orange', subtitle: 'System administration' }
+    ];
 
-    const handleBack = () => {
-        setSelectedRole(null);
-    };
-
-    const handleClose = () => {
-        onClose();
-        setTimeout(() => setSelectedRole(null), 300);
+    const handleOverlayClick = (e) => {
+        if (e.target === e.currentTarget) onClose();
     };
 
     return (
-        <div className="login-overlay" onClick={handleBackdropClick}>
-            <div className="login-modal">
-                <button className="modal-close" onClick={handleClose}>
+        <div className="login-overlay" onClick={handleOverlayClick}>
+            <div className="login-modal-wrapper">
+                <button className="modal-close-icon" onClick={onClose} aria-label="Close">
                     <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
                         <path d="M18 6L6 18M6 6l12 12" />
                     </svg>
                 </button>
 
-                {!selectedRole ? (
-                    <div className="role-selection-view">
-                        <div className="view-header">
-                            <h2 className="view-title">Welcome Back</h2>
-                            <p className="view-subtitle">Please select your portal to continue</p>
+                <div className="login-dual-layout">
+                    {/* Left Side: Role Navigation */}
+                    <div className="login-role-sidebar">
+                        <div className="sidebar-branding">
+                            <h2 className="brand-text">Klass<span className="logo-accent">in</span></h2>
+                            <p className="login-hint">Select Workspace</p>
                         </div>
 
-                        <div className="role-options">
-                            <div className="role-option-card" onClick={() => setSelectedRole('institute')}>
-                                <div className="role-icon-box blue">
-                                    <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                                        <path d="M3 21h18M3 7l9-4 9 4M5 21V10M19 21V10M9 21v-6h6v6" />
-                                    </svg>
+                        <div className="role-nav-container">
+                            {roles.map((role) => (
+                                <div 
+                                    key={role.id} 
+                                    className={`role-nav-card ${selectedRole === role.id ? 'active' : ''}`}
+                                    onClick={() => setSelectedRole(role.id)}
+                                >
+                                    <div className={`role-card-icon ${role.color}`}>
+                                        <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                                            <path d={role.icon} />
+                                        </svg>
+                                    </div>
+                                    <div className="role-card-text">
+                                        <span className="role-card-label">{role.title}</span>
+                                        <span className="role-card-subtitle">{role.subtitle}</span>
+                                    </div>
+                                    {selectedRole === role.id && <div className="selection-indicator"></div>}
                                 </div>
-                                <div className="role-info">
-                                    <h3>Institute Login</h3>
-                                    <p>Principals & Administrators</p>
-                                </div>
-                                <svg className="arrow-right" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
-                                    <path d="M9 18l6-6-6-6" />
-                                </svg>
-                            </div>
-
-                            <div className="role-option-card" onClick={() => setSelectedRole('teacher')}>
-                                <div className="role-icon-box purple">
-                                    <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                                        <path d="M20 21v-2a4 4 0 0 0-3-3.87M4 19v-2a4 4 0 0 1 4-4h1M16 11a4 4 0 1 1-8 0 4 4 0 0 1 8 0z" />
-                                    </svg>
-                                </div>
-                                <div className="role-info">
-                                    <h3>Teacher Login</h3>
-                                    <p>Faculty & Staff Members</p>
-                                </div>
-                                <svg className="arrow-right" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
-                                    <path d="M9 18l6-6-6-6" />
-                                </svg>
-                            </div>
-
-                            <div className="role-option-card" onClick={() => setSelectedRole('student')}>
-                                <div className="role-icon-box pink">
-                                    <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                                        <circle cx="12" cy="7" r="4" />
-                                        <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2" />
-                                    </svg>
-                                </div>
-                                <div className="role-info">
-                                    <h3>Student Login</h3>
-                                    <p>Learner & Parent Access</p>
-                                </div>
-                                <svg className="arrow-right" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
-                                    <path d="M9 18l6-6-6-6" />
-                                </svg>
-                            </div>
-
-                            <div className="role-option-card" onClick={() => setSelectedRole('admin')}>
-                                <div className="role-icon-box orange">
-                                    <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                                        <path d="M12 2L2 7l10 5 10-5-10-5z" />
-                                        <path d="M2 17l10 5 10-5M2 12l10 5 10-5" />
-                                    </svg>
-                                </div>
-                                <div className="role-info">
-                                    <h3>Admin Login</h3>
-                                    <p>System Administrator</p>
-                                </div>
-                                <svg className="arrow-right" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
-                                    <path d="M9 18l6-6-6-6" />
-                                </svg>
-                            </div>
+                            ))}
                         </div>
 
-                        <div className="view-footer">
-                            <p>Trouble logging in? <a href="#">Contact Support</a></p>
+                        <div className="sidebar-tagline">
+                            <p>© 2026 Klassin.co.in</p>
                         </div>
                     </div>
-                ) : (
-                    <div className="login-form-view">
-                        {selectedRole === 'institute' && <InstituteLogin onBack={handleBack} onClose={handleClose} />}
-                        {selectedRole === 'teacher' && <TeacherLogin onBack={handleBack} onClose={handleClose} />}
-                        {selectedRole === 'student' && <StudentLogin onBack={handleBack} onClose={handleClose} />}
-                        {selectedRole === 'admin' && <AdminLogin onBack={handleBack} onClose={handleClose} />}
+
+                    {/* Right Side: Dynamic Form Area */}
+                    <div className="login-form-area">
+                        <div className="form-wrapper-box">
+                            {selectedRole === 'institute' && <InstituteLogin onBack={() => {}} onClose={onClose} isSplitView={true} />}
+                            {selectedRole === 'teacher' && <TeacherLogin onBack={() => {}} onClose={onClose} isSplitView={true} />}
+                            {selectedRole === 'student' && <StudentLogin onBack={() => {}} onClose={onClose} isSplitView={true} />}
+                            {selectedRole === 'admin' && <AdminLogin onBack={() => {}} onClose={onClose} isSplitView={true} />}
+                        </div>
                     </div>
-                )}
+                </div>
             </div>
         </div>
     );

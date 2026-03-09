@@ -13,7 +13,7 @@ import Toast from 'react-native-toast-message';
 import { Ionicons } from '@expo/vector-icons';
 import { BlurView } from 'expo-blur';
 import { LinearGradient } from 'expo-linear-gradient';
-import Animated, { useSharedValue, useAnimatedStyle, withTiming, withSpring, interpolate, Extrapolate, useAnimatedScrollHandler, interpolateColor } from 'react-native-reanimated';
+import Animated, { useSharedValue, useAnimatedStyle, withTiming, withSpring, interpolate, Extrapolate, useAnimatedScrollHandler, interpolateColor, withRepeat, withSequence } from 'react-native-reanimated';
 import { useTheme } from '../../context/ThemeContext';
 import { useSocket } from '../../context/SocketContext';
 import { API_ENDPOINTS, BASE_URL } from '../../constants/Config';
@@ -30,7 +30,68 @@ const GRADIENTS = {
     afternoon: ['#007AFF', '#4CD964'],
     evening: ['#5856D6', '#000000'],
     event: ['#FF2D55', '#AF52DE'],
+    fees: ['#6366f1', '#a855f7'],
+    transport: ['#06b6d4', '#0891b2'],
 };
+
+const LiveBadge = () => {
+    const opacity = useSharedValue(1);
+    const scale = useSharedValue(1);
+
+    useEffect(() => {
+        opacity.value = withRepeat(
+            withSequence(
+                withTiming(0.4, { duration: 800 }),
+                withTiming(1, { duration: 800 })
+            ),
+            -1,
+            true
+        );
+        scale.value = withRepeat(
+            withSequence(
+                withTiming(1.1, { duration: 800 }),
+                withTiming(1, { duration: 800 })
+            ),
+            -1,
+            true
+        );
+    }, []);
+
+    const animatedStyle = useAnimatedStyle(() => ({
+        opacity: opacity.value,
+        transform: [{ scale: scale.value }],
+        borderColor: '#FF3B30',
+        borderWidth: 2,
+    }));
+
+    return (
+        <Animated.View style={[{ 
+            backgroundColor: '#fff', 
+            paddingHorizontal: 10, 
+            paddingVertical: 4, 
+            borderRadius: 10,
+            flexDirection: 'row',
+            alignItems: 'center',
+            elevation: 5,
+            shadowColor: '#FF3B30',
+            shadowOpacity: 0.5,
+            shadowRadius: 5
+        }, animatedStyle]}>
+            <View style={{ width: 7, height: 7, borderRadius: 3.5, backgroundColor: '#FF3B30', marginRight: 5 }} />
+            <Text style={{ fontSize: 9, fontWeight: '900', color: '#FF3B30', letterSpacing: 0.5 }}>LIVE</Text>
+        </Animated.View>
+    );
+};
+
+const PREMIUM_GRADIENTS = [
+    ['#4158D0', '#C850C0', '#FFCC70'], // Cosmic Fusion
+    ['#0093E9', '#80D0C7'],             // Deep Ocean
+    ['#8EC5FC', '#E0C3FC'],             // Lavender Sky
+    ['#FBAB7E', '#F7CE68'],             // Sunset Glow
+    ['#85FFBD', '#FFFB7D'],             // Fresh Mint
+    ['#21D4FD', '#B721FF'],             // Electric Violet
+    ['#08AEEA', '#2AF598'],             // Arctic Cyan
+];
 
 const getGreetingAndQuote = () => {
     const now = new Date();
@@ -60,18 +121,31 @@ const getGreetingAndQuote = () => {
 };
 
 export default function StudentDashboard() {
+
     const router = useRouter();
+
     const [studentData, setStudentData] = useState<any>(null);
+
     const [loading, setLoading] = useState(true);
+
     const [refreshing, setRefreshing] = useState(false);
+
     const { isDark, theme, toggleTheme } = useTheme();
+
     const { socket } = useSocket();
+
     const insets = useSafeAreaInsets();
 
+
+
     // Flashcards State
+
     const [dashboardData, setDashboardData] = useState<any>(null);
+
     const [activeSlide, setActiveSlide] = useState(0);
+
     const flashListRef = useRef<any>(null);
+    const otpInputRef = useRef<TextInput>(null);
     const scrollX = useSharedValue(0);
     const isInteracting = useRef(false);
     const timerRef = useRef<any>(null);
@@ -84,10 +158,20 @@ export default function StudentDashboard() {
 
     const flashcardData = useMemo(() => {
         if (!dashboardData) return [];
-        const base = [
-            { type: 'attendance', data: dashboardData.attendance },
+        const base: any[] = [
+            { type: 'attendance', data: { attendance: dashboardData.attendance, absent_request: dashboardData.absent_request } },
             { type: 'homework_summary', data: dashboardData.homework }
         ];
+
+        // Monthly Fees Activation Flashcard
+        if (dashboardData.fees_activation?.is_activated) {
+            base.push({ type: 'monthly_fees', data: dashboardData.fees_activation });
+        }
+
+        // Transport Flashcard
+        if (dashboardData.transport) {
+            base.push({ type: 'transport', data: dashboardData.transport });
+        }
 
         // 3rd Card: Event or Greeting
         if (dashboardData.today_events && dashboardData.today_events.length > 0) {
@@ -101,7 +185,7 @@ export default function StudentDashboard() {
 
     const startTimer = () => {
         if (timerRef.current) clearInterval(timerRef.current);
-        if (flashcardData.length <= 1) return;
+        if (!flashcardData || flashcardData.length <= 1) return;
 
         const currentCard = flashcardData[activeSlide];
         let delay = 4000; // Default 4s
@@ -110,10 +194,14 @@ export default function StudentDashboard() {
         if (currentCard?.type === 'event') delay = 60000; // 60s for event
 
         timerRef.current = setInterval(() => {
-            if (!isInteracting.current && dashboardData) {
+            if (!isInteracting.current && flashcardData.length > 1) {
                 const nextIndex = (activeSlide + 1) % flashcardData.length;
-                flashListRef.current?.scrollToIndex({ index: nextIndex, animated: true });
-                setActiveSlide(nextIndex);
+                
+                // Safety check to prevent out of bounds errors
+                if (nextIndex >= 0 && nextIndex < flashcardData.length) {
+                    flashListRef.current?.scrollToIndex({ index: nextIndex, animated: true });
+                    setActiveSlide(nextIndex);
+                }
             }
         }, delay);
     };
@@ -142,15 +230,55 @@ export default function StudentDashboard() {
         let mainText = 'Pending';
         let bottomText = 'Attendance';
 
-        if (item.type === 'attendance') {
-            const now = new Date();
-            subTitle = now.toLocaleDateString('en-IN', { weekday: 'long', day: 'numeric', month: 'short' });
-            if (item.data) {
-                mainText = item.data.status.toUpperCase();
-                gradientColors = item.data.status === 'present' ? GRADIENTS.homeworkDone : ['#FF3B30', '#FF2D55'];
-                iconName = item.data.status === 'present' ? 'checkmark-circle' : 'close-circle';
-            }
-        } else if (item.type === 'homework_summary') {
+                if (item.type === 'attendance') {
+
+                    const now = new Date();
+
+                    subTitle = now.toLocaleDateString('en-IN', { weekday: 'long', day: 'numeric', month: 'short' });
+
+                    const attendance = item.data?.attendance;
+
+                    const absentReq = item.data?.absent_request;
+
+        
+
+                    if (attendance) {
+
+                        mainText = attendance.status.toUpperCase();
+
+                        gradientColors = attendance.status === 'present' ? GRADIENTS.homeworkDone : ['#FF3B30', '#FF2D55'];
+
+                        iconName = attendance.status === 'present' ? 'checkmark-circle' : 'close-circle';
+
+                        bottomText = 'Attendance Marked';
+
+                    } else if (absentReq) {
+
+                        mainText = 'LEAVE OK';
+
+                        subTitle = 'Today\'s Approved Leave';
+
+                        gradientColors = ['#f59e0b', '#d97706']; // Professional orange for approved leave
+
+                        iconName = 'document-text-outline';
+
+                        bottomText = `By ${absentReq.approved_by_teacher_name}`;
+
+                    } else {
+
+                        mainText = 'PENDING';
+
+                        bottomText = 'Attendance Status';
+
+                        gradientColors = GRADIENTS.attendance;
+
+                        iconName = 'calendar-outline';
+
+                    }
+
+                }
+
+         else if (item.type === 'homework_summary') {
             const count = item.data?.length || 0;
             const doneCount = item.data?.filter((h: any) => h.is_done).length || 0;
             
@@ -175,6 +303,34 @@ export default function StudentDashboard() {
             bottomText = item.data.description || "Check calendar for details";
             gradientColors = GRADIENTS.event;
             iconName = 'star';
+        } else if (item.type === 'monthly_fees') {
+            const months = ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"];
+            const monthName = months[item.data.month - 1];
+            const details = item.data.details;
+            const extraCharges = item.data.extra_charges || [];
+            const extraTotal = extraCharges.reduce((sum: number, ec: any) => sum + parseFloat(ec.amount || 0), 0);
+            const total = (parseFloat(details?.monthly_fees || 0) + (details?.transport_facility ? parseFloat(details?.transport_fees || 0) : 0) + extraTotal);
+            
+            title = "Monthly Fees";
+            subTitle = `${monthName} ${item.data.year}`;
+            mainText = `₹${total.toLocaleString()}`;
+            
+            // Build a descriptive breakdown
+            const items = ['Tuition'];
+            if (details?.transport_facility) items.push('Transport');
+            extraCharges.forEach((ec: any) => items.push(ec.reason));
+            
+            bottomText = `${details?.payment_status === 'paid' ? 'PAID' : 'PENDING'}: ${items.join(' + ')}`;
+            
+            gradientColors = details?.payment_status === 'paid' ? GRADIENTS.homeworkDone : GRADIENTS.fees;
+            iconName = 'wallet-outline';
+        } else if (item.type === 'transport') {
+            title = "My Transport";
+            subTitle = item.data.bus_number;
+            mainText = item.data.stop_name;
+            bottomText = `Driver: ${item.data.driver_name}`;
+            gradientColors = GRADIENTS.transport;
+            iconName = 'bus-outline';
         }
 
         return (
@@ -184,7 +340,10 @@ export default function StudentDashboard() {
                     if (item.type === 'homework_summary') router.push('/(student)/homework');
                     else if (item.type === 'attendance') router.push('/(student)/absent-note');
                     else if (item.type === 'event') router.push('/(student)/academic-calendar');
-                }}
+                    else if (item.type === 'monthly_fees') router.push('/(student)/fees');
+                    else if (item.type === 'result') router.push('/(student)/results');
+                    else if (item.type === 'transport') router.push('/(student)/transport');
+                }} 
                 onPressIn={() => { isInteracting.current = true; stopTimer(); }}
                 onPressOut={() => { isInteracting.current = false; startTimer(); }}
                 style={{
@@ -210,15 +369,27 @@ export default function StudentDashboard() {
                             <Text style={{ fontSize: 18, fontWeight: '800', color: '#fff' }} numberOfLines={1}>{title}</Text>
                             <Text style={{ fontSize: 13, color: 'rgba(255,255,255,0.8)', marginTop: 2 }}>{subTitle}</Text>
                         </View>
-                        <View style={{ width: 44, height: 44, borderRadius: 22, backgroundColor: 'rgba(255,255,255,0.2)', justifyContent: 'center', alignItems: 'center' }}>
-                            <Ionicons name={iconName} size={24} color="#fff" />
-                        </View>
+                        {item.type === 'result' ? (
+                            <TouchableOpacity 
+                                onPress={(e) => {
+                                    e.stopPropagation();
+                                    downloadResultPDF(item.data.id);
+                                }}
+                                style={{ width: 44, height: 44, borderRadius: 22, backgroundColor: 'rgba(255,255,255,0.3)', justifyContent: 'center', alignItems: 'center', zIndex: 100 }}
+                            >
+                                {isDownloading ? <ActivityIndicator size="small" color="#fff" /> : <Ionicons name="download-outline" size={24} color="#fff" />}
+                            </TouchableOpacity>
+                        ) : (
+                            <View style={{ width: 44, height: 44, borderRadius: 22, backgroundColor: 'rgba(255,255,255,0.2)', justifyContent: 'center', alignItems: 'center' }}>
+                                <Ionicons name={iconName} size={24} color="#fff" />
+                            </View>
+                        )}
                     </View>
                     <View>
-                        <Text style={{ fontSize: item.type === 'greeting' ? 20 : 28, fontWeight: '900', color: '#fff' }} numberOfLines={2}>
+                        <Text style={{ fontSize: item.type === 'greeting' ? 20 : 28, fontWeight: '900', color: '#fff' }} numberOfLines={item.type === 'monthly_fees' ? 1 : 2}>
                             {mainText}
                         </Text>
-                        <Text style={{ fontSize: 14, color: 'rgba(255,255,255,0.9)', fontWeight: '700', marginTop: 4 }} numberOfLines={1}>{bottomText}</Text>
+                        <Text style={{ fontSize: 13, color: 'rgba(255,255,255,0.9)', fontWeight: '700', marginTop: 4 }} numberOfLines={item.type === 'monthly_fees' ? 2 : 1}>{bottomText}</Text>
                     </View>
                 </LinearGradient>
             </TouchableOpacity>
@@ -270,11 +441,26 @@ export default function StudentDashboard() {
         setRefreshing(true);
         try {
             const token = await AsyncStorage.getItem('studentToken');
-            const data = await AsyncStorage.getItem('studentData');
-            if (!data) return;
-            const parsed = JSON.parse(data);
-            setStudentData(parsed);
+            const storedSessionId = await AsyncStorage.getItem('selectedSessionId');
+            const sessionId = forcedSessionId || storedSessionId;
 
+            // 1. Fetch fresh profile for the selected session
+            const profileUrl = `${API_URL}/profile`;
+            const profileRes = await axios.get(profileUrl, {
+                headers: { 
+                    Authorization: `Bearer ${token}`,
+                    'x-academic-session-id': sessionId?.toString()
+                }
+            });
+
+            if (profileRes.data.student) {
+                const freshData = { ...profileRes.data.student, authToken: token };
+                setStudentData(freshData);
+                // Always update cache so other screens (homework, transport) see correct class/section
+                await AsyncStorage.setItem('studentData', JSON.stringify(freshData));
+            }
+
+            // 2. Fetch other dashboard components with the correct session
             await Promise.all([
                 fetchSessions(),
                 fetchMyRoutine(forcedSessionId),
@@ -324,7 +510,7 @@ export default function StudentDashboard() {
     };
 
     // Actions state
-    const [isActionsExpanded, setIsActionsExpanded] = useState(false);
+    const [isActionsExpanded, setIsActionsExpanded] = useState(true);
 
     // Session States
     const [sessions, setSessions] = useState<any[]>([]);
@@ -380,11 +566,18 @@ export default function StudentDashboard() {
                 text2: `Viewing data for ${name}` 
             });
             
-            onRefresh(id); // Refresh student data for new session
+            await onRefresh(id); // Refresh student data for new session
         } catch (error) {
             Toast.show({ type: 'error', text1: 'Error', text2: 'Failed to switch session' });
         }
     };
+
+    // Auto-refresh when selectedSessionId changes
+    useEffect(() => {
+        if (selectedSessionId && studentData) {
+            onRefresh(selectedSessionId);
+        }
+    }, [selectedSessionId]);
 
     useFocusEffect(
         useCallback(() => {
@@ -482,26 +675,6 @@ export default function StudentDashboard() {
             }, ...prev]);
         };
 
-        const handleNewFee = (data: any) => {
-            const isMonthly = data.type === 'monthly';
-            const feeTypeName = isMonthly ? 'Monthly' : 'Occasional';
-            const feeName = isMonthly ? data.month_year : data.feeName;
-            
-            addNotif({ title: 'New Fee', message: `${feeTypeName}: ${feeName} (₹${data.amount})`, type: 'fee' });
-            Toast.show({
-                type: 'fee',
-                text1: `New ${feeTypeName} Fee: ${feeName}`,
-                text2: `of amt rs. ${data.amount}`,
-                visibilityTime: 10000,
-                props: {
-                    onPress: () => {
-                        router.push('/(student)/fees');
-                        Toast.hide();
-                    }
-                }
-            });
-        };
-
         const handleAttendance = (data: any) => {
             const status = data.status === 'present' ? 'PRESENT' : 'ABSENT';
             addNotif({ 
@@ -544,20 +717,58 @@ export default function StudentDashboard() {
             });
         };
 
-        socket.on('new_fee', handleNewFee);
+        const handleFeesActivated = (data: any) => {
+            addNotif({
+                title: data.title || 'Fees Published',
+                message: data.message || 'New monthly fees have been published.',
+                type: 'fees'
+            });
+            Toast.show({
+                type: 'info',
+                text1: data.title || 'Fees Published',
+                text2: data.message || 'Check your dues in the Fees section',
+                onPress: () => router.push('/(student)/fees')
+            });
+            fetchDashboardData();
+        };
+
+        const handleOneTimeFee = (data: any) => {
+            addNotif({
+                title: data.title || 'New Fee',
+                message: data.message || `A new one-time fee has been published.`,
+                type: 'fees'
+            });
+            Toast.show({
+                type: 'info',
+                text1: data.title || 'New Fee',
+                text2: data.message || 'Check your dues in the Fees section',
+                onPress: () => router.push('/(student)/fees')
+            });
+            fetchDashboardData();
+        };
+
         socket.on('attendance_marked', handleAttendance);
         socket.on('new_homework', handleHomework);
         socket.on('new_notice', handleNotice);
+        socket.on('monthly_fees_activated', handleFeesActivated);
+        socket.on('one_time_fee_published', handleOneTimeFee);
+        socket.on('fee_payment_received', (data) => {
+            addNotif({
+                title: data.title || 'Payment Received',
+                message: data.message || 'Your fee payment has been confirmed.',
+                type: 'fees'
+            });
+        });
 
         socket.emit('join_room', `student-${studentData.id}`);
         socket.emit('join_room', `students-${studentData.institute_id}`);
         socket.emit('join_room', `${studentData.institute_id}-${studentData.class}-${studentData.section}`);
 
         return () => {
-            socket.off('new_fee', handleNewFee);
             socket.off('attendance_marked', handleAttendance);
             socket.off('new_homework', handleHomework);
             socket.off('new_notice', handleNotice);
+            socket.off('monthly_fees_activated', handleFeesActivated);
         };
     }, [socket, studentData]);
 
@@ -565,10 +776,34 @@ export default function StudentDashboard() {
         setLoading(true);
         try {
             const data = await AsyncStorage.getItem('studentData');
-            if (data) {
-                const parsed = JSON.parse(data);
+            const token = await AsyncStorage.getItem('studentToken');
+            
+            if (data && token) {
+                let parsed = JSON.parse(data);
+                
+                // 1. Ensure current student data has the token attached
+                if (!parsed.authToken) {
+                    parsed.authToken = token;
+                    await AsyncStorage.setItem('studentData', JSON.stringify(parsed));
+                }
                 setStudentData(parsed);
-                await loadSavedAccounts();
+
+                // 2. Load saved accounts and ensure the current one is backed up
+                const accountsStr = await AsyncStorage.getItem('studentAccounts');
+                let accounts = accountsStr ? JSON.parse(accountsStr) : [];
+                
+                const existingIdx = accounts.findIndex((acc: any) => acc.id === parsed.id);
+                if (existingIdx === -1) {
+                    accounts.push(parsed);
+                    await AsyncStorage.setItem('studentAccounts', JSON.stringify(accounts));
+                } else if (!accounts[existingIdx].authToken) {
+                    // Backfill token if it's missing (for older sessions)
+                    accounts[existingIdx].authToken = token;
+                    await AsyncStorage.setItem('studentAccounts', JSON.stringify(accounts));
+                }
+                
+                setSavedAccounts(accounts);
+
                 if (parsed.mobile) {
                     fetchAllAccounts(parsed.mobile);
                 }
@@ -612,10 +847,16 @@ export default function StudentDashboard() {
             setShowAccountModal(false);
             return;
         }
-        const isAlreadyLoggedIn = savedAccounts.some(acc => acc.id === account.id);
-        if (isAlreadyLoggedIn) {
+        
+        // Check if we have this account saved WITH an authentication token
+        const savedAccount = savedAccounts.find(acc => acc.id === account.id);
+        const hasToken = !!savedAccount?.authToken;
+
+        if (hasToken) {
             performSwitch(account);
         } else {
+            // If no token exists (old login or first time on this device), 
+            // force verification to securely fetch a fresh token.
             setTargetAccount(account);
             setAccessCode('');
             setShowCodeModal(true);
@@ -625,17 +866,39 @@ export default function StudentDashboard() {
     const performSwitch = async (account: any) => {
         try {
             const savedAcc = savedAccounts.find(acc => acc.id === account.id);
-            const dataToSet = savedAcc || account;
-            await AsyncStorage.setItem('studentData', JSON.stringify(dataToSet));
-            setStudentData(dataToSet);
+            
+            if (!savedAcc || !savedAcc.authToken) {
+                console.warn('[Switch] Cannot switch: Missing authentication token');
+                // Fallback to verification if somehow we got here without a token
+                setTargetAccount(account);
+                setAccessCode('');
+                setShowCodeModal(true);
+                return;
+            }
+
+            console.log(`[Switch] Switching to ${savedAcc.name}...`);
+            
+            // 1. Update Token
+            await AsyncStorage.setItem('studentToken', savedAcc.authToken);
+            
+            // 2. Update Student Data
+            await AsyncStorage.setItem('studentData', JSON.stringify(savedAcc));
+            
+            // 3. Update State
+            setStudentData(savedAcc);
             setShowAccountModal(false);
+            
+            // 4. Refresh Dashboard Content
+            await onRefresh();
+            
             Toast.show({
                 type: 'success',
                 text1: 'Switched Account',
-                text2: `Logged in as ${dataToSet.name}`
+                text2: `Logged in as ${savedAcc.name}`
             });
         } catch (error) {
             console.error('Perform switch error:', error);
+            Toast.show({ type: 'error', text1: 'Switch Failed', text2: 'Please try again' });
         }
     };
 
@@ -651,18 +914,22 @@ export default function StudentDashboard() {
                 access_code: accessCode
             });
             const { token, student } = response.data;
+            // Add token to the student object so we can swap it later
+            const studentWithToken = { ...student, authToken: token };
+            
             await AsyncStorage.setItem('studentToken', token);
-            await AsyncStorage.setItem('studentData', JSON.stringify(student));
+            await AsyncStorage.setItem('studentData', JSON.stringify(studentWithToken));
+            
             let updatedSaved = [...savedAccounts];
             const existingIdx = updatedSaved.findIndex(acc => acc.id === student.id);
             if (existingIdx !== -1) {
-                updatedSaved[existingIdx] = student;
+                updatedSaved[existingIdx] = studentWithToken;
             } else {
-                updatedSaved.push(student);
+                updatedSaved.push(studentWithToken);
             }
             await AsyncStorage.setItem('studentAccounts', JSON.stringify(updatedSaved));
             setSavedAccounts(updatedSaved);
-            setStudentData(student);
+            setStudentData(studentWithToken);
             setShowCodeModal(false);
             setShowAccountModal(false);
             Toast.show({
@@ -695,11 +962,12 @@ export default function StudentDashboard() {
     const styles = useMemo(() => StyleSheet.create({
         container: { flex: 1, backgroundColor: theme.background },
         header: {
-            backgroundColor: theme.background,
+            backgroundColor: 'transparent',
             flexDirection: 'row',
             alignItems: 'center',
             justifyContent: 'space-between',
-            paddingHorizontal: 12,
+            paddingLeft: 5,
+            paddingRight: 12,
             paddingTop: insets.top + 10,
             paddingBottom: 10,
             zIndex: 100,
@@ -707,9 +975,8 @@ export default function StudentDashboard() {
         headerTouchArea: {
             flexDirection: 'row',
             alignItems: 'center',
-            width: 40,
         },
-        headerLogo: { width: 40, height: 40, borderRadius: 10 },
+        headerLogo: { width: 100, height: 45 },
         headerLogoDark: {
             // width: 120, 
             // height: 50 
@@ -733,8 +1000,7 @@ export default function StudentDashboard() {
             height: 36,
             backgroundColor: theme.card,
             borderRadius: 18,
-            marginLeft: 60,
-            marginRight: 30,
+            marginHorizontal: 15,
             flexDirection: 'row',
             alignItems: 'center',
             justifyContent: 'center',
@@ -930,61 +1196,91 @@ export default function StudentDashboard() {
         codeTitle: { fontSize: 22, fontWeight: '900', color: theme.text },
         codeSubtitle: { fontSize: 14, color: theme.textLight, marginTop: 10 },
         codeTargetName: { fontSize: 17, fontWeight: '800', color: theme.primary, marginTop: 6 },
-        codeInput: { backgroundColor: theme.background, height: 64, borderRadius: 18, marginTop: 28, textAlign: 'center', fontSize: 26, fontWeight: '800', color: theme.text, letterSpacing: 5, borderWidth: 2, borderColor: theme.border, fontFamily: Platform.OS === 'ios' ? 'Courier' : 'monospace' },
+        
+        // Modern Single Input Styles
+        inputWrapper: {
+            marginTop: 30,
+            flexDirection: 'row',
+            alignItems: 'center',
+            backgroundColor: isDark ? theme.background : '#F1F5F9',
+            borderRadius: 18,
+            paddingHorizontal: 15,
+            borderWidth: 1.5,
+            borderColor: theme.border,
+            height: 64,
+        },
+        inputIcon: {
+            marginRight: 12,
+            opacity: 0.8,
+        },
+        modernInput: {
+            flex: 1,
+            height: '100%',
+            fontSize: 18,
+            fontWeight: '700',
+            color: theme.text,
+            letterSpacing: 2,
+        },
         verifyBtn: { backgroundColor: theme.primary, height: 60, borderRadius: 18, justifyContent: 'center', alignItems: 'center', marginTop: 24 },
         verifyBtnText: { color: '#fff', fontSize: 17, fontWeight: '800' },
 
         // Actions Container
         actionsBox: {
             borderWidth: 1,
-            borderColor: theme.border,
-            borderRadius: 22,
+            borderColor: isDark ? 'rgba(255,255,255,0.1)' : 'rgba(0,0,0,0.05)',
+            borderRadius: 32,
             marginHorizontal: 15,
-            paddingTop: 15,
+            paddingTop: 20,
             paddingBottom: 10,
-            backgroundColor: isDark ? theme.background : '#fff',
+            backgroundColor: isDark ? 'rgba(255,255,255,0.03)' : 'rgba(255,255,255,0.8)',
             position: 'relative',
-            marginBottom: 25,
+            marginBottom: 35,
+            shadowColor: '#000',
+            shadowOffset: { width: 0, height: 10 },
+            shadowOpacity: isDark ? 0.3 : 0.1,
+            shadowRadius: 20,
+            elevation: 8,
         },
         actionCard: {
             width: '33.33%',
             alignItems: 'center',
-            marginBottom: 15,
+            marginBottom: 20,
         },
         actionIconCircle: {
-            width: 56,
-            height: 56,
-            borderRadius: 18,
+            width: 60,
+            height: 60,
+            borderRadius: 20,
             justifyContent: 'center',
             alignItems: 'center',
-            marginBottom: 8,
+            marginBottom: 10,
+            shadowColor: '#000',
+            shadowOffset: { width: 0, height: 4 },
+            shadowOpacity: 0.1,
+            shadowRadius: 8,
+            elevation: 2,
         },
         actionText: {
-            fontSize: 11,
-            fontWeight: '700',
+            fontSize: 12,
+            fontWeight: '800',
             color: theme.text,
             textAlign: 'center',
-            paddingHorizontal: 2,
+            paddingHorizontal: 4,
+            letterSpacing: -0.2,
         },
         expandButton: {
             position: 'absolute',
-            bottom: -15,
+            bottom: -18,
             left: '50%',
-            marginLeft: -15,
-            width: 30,
-            height: 30,
-            borderRadius: 15,
-            backgroundColor: isDark ? theme.background : '#fff',
+            marginLeft: -20,
+            width: 40,
+            height: 36,
+            backgroundColor: theme.background,
+            borderRadius: 20,
             borderWidth: 1,
-            borderColor: theme.border,
+            borderColor: isDark ? 'rgba(255,255,255,0.1)' : 'rgba(0,0,0,0.05)',
             alignItems: 'center',
             justifyContent: 'center',
-            zIndex: 10,
-            shadowColor: '#000',
-            shadowOffset: { width: 0, height: 2 },
-            shadowOpacity: 0.1,
-            shadowRadius: 3,
-            elevation: 3,
+            zIndex: 100,
         },
         row: {
             flexDirection: 'row',
@@ -997,8 +1293,8 @@ export default function StudentDashboard() {
         sectionTitle: { fontSize: 20, fontWeight: '900', color: theme.text },
         viewWeeklyBtn: { flexDirection: 'row', alignItems: 'center', backgroundColor: theme.primary + '15', paddingVertical: 6, paddingHorizontal: 12, borderRadius: 10 },
         viewWeeklyText: { fontSize: 12, fontWeight: 'bold', color: theme.primary, marginRight: 4 },
-        todayRoutineCard: { backgroundColor: theme.card, borderRadius: 24, padding: 15, borderWidth: 1, borderColor: theme.border, shadowColor: '#000', shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.05, elevation: 2 },
-        slotsContainer: { flexDirection: 'row', paddingVertical: 10 },
+        todayRoutineCard: { backgroundColor: 'transparent', padding: 0 },
+        slotsContainer: { paddingVertical: 10 },
         slotPill: { width: 140, backgroundColor: theme.background, borderRadius: 18, padding: 12, marginRight: 12, borderWidth: 1, borderColor: theme.border, position: 'relative' },
         liveSlotPill: { 
             borderColor: theme.primary, 
@@ -1190,12 +1486,12 @@ export default function StudentDashboard() {
                             </TouchableOpacity>
                         </View>
 
-                        <View style={styles.todayRoutineCard}>
+                        <View style={{ marginTop: 5 }}>
                             <ScrollView 
                                 ref={studentScrollRef}
                                 horizontal 
                                 showsHorizontalScrollIndicator={false} 
-                                contentContainerStyle={styles.slotsContainer}
+                                contentContainerStyle={{ paddingLeft: 20, paddingRight: 20, paddingVertical: 10 }}
                             >
                                 {(() => {
                                     const days = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
@@ -1205,8 +1501,8 @@ export default function StudentDashboard() {
 
                                     if (slots.length === 0 || todayData.length === 0) {
                                         return (
-                                            <View style={styles.noRoutineBox}>
-                                                <Text style={styles.noRoutineText}>No lectures today ☕</Text>
+                                            <View style={{ width: SCREEN_WIDTH - 40, height: 100, backgroundColor: theme.card, borderRadius: 24, justifyContent: 'center', alignItems: 'center', borderWidth: 1, borderColor: theme.border, borderStyle: 'dashed' }}>
+                                                <Text style={{ color: theme.textLight, fontSize: 14, fontWeight: '600' }}>No lectures today ☕</Text>
                                             </View>
                                         );
                                     }
@@ -1231,20 +1527,79 @@ export default function StudentDashboard() {
 
                                         if (slotConfig.type === 'break') {
                                             return (
-                                                <View key={pIdx} style={[styles.slotPill, styles.breakPill]}>
-                                                    <Text style={styles.slotTime}>{slotConfig.startTime}</Text>
-                                                    <Text style={styles.breakText}>BREAK</Text>
+                                                <View key={pIdx} style={{ width: 120, height: 130, backgroundColor: isDark ? '#1a1a1a' : '#f5f5f5', borderRadius: 28, marginRight: 16, justifyContent: 'center', alignItems: 'center', borderWidth: 1, borderColor: theme.border }}>
+                                                    <Ionicons name="cafe-outline" size={24} color={theme.textLight} />
+                                                    <Text style={{ fontSize: 10, fontWeight: 'bold', color: theme.textLight, marginTop: 8 }}>{slotConfig.startTime}</Text>
+                                                    <Text style={{ fontSize: 12, fontWeight: '900', color: theme.textLight, letterSpacing: 1, marginTop: 2 }}>BREAK</Text>
                                                 </View>
                                             );
                                         }
 
+                                        const gradient = PREMIUM_GRADIENTS[pIdx % PREMIUM_GRADIENTS.length];
+                                        const teacherObj = teachers.find(t => String(t.id) === String(slotData.teacherId));
+
                                         return (
-                                            <View key={pIdx} style={[styles.slotPill, isLive && styles.liveSlotPill]}>
-                                                {isLive && <View style={styles.liveBadge}><Text style={styles.liveBadgeText}>LIVE</Text></View>}
-                                                <Text style={styles.slotTime}>{slotConfig.startTime} - {slotConfig.endTime}</Text>
-                                                <Text style={styles.slotSubject} numberOfLines={1}>{slotData.subject || 'Free Period'}</Text>
-                                                <Text style={styles.slotTeacher} numberOfLines={1}>{teacherName || 'Faculty'}</Text>
-                                            </View>
+                                            <TouchableOpacity 
+                                                key={pIdx} 
+                                                activeOpacity={0.95}
+                                                style={{ 
+                                                    width: 185, 
+                                                    height: 130, 
+                                                    marginRight: 16, 
+                                                    borderRadius: 28, 
+                                                    elevation: isLive ? 15 : 5,
+                                                    shadowColor: gradient[0],
+                                                    shadowOpacity: isLive ? 0.7 : 0.2,
+                                                    shadowRadius: 15,
+                                                    shadowOffset: { width: 0, height: 8 },
+                                                }}
+                                            >
+                                                <LinearGradient
+                                                    colors={gradient}
+                                                    start={{ x: 0, y: 0 }}
+                                                    end={{ x: 1, y: 1 }}
+                                                    style={{ 
+                                                        flex: 1, 
+                                                        borderRadius: 28, 
+                                                        padding: 18,
+                                                        borderWidth: isLive ? 2.5 : 0,
+                                                        borderColor: 'rgba(255,255,255,0.7)',
+                                                        justifyContent: 'space-between',
+                                                        overflow: 'hidden',
+                                                    }}
+                                                >
+                                                    <View style={{ position: 'absolute', right: -25, top: -25, width: 90, height: 90, borderRadius: 45, backgroundColor: 'rgba(255,255,255,0.2)', zIndex: 0 }} />
+                                                    <View style={{ position: 'absolute', left: -30, bottom: -30, width: 80, height: 80, borderRadius: 40, backgroundColor: 'rgba(0,0,0,0.08)', zIndex: 0 }} />
+
+                                                    <View style={{ zIndex: 1 }}>
+                                                        <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
+                                                            <View style={{ flexDirection: 'row', alignItems: 'center', backgroundColor: 'rgba(255,255,255,0.28)', paddingHorizontal: 8, paddingVertical: 4, borderRadius: 10 }}>
+                                                                <Ionicons name="time" size={12} color="#fff" />
+                                                                <Text style={{ fontSize: 10, fontWeight: '900', color: '#fff', marginLeft: 4 }}>{slotConfig.startTime} - {slotConfig.endTime}</Text>
+                                                            </View>
+                                                            {isLive && <LiveBadge />}
+                                                        </View>
+                                                        <Text style={{ fontSize: 18, fontWeight: '900', color: '#fff', letterSpacing: -0.5, textShadowColor: 'rgba(0,0,0,0.15)', textShadowOffset: { width: 0, height: 1.5 }, textShadowRadius: 3 }} numberOfLines={1}>
+                                                            {slotData.subject || 'Free Period'}
+                                                        </Text>
+                                                    </View>
+
+                                                    <View style={{ flexDirection: 'row', alignItems: 'center', zIndex: 1 }}>
+                                                        <View style={{ width: 28, height: 28, borderRadius: 10, backgroundColor: 'rgba(255,255,255,0.3)', justifyContent: 'center', alignItems: 'center', marginRight: 10, overflow: 'hidden' }}>
+                                                            {teacherObj?.photo_url ? (
+                                                                <Image source={{ uri: teacherObj.photo_url }} style={{ width: '100%', height: '100%' }} />
+                                                            ) : (
+                                                                <Text style={{ color: '#fff', fontSize: 12, fontWeight: '900' }}>
+                                                                    {teacherName?.charAt(0) || '?'}
+                                                                </Text>
+                                                            )}
+                                                        </View>
+                                                        <Text style={{ fontSize: 12, fontWeight: '800', color: 'rgba(255,255,255,0.95)', flex: 1 }} numberOfLines={1}>
+                                                            {teacherName || 'Faculty'}
+                                                        </Text>
+                                                    </View>
+                                                </LinearGradient>
+                                            </TouchableOpacity>
                                         );
                                     });
                                 })()}
@@ -1264,14 +1619,21 @@ export default function StudentDashboard() {
 
                 {/* Actions Container */}
                 <View style={styles.actionsBox}>
+                    <View style={{ ...StyleSheet.absoluteFillObject, borderRadius: 32, overflow: 'hidden' }}>
+                        <LinearGradient
+                            colors={isDark ? ['rgba(255,255,255,0.05)', 'rgba(255,255,255,0.01)'] : ['rgba(255,255,255,0.9)', 'rgba(255,255,255,0.5)']}
+                            style={StyleSheet.absoluteFill}
+                        />
+                    </View>
+                    
                     {/* Row 1 - Always Visible (3 Icons) */}
                     <View style={styles.row}>
                         <TouchableOpacity
                             style={styles.actionCard}
                             onPress={() => setIsRoutineModalOpen(true)}
                         >
-                            <View style={[styles.actionIconCircle, { backgroundColor: isDark ? '#1A2A33' : '#E1F5FE' }]}>
-                                <Ionicons name="calendar" size={24} color="#0288D1" />
+                            <View style={[styles.actionIconCircle, { backgroundColor: isDark ? '#0288D120' : '#E1F5FE' }]}>
+                                <Ionicons name="calendar" size={26} color="#0288D1" />
                             </View>
                             <Text style={styles.actionText}>Routine</Text>
                         </TouchableOpacity>
@@ -1280,10 +1642,20 @@ export default function StudentDashboard() {
                             style={styles.actionCard}
                             onPress={() => router.push('/(student)/absent-note')}
                         >
-                            <View style={[styles.actionIconCircle, { backgroundColor: isDark ? '#2E1A47' : '#F3E5F5' }]}>
-                                <Ionicons name="checkmark-done" size={24} color="#9C27B0" />
+                            <View style={[styles.actionIconCircle, { backgroundColor: isDark ? '#9C27B020' : '#F3E5F5' }]}>
+                                <Ionicons name="checkmark-done" size={26} color="#9C27B0" />
                             </View>
                             <Text style={styles.actionText}>Attendance</Text>
+                        </TouchableOpacity>
+
+                        <TouchableOpacity
+                            style={styles.actionCard}
+                            onPress={() => router.push('/(student)/fees')}
+                        >
+                            <View style={[styles.actionIconCircle, { backgroundColor: isDark ? '#00897B20' : '#E0F2F1' }]}>
+                                <Ionicons name="wallet" size={26} color="#00897B" />
+                            </View>
+                            <Text style={styles.actionText}>Fees</Text>
                         </TouchableOpacity>
                     </View>
 
@@ -1293,20 +1665,10 @@ export default function StudentDashboard() {
                             <View style={[styles.row, { marginTop: 10 }]}>
                                 <TouchableOpacity
                                     style={styles.actionCard}
-                                    onPress={() => router.push('/(student)/fees')}
-                                >
-                                    <View style={[styles.actionIconCircle, { backgroundColor: isDark ? '#1A332D' : '#E0F2F1' }]}>
-                                        <Text style={{ fontSize: 24, color: "#009688", fontWeight: 'bold' }}>₹</Text>
-                                    </View>
-                                    <Text style={styles.actionText}>Fees</Text>
-                                </TouchableOpacity>
-
-                                <TouchableOpacity
-                                    style={styles.actionCard}
                                     onPress={() => router.push('/(student)/admit-card')}
                                 >
-                                    <View style={[styles.actionIconCircle, { backgroundColor: isDark ? '#2D1B36' : '#F3E5F5' }]}>
-                                        <Ionicons name="card-outline" size={24} color="#6366f1" />
+                                    <View style={[styles.actionIconCircle, { backgroundColor: isDark ? '#6366f120' : '#EEF2FF' }]}>
+                                        <Ionicons name="card-outline" size={26} color="#6366f1" />
                                     </View>
                                     <Text style={styles.actionText}>Admit Card</Text>
                                 </TouchableOpacity>
@@ -1315,8 +1677,8 @@ export default function StudentDashboard() {
                                     style={styles.actionCard}
                                     onPress={() => router.push('/(student)/homework')}
                                 >
-                                    <View style={[styles.actionIconCircle, { backgroundColor: isDark ? '#3D2B1B' : '#FFF3E0' }]}>
-                                        <Ionicons name="book" size={24} color="#F39C12" />
+                                    <View style={[styles.actionIconCircle, { backgroundColor: isDark ? '#F39C1220' : '#FFF3E0' }]}>
+                                        <Ionicons name="book" size={26} color="#F39C12" />
                                     </View>
                                     <Text style={styles.actionText}>Homework</Text>
                                 </TouchableOpacity>
@@ -1324,8 +1686,8 @@ export default function StudentDashboard() {
                                     style={styles.actionCard}
                                     onPress={() => router.push('/(student)/notice')}
                                 >
-                                    <View style={[styles.actionIconCircle, { backgroundColor: isDark ? '#3E1A23' : '#FCE4EC' }]}>
-                                        <Ionicons name="notifications-outline" size={24} color="#E91E63" />
+                                    <View style={[styles.actionIconCircle, { backgroundColor: isDark ? '#E91E6320' : '#FCE4EC' }]}>
+                                        <Ionicons name="notifications-outline" size={26} color="#E91E63" />
                                     </View>
                                     <Text style={styles.actionText}>Notice</Text>
                                 </TouchableOpacity>
@@ -1333,23 +1695,53 @@ export default function StudentDashboard() {
                                     style={styles.actionCard}
                                     onPress={() => router.push('/(student)/academic-calendar')}
                                 >
-                                    <View style={[styles.actionIconCircle, { backgroundColor: isDark ? '#3E2723' : '#FFF3E0' }]}>
-                                        <Ionicons name="calendar-number-outline" size={24} color="#795548" />
+                                    <View style={[styles.actionIconCircle, { backgroundColor: isDark ? '#79554820' : '#EFEBE9' }]}>
+                                        <Ionicons name="calendar-number-outline" size={26} color="#795548" />
                                     </View>
                                     <Text style={styles.actionText}>Academic Calendar</Text>
+                                </TouchableOpacity>
+                                <TouchableOpacity
+                                    style={styles.actionCard}
+                                    onPress={() => router.push('/(student)/transport')}
+                                >
+                                    <View style={[styles.actionIconCircle, { backgroundColor: isDark ? '#00ACC120' : '#E0F7FA' }]}>
+                                        <Ionicons name="bus" size={26} color="#00ACC1" />
+                                    </View>
+                                    <Text style={styles.actionText}>Transport</Text>
+                                </TouchableOpacity>
+                                <TouchableOpacity
+                                    style={styles.actionCard}
+                                    onPress={() => router.push('/(student)/id-card')}
+                                >
+                                    <View style={[styles.actionIconCircle, { backgroundColor: isDark ? '#FBC02D20' : '#FFFDE7' }]}>
+                                        <Ionicons name="person-circle-outline" size={26} color="#FBC02D" />
+                                    </View>
+                                    <Text style={styles.actionText}>Identity Card</Text>
+                                </TouchableOpacity>
+                                <TouchableOpacity
+                                    style={styles.actionCard}
+                                    onPress={() => router.push('/(student)/results' as any)}
+                                >
+                                    <View style={[styles.actionIconCircle, { backgroundColor: isDark ? '#8E44AD20' : '#F3E5F5' }]}>
+                                        <Ionicons name="document-text-outline" size={26} color="#8E44AD" />
+                                    </View>
+                                    <Text style={styles.actionText}>Result</Text>
                                 </TouchableOpacity>
                             </View>
                         </>
                     )}
 
-                    {/* Toggle Arrow - Positioned on border line */}
+                    {/* Toggle Arrow */}
                     <TouchableOpacity
                         style={styles.expandButton}
-                        onPress={() => setIsActionsExpanded(!isActionsExpanded)}
+                        onPress={() => {
+                            LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
+                            setIsActionsExpanded(!isActionsExpanded);
+                        }}
                     >
                         <Ionicons
                             name={isActionsExpanded ? "chevron-up" : "chevron-down"}
-                            size={18}
+                            size={20}
                             color={theme.textLight}
                         />
                     </TouchableOpacity>
@@ -1383,13 +1775,12 @@ export default function StudentDashboard() {
                             </View>
                         </View>
 
-                        <TouchableOpacity style={styles.menuItem} onPress={() => toggleTheme()}>
-                            <Ionicons name={isDark ? "sunny-outline" : "moon-outline"} size={20} color={theme.text} />
-                            <Text style={styles.menuText}>{isDark ? 'Light Mode' : 'Dark Mode'}</Text>
-                            <View style={{ flex: 1 }} />
-                            <View style={[styles.toggleBackground, isDark && { backgroundColor: theme.primary }]}>
-                                <View style={[styles.toggleCircle, isDark && styles.toggleCircleActive]} />
-                            </View>
+                        <TouchableOpacity style={styles.menuItem} onPress={() => {
+                            setShowProfileMenu(false);
+                            router.push('/(student)/profile');
+                        }}>
+                            <Ionicons name="person-outline" size={20} color={theme.text} />
+                            <Text style={styles.menuText}>My Profile</Text>
                         </TouchableOpacity>
 
                         {/* Academic Session Switcher */}
@@ -1434,7 +1825,6 @@ export default function StudentDashboard() {
                                                 </Text>
                                                 <View style={{ flexDirection: 'row', gap: 10 }}>
                                                     {session.id === selectedSessionId && <Ionicons name="checkmark" size={16} color={theme.primary} />}
-                                                    {/* Students usually shouldn't rename, but Principal/Teacher can. I'll keep UI consistent or hide edit for students if you prefer */}
                                                 </View>
                                             </TouchableOpacity>
                                         )}
@@ -1443,13 +1833,16 @@ export default function StudentDashboard() {
                             </View>
                         )}
 
-                        <TouchableOpacity style={styles.menuItem} onPress={() => {
-                            setShowProfileMenu(false);
-                            router.push('/(student)/profile');
-                        }}>
-                            <Ionicons name="person-outline" size={20} color={theme.text} />
-                            <Text style={styles.menuText}>My Profile</Text>
+                        <TouchableOpacity style={styles.menuItem} onPress={() => toggleTheme()}>
+                            <Ionicons name={isDark ? "sunny-outline" : "moon-outline"} size={20} color={theme.text} />
+                            <Text style={styles.menuText}>{isDark ? 'Light Mode' : 'Dark Mode'}</Text>
+                            <View style={{ flex: 1 }} />
+                            <View style={[styles.toggleBackground, isDark && { backgroundColor: theme.primary }]}>
+                                <View style={[styles.toggleCircle, isDark && styles.toggleCircleActive]} />
+                            </View>
                         </TouchableOpacity>
+
+                        <View style={{ height: 1, backgroundColor: theme.border, marginVertical: 8 }} />
 
                         <TouchableOpacity style={styles.menuItem} onPress={handleLogout}>
                             <Ionicons name="log-out-outline" size={20} color={theme.danger} />
@@ -1524,25 +1917,7 @@ export default function StudentDashboard() {
                                     );
                                 })
                             )}
-
-                            <TouchableOpacity
-                                style={styles.addAccountBtn}
-                                onPress={() => {
-                                    setShowAccountModal(false);
-                                    router.push('/(auth)/student-login');
-                                }}
-                            >
-                                <View style={styles.addIconCircle}>
-                                    <Ionicons name="person-add" size={20} color={theme.primary} />
-                                </View>
-                                <Text style={styles.addAccountText}>Link another student profile</Text>
-                            </TouchableOpacity>
                         </ScrollView>
-
-                        <TouchableOpacity style={styles.modalLogoutBtn} onPress={handleLogout}>
-                            <Ionicons name="log-out-outline" size={22} color={theme.danger} />
-                            <Text style={styles.modalLogoutText}>Sign Out</Text>
-                        </TouchableOpacity>
                     </View>
                 </TouchableOpacity>
             </Modal>
@@ -1574,21 +1949,26 @@ export default function StudentDashboard() {
                                 <Text style={styles.codeTargetName}>{targetAccount?.name}</Text>
                             </View>
 
-                            <TextInput
-                                style={styles.codeInput}
-                                placeholder="6-character code"
-                                placeholderTextColor={theme.textLight}
-                                value={accessCode}
-                                onChangeText={setAccessCode}
-                                maxLength={6}
-                                autoCapitalize="none"
-                                autoCorrect={false}
-                            />
+                            <View style={styles.inputWrapper}>
+                                <Ionicons name="key-outline" size={20} color={theme.primary} style={styles.inputIcon} />
+                                <TextInput
+                                    style={styles.modernInput}
+                                    placeholder="Enter 6-digit code"
+                                    placeholderTextColor={theme.textLight + '70'}
+                                    value={accessCode}
+                                    onChangeText={setAccessCode}
+                                    maxLength={6}
+                                    autoCapitalize="none"
+                                    autoCorrect={false}
+                                    keyboardType="default"
+                                    selectionColor={theme.primary}
+                                />
+                            </View>
 
                             <TouchableOpacity
-                                style={[styles.verifyBtn, verifyingCode && { opacity: 0.7 }]}
+                                style={[styles.verifyBtn, (verifyingCode || accessCode.length < 6) && { opacity: 0.6 }]}
                                 onPress={handleCodeVerify}
-                                disabled={verifyingCode}
+                                disabled={verifyingCode || accessCode.length < 6}
                             >
                                 {verifyingCode ? (
                                     <ActivityIndicator color="#fff" />
@@ -1689,7 +2069,7 @@ export default function StudentDashboard() {
                             ) : (
                                 notifications.map((item) => (
                                     <View key={item.id} style={styles.notifItem}>
-                                        <View style={[styles.notifItemDot, { backgroundColor: item.type === 'fee' ? '#10b981' : item.type === 'attendance' ? theme.primary : '#f59e0b' }]} />
+                                        <View style={[styles.notifItemDot, { backgroundColor: item.type === 'attendance' ? theme.primary : item.type === 'fees' ? theme.success : '#f59e0b' }]} />
                                         <View style={{ flex: 1 }}>
                                             <Text style={styles.notifItemTitle}>{item.title}</Text>
                                             <Text style={styles.notifItemMsg}>{item.message}</Text>

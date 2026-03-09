@@ -25,9 +25,15 @@ export default function HomeworkClassSelection() {
         try {
             setLoading(true);
             const token = await AsyncStorage.getItem('teacherToken');
+            const storedSessionId = await AsyncStorage.getItem('selectedSessionId');
+            const userData = await AsyncStorage.getItem('teacherData');
+            const sessionId = storedSessionId || (userData ? JSON.parse(userData).current_session_id : null);
             
             const response = await axios.get(`${API_ENDPOINTS.TEACHER}/student/list`, {
-                headers: { Authorization: `Bearer ${token}` }
+                headers: { 
+                    Authorization: `Bearer ${token}`,
+                    'x-academic-session-id': sessionId?.toString()
+                }
             });
             
             if (response.data && Array.isArray(response.data.students)) {
@@ -67,17 +73,27 @@ export default function HomeworkClassSelection() {
     const styles = useMemo(() => StyleSheet.create({
         container: { flex: 1, backgroundColor: theme.background },
         header: {
-            backgroundColor: theme.card,
             paddingTop: insets.top + 10,
-            paddingBottom: 15,
+            paddingBottom: 10,
             paddingHorizontal: 20,
             flexDirection: 'row',
             alignItems: 'center',
-            borderBottomWidth: 1,
-            borderBottomColor: theme.border,
         },
-        backBtn: { padding: 5, marginRight: 15 },
-        headerTitle: { fontSize: 20, fontWeight: '900', color: theme.text },
+        backBtn: { 
+            width: 40, 
+            height: 40, 
+            borderRadius: 20, 
+            backgroundColor: theme.card, 
+            justifyContent: 'center', 
+            alignItems: 'center', 
+            marginRight: 15,
+            elevation: 2,
+            shadowColor: '#000',
+            shadowOffset: { width: 0, height: 2 },
+            shadowOpacity: 0.1,
+            shadowRadius: 4,
+        },
+        headerTitle: { fontSize: 24, fontWeight: '900', color: theme.text, letterSpacing: -0.5 },
         content: { padding: 20 },
         sectionTitle: { fontSize: 14, fontWeight: '800', color: theme.textLight, marginBottom: 20, textTransform: 'uppercase', letterSpacing: 1 },
         
@@ -153,15 +169,18 @@ export default function HomeworkClassSelection() {
 
     return (
         <View style={styles.container}>
-            <StatusBar barStyle={theme.statusBarStyle} backgroundColor={theme.card} />
+            <StatusBar barStyle={theme.statusBarStyle} backgroundColor="transparent" translucent={true} />
             <View style={styles.header}>
                 <TouchableOpacity style={styles.backBtn} onPress={() => router.back()}>
-                    <Ionicons name="arrow-back" size={24} color={theme.text} />
+                    <Ionicons name="chevron-back" size={22} color={theme.text} />
                 </TouchableOpacity>
                 <Text style={styles.headerTitle}>Post Homework</Text>
             </View>
 
-            <ScrollView contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>
+            <ScrollView 
+                contentContainerStyle={[styles.content, { paddingBottom: Math.max(20, insets.bottom + 20) }]} 
+                showsVerticalScrollIndicator={false}
+            >
                 <Text style={styles.sectionTitle}>Select Class & Section</Text>
                 
                 {classes.length > 0 ? (

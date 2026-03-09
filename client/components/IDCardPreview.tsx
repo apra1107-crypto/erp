@@ -163,44 +163,62 @@ export default function IDCardPreview({ student, institute, isDark, template = '
         </View>
     );
 
-    const renderLandscape = () => (
-        <View style={[styles.card, styles.landscapeCard, cardStyle]}>
-            {/* Left Side: Photo & Basic Info */}
-            <View style={styles.landLeft}>
-                <Image
-                    source={student.photo_url ? { uri: student.photo_url } : require('../assets/images/react-logo.png')}
-                    style={styles.landPhoto}
-                />
-                <Text style={styles.landStudentName}>{student.name}</Text>
-                <Text style={styles.landClass}>Class {student.class}-{student.section}</Text>
-                <Text style={styles.landRoll}>Roll: {student.roll_no}</Text>
-            </View>
+    const renderLandscape = () => {
+        const fullInstituteAddress = [
+            institute.address,
+            institute.landmark,
+            institute.district,
+            institute.state,
+            institute.pincode
+        ].filter(Boolean).join(' ');
 
-            {/* Right Side: Header & Details */}
-            <View style={styles.landRight}>
-                <View style={styles.landHeader}>
-                    {institute.logo_url && <Image source={{ uri: institute.logo_url }} style={styles.landLogo} />}
-                    <View style={{ flex: 1 }}>
-                        <Text style={styles.landSchoolName} numberOfLines={2}>{institute.name}</Text>
-                        <Text style={styles.landAddress} numberOfLines={1}>{institute.address}</Text>
+        return (
+            <View style={[styles.card, styles.landscapeCard, cardStyle]}>
+                <LinearGradient colors={['#667eea', '#764ba2']} start={{ x: 0, y: 0 }} end={{ x: 1, y: 0 }} style={styles.landHeaderStrip}>
+                    {institute.logo_url ? <Image source={{ uri: institute.logo_url }} style={styles.landInstLogo} /> : <View style={styles.landInstLogoPlaceholder}><Text style={styles.landInstLogoText}>{institute.name?.charAt(0)}</Text></View>}
+                    <Text style={styles.landInstName} numberOfLines={1}>{institute.name}</Text>
+                </LinearGradient>
+                
+                <View style={styles.landSubHeader}>
+                    <Text style={styles.landSubHeaderText} numberOfLines={1}>{fullInstituteAddress}</Text>
+                </View>
+
+                <View style={styles.landCardBody}>
+                    <View style={styles.landLeftCol}>
+                        <View style={styles.landNameBox}>
+                            <Text style={styles.landFieldLabel}>Student Name</Text>
+                            <Text style={styles.landStudentNameVal} numberOfLines={1}>{student.name}</Text>
+                        </View>
+                        <View style={styles.landStatsRow}>
+                            <View style={{ flex: 1 }}><Text style={styles.landFieldLabel}>Class</Text><Text style={styles.landStatVal}>{student.class}</Text></View>
+                            <View style={{ flex: 1 }}><Text style={styles.landFieldLabel}>Sec</Text><Text style={styles.landStatVal}>{student.section}</Text></View>
+                            <View style={{ flex: 1 }}><Text style={styles.landFieldLabel}>Roll</Text><Text style={styles.landStatVal}>{student.roll_no}</Text></View>
+                        </View>
+                        <View style={styles.landDetailsGrid}>
+                            <View style={styles.landDetailItem}><Text style={styles.landFieldLabel}>Father</Text><Text style={styles.landDetailVal} numberOfLines={1}>{student.father_name}</Text></View>
+                            <View style={styles.landDetailItem}><Text style={styles.landFieldLabel}>Mother</Text><Text style={styles.landDetailVal} numberOfLines={1}>{student.mother_name || 'N/A'}</Text></View>
+                            <View style={styles.landDetailItem}><Text style={styles.landFieldLabel}>DOB</Text><Text style={styles.landDetailVal}>{student.dob || '-'}</Text></View>
+                            <View style={styles.landDetailItem}><Text style={styles.landFieldLabel}>Contact</Text><Text style={styles.landDetailVal}>{student.mobile}</Text></View>
+                            <View style={{ width: '100%', marginTop: 4 }}>
+                                <Text style={styles.landFieldLabel}>Address</Text>
+                                <Text style={styles.landAddrText} numberOfLines={2}>{student.address}</Text>
+                            </View>
+                        </View>
+                    </View>
+
+                    <View style={styles.landRightCol}>
+                        <View style={styles.landPhotoBox}>
+                            <Image source={student.photo_url ? { uri: student.photo_url } : require('../assets/images/react-logo.png')} style={styles.landPhotoImg} />
+                        </View>
                     </View>
                 </View>
 
-                <View style={styles.landDivider} />
-
-                <View style={styles.landGrid}>
-                    <View style={styles.landRow}><Text style={styles.landLabel}>Father:</Text><Text style={styles.landValue} numberOfLines={1}>{student.father_name}</Text></View>
-                    <View style={styles.landRow}><Text style={styles.landLabel}>Contact:</Text><Text style={styles.landValue}>{student.mobile}</Text></View>
-                    <View style={styles.landRow}><Text style={styles.landLabel}>Email:</Text><Text style={styles.landValue} numberOfLines={1}>{student.email}</Text></View>
-                    <View style={styles.landRow}><Text style={styles.landLabel}>Address:</Text><Text style={styles.landValue} numberOfLines={1}>{student.address}</Text></View>
-                </View>
-
-                <View style={styles.landFooter}>
-                    <Text style={styles.landFooterText}>Identity Card</Text>
+                <View style={styles.landFooterStrip}>
+                    <Text style={styles.landFooterText}>STUDENT IDENTITY CARD</Text>
                 </View>
             </View>
-        </View>
-    );
+        );
+    };
 
     return (
         <View style={styles.cardContainer}>
@@ -224,7 +242,7 @@ const InfoRow = ({ label, value, fullWidth, modern }: any) => (
 );
 
 const styles = StyleSheet.create({
-    cardContainer: { alignItems: 'center', justifyContent: 'center', paddingVertical: 20 },
+    cardContainer: { alignItems: 'center', justifyContent: 'center' },
     card: {
         borderRadius: 15,
         overflow: 'hidden',
@@ -307,23 +325,34 @@ const styles = StyleSheet.create({
     proFooter: { height: 10, backgroundColor: '#333', width: '100%', position: 'absolute', bottom: 0 },
 
     // LANDSCAPE
-    landscapeCard: { flexDirection: 'row', backgroundColor: '#fff' },
-    landLeft: { width: '35%', backgroundColor: '#f0f4f8', alignItems: 'center', justifyContent: 'center', padding: 10 },
-    landPhoto: { width: 70, height: 70, borderRadius: 35, borderWidth: 2, borderColor: '#fff', marginBottom: 10 },
-    landStudentName: { fontSize: 14, fontWeight: 'bold', color: '#333', textAlign: 'center' },
-    landClass: { fontSize: 10, color: '#666', fontWeight: '600' },
-    landRoll: { fontSize: 9, color: '#888', marginTop: 2 },
-
-    landRight: { flex: 1, padding: 15, position: 'relative' },
-    landHeader: { flexDirection: 'row', alignItems: 'center', marginBottom: 10, gap: 10 },
-    landLogo: { width: 30, height: 30 },
-    landSchoolName: { fontSize: 14, fontWeight: 'bold', color: '#1e3c72', textTransform: 'uppercase' },
-    landAddress: { fontSize: 8, color: '#666', marginTop: 1 },
-    landDivider: { height: 1, backgroundColor: '#eee', width: '100%', marginVertical: 8 },
-    landGrid: { gap: 4 },
-    landRow: { flexDirection: 'row', gap: 5 },
-    landLabel: { fontSize: 9, fontWeight: 'bold', color: '#888', width: 45 },
-    landValue: { fontSize: 9, color: '#333', flex: 1, fontWeight: '600' },
-    landFooter: { position: 'absolute', bottom: 10, right: 15 },
-    landFooterText: { fontSize: 8, color: '#aaa', letterSpacing: 1, textTransform: 'uppercase' }
+    landscapeCard: { backgroundColor: '#fff', flexDirection: 'column' },
+    landHeaderStrip: { paddingVertical: 6, paddingHorizontal: 12, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8 },
+    landInstLogo: { width: 22, height: 22, resizeMode: 'contain' },
+    landInstLogoPlaceholder: { width: 22, height: 22, backgroundColor: 'rgba(255,255,255,0.2)', borderRadius: 11, justifyContent: 'center', alignItems: 'center' },
+    landInstLogoText: { color: '#fff', fontSize: 12, fontWeight: '900' },
+    landInstName: { color: '#fff', fontSize: 11, fontWeight: '900', textTransform: 'uppercase', letterSpacing: 0.5 },
+    
+    landSubHeader: { backgroundColor: '#fff', paddingVertical: 4, paddingHorizontal: 10, alignItems: 'center', borderBottomWidth: 1, borderBottomColor: '#e2e8f0' },
+    landSubHeaderText: { color: '#000', fontSize: 6, fontWeight: '800', letterSpacing: 0.1 },
+    
+    landCardBody: { flex: 1, padding: 10, flexDirection: 'row', gap: 12 },
+    landLeftCol: { flex: 1 },
+    landNameBox: { marginBottom: 4 },
+    landFieldLabel: { fontSize: 6, color: '#000', fontWeight: '900', textTransform: 'uppercase', letterSpacing: 0.2, marginBottom: 1 },
+    landStudentNameVal: { fontSize: 11, color: '#000', fontWeight: '900', textTransform: 'uppercase' },
+    
+    landStatsRow: { flexDirection: 'row', gap: 8, marginBottom: 4 },
+    landStatVal: { fontSize: 9, fontWeight: '900', color: '#000' },
+    
+    landDetailsGrid: { borderTopWidth: 1, borderTopColor: '#e2e8f0', paddingTop: 4, flexDirection: 'row', flexWrap: 'wrap', gap: 4 },
+    landDetailItem: { width: '48%' },
+    landDetailVal: { fontSize: 8, color: '#000', fontWeight: '900' },
+    
+    landRightCol: { width: 80, alignItems: 'center' },
+    landPhotoBox: { width: 75, height: 75, borderWidth: 1, borderColor: '#e2e8f0', borderRadius: 4, overflow: 'hidden', backgroundColor: '#fff' },
+    landPhotoImg: { width: '100%', height: '100%', resizeMode: 'cover' },
+    landAddrText: { fontSize: 6.5, fontWeight: '900', color: '#000', lineHeight: 8 },
+    
+    landFooterStrip: { backgroundColor: '#fff', borderTopWidth: 1, borderTopColor: '#e2e8f0', paddingVertical: 4, alignItems: 'center' },
+    landFooterText: { color: '#000', fontSize: 8, fontWeight: '900', letterSpacing: 1.2, textTransform: 'uppercase' }
 });

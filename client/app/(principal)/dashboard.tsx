@@ -1,5 +1,5 @@
 import { useState, useEffect, useMemo, useRef, useCallback } from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, ActivityIndicator, TextInput, FlatList, Image, ScrollView, RefreshControl, Modal, StatusBar, Platform, Dimensions, LayoutAnimation, UIManager, Alert } from 'react-native';
+import { View, Text, StyleSheet, TouchableOpacity, ActivityIndicator, TextInput, FlatList, Image, ScrollView, RefreshControl, Modal, StatusBar, Platform, Dimensions, LayoutAnimation, UIManager, Alert, TouchableWithoutFeedback, Keyboard } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useTheme } from '../../context/ThemeContext';
 import { useSocket } from '../../context/SocketContext';
@@ -9,9 +9,42 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import Toast from 'react-native-toast-message';
 import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
-import Animated, { useSharedValue, useAnimatedStyle, withTiming, withSpring, Easing, useAnimatedScrollHandler, interpolateColor, interpolate, Extrapolate } from 'react-native-reanimated';
+import Animated, { useSharedValue, useAnimatedStyle, withTiming, withSpring, Easing, useAnimatedScrollHandler, interpolateColor, interpolate, Extrapolate, withRepeat, withSequence } from 'react-native-reanimated';
 
 import { API_ENDPOINTS } from '../../constants/Config';
+
+const ModernToggle = ({ active, onToggle, theme }: { active: boolean, onToggle: () => void, theme: any }) => {
+    return (
+        <TouchableOpacity 
+            activeOpacity={0.8}
+            onPress={onToggle}
+            style={{
+                width: 44,
+                height: 24,
+                borderRadius: 12,
+                backgroundColor: active ? '#27AE60' : (theme.isDark ? '#333' : '#fff'),
+                borderWidth: active ? 0 : 1.5,
+                borderColor: active ? 'transparent' : '#E0E0E0',
+                padding: 2,
+                flexDirection: 'row',
+                alignItems: 'center',
+                justifyContent: active ? 'flex-end' : 'flex-start',
+            }}
+        >
+            <View style={{
+                width: 18,
+                height: 18,
+                borderRadius: 9,
+                backgroundColor: active ? '#fff' : (theme.isDark ? '#bbb' : '#E0E0E0'),
+                elevation: 2,
+                shadowColor: '#000',
+                shadowOffset: { width: 0, height: 1 },
+                shadowOpacity: 0.2,
+                shadowRadius: 1.5,
+            }} />
+        </TouchableOpacity>
+    );
+};
 
 if (Platform.OS === 'android' && UIManager.setLayoutAnimationEnabledExperimental) {
   UIManager.setLayoutAnimationEnabledExperimental(true);
@@ -22,11 +55,11 @@ const { width: SCREEN_WIDTH } = Dimensions.get('window');
 const GRADIENTS = {
     student: ['#FF2D55', '#5856D6'],
     teacher: ['#AF52DE', '#007AFF'],
-    revenue: ['#FF0080', '#1D2B64'],
     morning: ['#FF9500', '#FFCC00'],
     afternoon: ['#007AFF', '#4CD964'],
     evening: ['#5856D6', '#000000'],
     event: ['#FF2D55', '#AF52DE'],
+    revenue: ['#1e293b', '#334155'],
 };
 
 const getGreetingAndQuote = () => {
@@ -90,11 +123,13 @@ export default function PrincipalDashboard() {
     { title: 'Students', icon: 'school', color: '#3498DB', bgDark: '#1B263B', bgLight: '#E3F2FD', path: '/(principal)/students' },
     { title: 'Teachers', icon: 'people', color: '#AF52DE', bgDark: '#2D1B36', bgLight: '#F3E5F5', path: '/(principal)/teachers' },
     { title: 'Attendance', icon: 'checkmark-done', color: '#9C27B0', bgDark: '#2E1A47', bgLight: '#F3E5F5', path: '/(principal)/attendance' },
-    { title: 'Fees', icon: 'cash-outline', color: '#009688', bgDark: '#1A332D', bgLight: '#E0F2F1', path: '/(principal)/fees' },
     { title: 'Salary', icon: 'wallet-outline', color: '#795548', bgDark: '#3E2723', bgLight: '#EFEBE9', path: '/(principal)/salary' },
+    { title: 'Fees', icon: 'cash-outline', color: '#4CAF50', bgDark: '#223825', bgLight: '#E8F5E9', path: '/(principal)/fees' },
     { title: 'Homework', icon: 'book-outline', color: '#F39C12', bgDark: '#3D2B1B', bgLight: '#FFF3E0', path: '/(principal)/homework' },
     { title: 'Results', icon: 'trophy-outline', color: '#E91E63', bgDark: '#3E1A23', bgLight: '#FCE4EC', path: '/(principal)/results' },
     { title: 'Promotion', icon: 'trending-up-outline', color: '#E91E63', bgDark: '#3E1A23', bgLight: '#FCE4EC', path: '/(principal)/promotion' },
+    { title: 'Transport', icon: 'bus-outline', color: '#06b6d4', bgDark: '#1B2E33', bgLight: '#E0F7FA', path: '/(principal)/transport' },
+    { title: 'ID Card', icon: 'person-circle-outline', color: '#009688', bgDark: '#1B2E2A', bgLight: '#E0F2F1', path: '/(principal)/id-card' },
     { title: 'Admit Card', icon: 'card-outline', color: '#6366f1', bgDark: '#2D1B36', bgLight: '#F3E5F5', path: '/(principal)/admit-card' },
     { title: 'Academic Calendar', icon: 'calendar-number-outline', color: '#795548', bgDark: '#3E2723', bgLight: '#FFF3E0', path: '/(principal)/academic-calendar' },
   ], [isDark]);
@@ -160,16 +195,20 @@ export default function PrincipalDashboard() {
         setNotifications(prev => [{ id: Math.random().toString(36).substr(2, 9), time: new Date().toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit' }), ...notif }, ...prev]);
     };
 
-    socket.on('fee_received', (data) => addNotif({ title: 'Fee Payment', message: `${data.student_name} paid ₹${data.amount}`, type: 'fee' }));
     socket.on('absent_request', (data) => addNotif({ title: 'Absent Request', message: `New request from Roll ${data.roll_no}`, type: 'request' }));
     socket.on('teacher_attendance', (data) => addNotif({ title: 'Teacher Attendance', message: `${data.teacher_name} marked himself ${data.status.toUpperCase()} today`, type: 'attendance' }));
     socket.on('new_notice', (data) => addNotif({ title: data.isUpdate ? `Notice Updated: ${data.topic}` : `Notice: ${data.topic}`, message: `By ${data.creator_name}`, type: 'notice' }));
+    socket.on('fee_payment_received', (data) => addNotif({ 
+        title: data.title || 'Fee Payment', 
+        message: data.message || `₹${data.amount} received from ${data.studentName}`, 
+        type: 'fees' 
+    }));
     return () => { 
         socket.off('subscription_update');
-        socket.off('fee_received'); 
         socket.off('absent_request'); 
         socket.off('teacher_attendance'); 
         socket.off('new_notice'); 
+        socket.off('fee_payment_received');
     };
   }, [socket, userData?.id]);
 
@@ -178,6 +217,18 @@ export default function PrincipalDashboard() {
   const [searchResults, setSearchResults] = useState<any[]>([]);
   const [isSearching, setIsSearching] = useState(false);
   const [showResults, setShowResults] = useState(false);
+
+  const dismissSearch = () => {
+    if (isSearchActive) {
+      searchBarWidth.value = withTiming(0, { duration: 300 });
+      searchBarOpacity.value = withTiming(0, { duration: 200 });
+      setSearchQuery('');
+      setShowResults(false);
+      setIsSearching(false);
+      setTimeout(() => setIsSearchActive(false), 300);
+    }
+  };
+
   const [showProfileMenu, setShowProfileMenu] = useState(false);
   const [profileData, setProfileData] = useState<any>(null);
   const [showAccountMenu, setShowAccountMenu] = useState(false);
@@ -194,19 +245,113 @@ export default function PrincipalDashboard() {
 
   const [subStatus, setSubStatus] = useState('loading');
   const [subData, setSubData] = useState<any>(null);
+  const [visuals, setVisuals] = useState({
+    color: '#94a3b8',
+    percent: 0,
+    label: 'Checking...',
+    timeLeft: '',
+    isDanger: false
+  });
+
+  // PROGRESS BAR ANIMATIONS
+  const progressWidth = useSharedValue(0);
+  const dangerOpacity = useSharedValue(1);
+
+  // REAL-TIME VISUAL UPDATER (Matches Frontend Logic)
+  useEffect(() => {
+    const updateVisuals = () => {
+        if (!subData) return;
+
+        const now = new Date();
+        const currentStatus = subStatus;
+        const expiryDate = (currentStatus === 'active' || currentStatus === 'grant') 
+            ? new Date(subData.subscription_end_date) 
+            : now;
+
+        const diffMs = expiryDate.getTime() - now.getTime();
+        const diffMins = Math.max(0, Math.ceil(diffMs / (1000 * 60)));
+        const diffHours = Math.floor(diffMins / 60);
+        const diffDays = Math.floor(diffHours / 24);
+
+        let percentage = 0;
+        let color = '#94a3b8'; // Slate (Expired)
+        let label = 'Premium Active';
+        let isDanger = false;
+
+        if (currentStatus === 'grant') {
+            percentage = 100;
+            color = '#8b5cf6'; // Purple
+            label = 'Special Access';
+        } else if (currentStatus !== 'active' || diffMs <= 0) {
+            percentage = 100;
+            color = '#94a3b8'; // Slate
+            label = 'Expired';
+        } else {
+            const startDate = new Date(subData.subscription_start_date || subData.created_at);
+            const totalWindowMs = expiryDate.getTime() - startDate.getTime();
+            
+            if (totalWindowMs > 0) {
+                percentage = Math.max(0, Math.min(100, (diffMs / totalWindowMs) * 100));
+            } else {
+                percentage = 100;
+            }
+
+            // Web-matching Color Palette
+            if (percentage > 70) color = '#22d3ee'; // Cyan
+            else if (percentage > 50) color = '#34d399'; // Emerald
+            else if (percentage > 10) color = '#fcd34d'; // Amber
+            else {
+                color = '#fb7185'; // Rose
+                isDanger = true;
+            }
+        }
+
+        let timeLeft = diffDays > 0 ? `${diffDays}d left` : `${diffHours}h left`;
+        if (diffDays === 0 && diffHours === 0) timeLeft = `${diffMins}m left`;
+        if (currentStatus === 'grant') timeLeft = 'Lifetime';
+        if (currentStatus === 'expired' || currentStatus === 'disabled') timeLeft = 'LOCKED';
+
+        setVisuals({ color, percent: percentage, label, timeLeft, isDanger });
+    };
+
+    updateVisuals();
+    const timer = setInterval(updateVisuals, 1000);
+    return () => clearInterval(timer);
+  }, [subStatus, subData, theme]);
+
+  // Handle Progress Bar Animations
+  useEffect(() => {
+    progressWidth.value = withTiming(visuals.percent, { duration: 1000 });
+    
+    if (visuals.isDanger) {
+        dangerOpacity.value = withRepeat(
+            withSequence(
+                withTiming(0.4, { duration: 800 }),
+                withTiming(1, { duration: 800 })
+            ),
+            -1,
+            true
+        );
+    } else {
+        dangerOpacity.value = withTiming(1);
+    }
+  }, [visuals.percent, visuals.isDanger]);
+
+  const animatedSubBarStyle = useAnimatedStyle(() => ({
+    width: `${progressWidth.value}%`,
+    backgroundColor: visuals.color,
+    opacity: dangerOpacity.value
+  }));
 
   const isLocked = subStatus === 'expired' || subStatus === 'disabled';
 
   // AUTO-EXPIRY WATCHER: Locks dashboard the exact second time runs out
   useEffect(() => {
     if (subStatus !== 'active' || !subData?.subscription_end_date) return;
-
     const checkExpiry = () => {
         const now = new Date();
         const expiry = new Date(subData.subscription_end_date);
-        
         if (now >= expiry) {
-            console.log('⏰ [Watcher] Subscription time ran out. Locking dashboard.');
             LayoutAnimation.configureNext(LayoutAnimation.Presets.spring);
             setSubStatus('expired');
             Toast.show({ 
@@ -218,10 +363,95 @@ export default function PrincipalDashboard() {
             });
         }
     };
-
     const timer = setInterval(checkExpiry, 1000);
     return () => clearInterval(timer);
   }, [subStatus, subData?.subscription_end_date]);
+
+  const renderFlashcardItem = ({ item }: any) => {
+      let gradientColors = GRADIENTS.student;
+      let iconName: any = 'people';
+      let title = 'Student Attendance';
+      let subTitle = new Date().toLocaleDateString('en-IN', { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' });
+      let mainText = '';
+      let bottomText = '';
+      let extraContent = null;
+
+      if (item.type === 'student') {
+          mainText = `${item.data?.total_present || 0} / ${item.data?.total_students || 0}`;
+          bottomText = item.data?.status === 'complete' ? 'Present Today' : `In Progress (${item.data?.pending_count || 0} left)`;
+      } else if (item.type === 'teacher') {
+          gradientColors = GRADIENTS.teacher; iconName = 'school'; title = 'Teacher Attendance'; mainText = `${item.data?.present || 0} / ${item.data?.total || 0}`; bottomText = 'Teachers Present';
+      } else if (item.type === 'greeting') {
+          const now = new Date();
+          const timeStr = now.toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit', hour12: true });
+          const dateStr = now.toLocaleDateString('en-IN', { weekday: 'long', day: '2-digit', month: 'short' });
+          
+          title = "Welcome Back"; 
+          subTitle = dateStr;
+          mainText = item.data.greeting; 
+          bottomText = `Last Login: ${timeStr}`; 
+          gradientColors = (GRADIENTS as any)[item.data.type]; 
+          iconName = item.data.type === 'morning' ? 'sunny' : item.data.type === 'afternoon' ? 'partly-sunny' : 'moon';
+      } else if (item.type === 'event') {
+          title = "Institute Event"; mainText = item.data.title; bottomText = item.data.description || "Check calendar"; gradientColors = GRADIENTS.event; iconName = 'star';
+      } else if (item.type === 'revenue') {
+          gradientColors = GRADIENTS.revenue;
+          iconName = 'wallet';
+          title = 'Revenue Insights';
+          const dailyTotal = item.data?.daily_total || 0;
+          const dateObj = new Date(item.data?.date || new Date());
+          
+          mainText = `₹${dailyTotal.toLocaleString()}`;
+          bottomText = dateObj.toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' });
+          extraContent = null;
+      }
+
+      return (
+        <TouchableOpacity 
+            activeOpacity={0.95} 
+            onPress={() => { 
+                if (isLocked && item.type !== 'greeting') {
+                    Toast.show({ 
+                        type: 'error', 
+                        text1: 'Locked', 
+                        text2: 'Please renew subscription to access details',
+                        position: 'bottom',
+                        bottomOffset: 40
+                    });
+                    return;
+                }
+                if (item.type === 'student') router.push({ pathname: '/(principal)/stats', params: { initialTab: 'students' } }); 
+                else if (item.type === 'teacher') router.push({ pathname: '/(principal)/stats', params: { initialTab: 'teachers' } }); 
+                else if (item.type === 'event') router.push('/(principal)/academic-calendar'); 
+                else if (item.type === 'revenue') router.push({ pathname: '/(principal)/stats', params: { initialTab: 'revenue' } });
+            }} 
+            style={[styles.flashcard, isLocked && item.type !== 'greeting' && { opacity: 0.6 }]} 
+            onPressIn={() => { isInteracting.current = true; }} 
+            onPressOut={() => { isInteracting.current = false; }}
+        >
+            <LinearGradient colors={gradientColors as any} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={styles.cardGradient}>
+                <View style={styles.cardHeader}>
+                    <View>
+                        <Text style={styles.cardTitle}>{title}</Text>
+                        <Text style={styles.cardSub}>{item.type === 'revenue' ? "Today's Collection" : subTitle}</Text>
+                    </View>
+                    <View style={styles.cardIconBg}>
+                        {isLocked && item.type !== 'greeting' ? (
+                            <Ionicons name="lock-closed" size={22} color="#fff" />
+                        ) : (
+                            <Ionicons name={iconName} size={22} color="#fff" />
+                        )}
+                    </View>
+                </View>
+                <View style={{ position: 'relative' }}>
+                    <Text style={{ fontSize: (item.type === 'greeting' || item.type === 'revenue') ? 32 : 28, fontWeight: '900', color: '#fff' }} numberOfLines={2}>{mainText}</Text>
+                    <Text style={styles.cardBottomText}>{bottomText}</Text>
+                    {extraContent}
+                </View>
+            </LinearGradient>
+        </TouchableOpacity>
+      );
+  };
 
   const startTimer = () => {
       if (timerRef.current) clearInterval(timerRef.current);
@@ -242,88 +472,6 @@ export default function PrincipalDashboard() {
   useEffect(() => { if (flashcards) startTimer(); return () => clearInterval(timerRef.current); }, [flashcards, activeSlide]);
 
   const onMomentumScrollEnd = (event: any) => { setActiveSlide(Math.round(event.nativeEvent.contentOffset.x / SCREEN_WIDTH)); isInteracting.current = false; startTimer(); };
-
-  const getSubscriptionInfo = () => {
-    if (!subData) return { color: '#27AE60', percent: 100, label: 'Premium Access', timeLeft: '' };
-    const now = new Date();
-    const expiry = new Date(subData.subscription_end_date);
-    const diffMs = expiry.getTime() - now.getTime();
-    const diffMins = Math.max(0, Math.ceil(diffMs / (1000 * 60)));
-    const diffHours = Math.floor(diffMins / 60);
-    const diffDays = Math.floor(diffHours / 24);
-    let color = '#27AE60'; let percent = 100; let label = 'Premium Access';
-    if (subStatus === 'grant') { color = '#8E44AD'; percent = 100; label = 'Special Access'; }
-    else if (subStatus === 'expired' || subStatus === 'disabled') { color = theme.danger; percent = 10; label = 'Inactive'; }
-    else { if (diffMins < 60) { color = '#E74C3C'; percent = 20; } else if (diffDays < 7) { color = '#F39C12'; percent = 50; } }
-    let timeLeft = diffDays > 0 ? `${diffDays}d left` : `${diffHours}h left`;
-    return { color, percent, label, timeLeft };
-  };
-
-  const renderFlashcardItem = ({ item }: any) => {
-      let gradientColors = GRADIENTS.student;
-      let iconName: any = 'people';
-      let title = 'Student Attendance';
-      let subTitle = new Date().toLocaleDateString('en-IN', { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' });
-      let mainText = '';
-      let bottomText = '';
-      let extraContent = null;
-
-      if (item.type === 'student') {
-          mainText = `${item.data?.total_present || 0} / ${item.data?.total_students || 0}`;
-          bottomText = item.data?.status === 'complete' ? 'Present Today' : `In Progress (${item.data?.pending_count || 0} left)`;
-      } else if (item.type === 'teacher') {
-          gradientColors = GRADIENTS.teacher; iconName = 'school'; title = 'Teacher Attendance'; mainText = `${item.data?.present || 0} / ${item.data?.total || 0}`; bottomText = 'Teachers Present';
-      } else if (item.type === 'revenue') {
-          gradientColors = GRADIENTS.revenue; title = 'Revenue'; mainText = `₹${((Number(item.data.monthly_month) || 0) + (Number(item.data.occasional_month) || 0)).toLocaleString()}`; bottomText = `${item.data.month_name || ''} Total`;
-          extraContent = <View style={{ marginTop: 8, paddingTop: 8, borderTopWidth: 1, borderTopColor: 'rgba(255,255,255,0.3)', flexDirection: 'row', justifyContent: 'space-between' }}><Text style={{ color: 'rgba(255,255,255,0.9)', fontSize: 12, fontWeight: '700' }}>Today</Text><Text style={{ color: '#fff', fontSize: 14, fontWeight: '800' }}>₹${((Number(item.data.monthly_day) || 0) + (Number(item.data.occasional_day) || 0)).toLocaleString()}</Text></View>;
-      } else if (item.type === 'greeting') {
-          title = item.data.greeting; mainText = item.data.quote; bottomText = "Have a great day!"; gradientColors = (GRADIENTS as any)[item.data.type]; iconName = item.data.type === 'morning' ? 'sunny' : item.data.type === 'afternoon' ? 'partly-sunny' : 'moon';
-      } else if (item.type === 'event') {
-          title = "Institute Event"; mainText = item.data.title; bottomText = item.data.description || "Check calendar"; gradientColors = GRADIENTS.event; iconName = 'star';
-      }
-
-      return (
-        <TouchableOpacity 
-            activeOpacity={0.95} 
-            onPress={() => { 
-                if (isLocked && item.type !== 'greeting') {
-                    Toast.show({ 
-                        type: 'error', 
-                        text1: 'Locked', 
-                        text2: 'Please renew subscription to access details',
-                        position: 'bottom',
-                        bottomOffset: 40
-                    });
-                    return;
-                }
-                if (item.type === 'student') router.push({ pathname: '/(principal)/stats', params: { initialTab: 'students' } }); 
-                else if (item.type === 'teacher') router.push({ pathname: '/(principal)/stats', params: { initialTab: 'teachers' } }); 
-                else if (item.type === 'revenue') router.push({ pathname: '/(principal)/stats', params: { initialTab: 'revenue' } }); 
-                else if (item.type === 'event') router.push('/(principal)/academic-calendar'); 
-            }} 
-            style={[styles.flashcard, isLocked && item.type !== 'greeting' && { opacity: 0.6 }]} 
-            onPressIn={() => { isInteracting.current = true; }} 
-            onPressOut={() => { isInteracting.current = false; }}
-        >
-            <LinearGradient colors={gradientColors as any} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={styles.cardGradient}>
-                <View style={styles.cardHeader}>
-                    <View>
-                        <Text style={styles.cardTitle}>{title}</Text>
-                        <Text style={styles.cardSub}>{subTitle}</Text>
-                    </View>
-                    <View style={styles.cardIconBg}>
-                        {isLocked && item.type !== 'greeting' ? (
-                            <Ionicons name="lock-closed" size={22} color="#fff" />
-                        ) : (
-                            item.type === 'revenue' ? <Text style={{ fontSize: 24, color: '#fff', fontWeight: '900' }}>₹</Text> : <Ionicons name={iconName} size={22} color="#fff" />
-                        )}
-                    </View>
-                </View>
-                <View><Text style={{ fontSize: item.type === 'greeting' ? 20 : 28, fontWeight: '900', color: '#fff' }} numberOfLines={2}>{mainText}</Text><Text style={styles.cardBottomText}>{bottomText}</Text>{extraContent}</View>
-            </LinearGradient>
-        </TouchableOpacity>
-      );
-  };
 
   const fetchProfileImages = async (forcedToken?: string) => {
     try {
@@ -435,7 +583,10 @@ export default function PrincipalDashboard() {
     } catch (e) {} finally { setIsSearching(false); }
   };
 
-  const handleCreateResult = (item: any) => { router.push(item.type === 'student' ? `/(principal)/students/details/${item.id}` : `/(principal)/teachers/details/${item.id}`); };
+  const handleCreateResult = (item: any) => { 
+    dismissSearch();
+    router.push(item.type === 'student' ? `/(principal)/students/details/${item.id}` : `/(principal)/teachers/details/${item.id}`); 
+  };
   const switchAccount = async (acc: any) => { await AsyncStorage.setItem('token', acc.token); await AsyncStorage.setItem('userData', JSON.stringify(acc.userData)); onRefresh(); setShowAccountMenu(false); };
   const handleLogout = async () => { await AsyncStorage.clear(); router.replace('/(auth)/institute-login'); };
 
@@ -512,12 +663,11 @@ export default function PrincipalDashboard() {
     notifItemTime: { fontSize: 10, color: theme.textLight, marginLeft: 10 },
   }), [theme, isDark, insets]);
 
-  const subInfo = getSubscriptionInfo();
-
   return (
-    <View style={styles.container}>
-      <StatusBar barStyle={theme.statusBarStyle} backgroundColor="transparent" translucent />
-      <View style={styles.header}>
+    <TouchableWithoutFeedback onPress={() => { dismissSearch(); Keyboard.dismiss(); }}>
+      <View style={styles.container}>
+        <StatusBar barStyle={theme.statusBarStyle} backgroundColor="transparent" translucent />
+        <View style={styles.header}>
         <TouchableOpacity 
             onPress={() => setShowAccountMenu(true)} 
             style={styles.headerTouchArea}
@@ -531,7 +681,7 @@ export default function PrincipalDashboard() {
             <TouchableOpacity 
                 onPress={() => {
                     const expiryDate = subData?.subscription_end_date 
-                        ? new Date(subData.subscription_end_date).toLocaleDateString('en-IN', { day: '2-digit', month: 'long', year: 'numeric' })
+                        ? new Date(subData.subscription_end_date).toLocaleDateString('en-IN', { day: '2-digit', month: 'long', year: 'numeric', hour: '2-digit', minute: '2-digit' })
                         : 'Unlimited';
                     
                     Toast.show({ 
@@ -539,16 +689,16 @@ export default function PrincipalDashboard() {
                         position: 'bottom',
                         bottomOffset: 40,
                         props: { 
-                            label: subInfo.label, 
-                            timeLeft: subInfo.timeLeft,
+                            label: visuals.label, 
+                            timeLeft: visuals.timeLeft,
                             expiryDate: expiryDate,
-                            color: subInfo.color
+                            color: visuals.color
                         } 
                     });
                 }} 
                 style={styles.subIndicatorContainer}
             >
-                <View style={[styles.subLineFill, { width: `${subInfo.percent}%`, backgroundColor: subInfo.color }]} />
+                <Animated.View style={[styles.subLineFill, animatedSubBarStyle]} />
             </TouchableOpacity>
         </View>
 
@@ -700,6 +850,11 @@ export default function PrincipalDashboard() {
       {/* Profile Menu with Session Management Restore */}
       <Modal visible={showProfileMenu} transparent animationType="fade" onRequestClose={() => setShowProfileMenu(false)}><TouchableOpacity style={styles.modalOverlay} activeOpacity={1} onPress={() => setShowProfileMenu(false)}><View style={styles.profileMenu}><View style={styles.menuHeader}><View style={{ flexDirection: 'row', alignItems: 'center' }}>{profileData?.principal_photo_url ? <Image source={{ uri: profileData.principal_photo_url }} style={styles.menuAvatar} /> : <View style={[styles.menuAvatar, { backgroundColor: theme.primary + '20', justifyContent: 'center', alignItems: 'center' }]}><Text style={{ color: theme.primary, fontSize: 24, fontWeight: 'bold' }}>{userData?.principal_name?.charAt(0)}</Text></View>}<View style={{ marginLeft: 15 }}><Text style={styles.menuName}>{userData?.principal_name}</Text><Text style={styles.menuInfo}>{userData?.mobile}</Text></View></View></View><TouchableOpacity style={styles.menuItem} onPress={() => { setShowProfileMenu(false); router.push('/(principal)/profile'); }}><Ionicons name="person-outline" size={20} color={theme.text} /><Text style={styles.menuText}>Profile</Text></TouchableOpacity>
         
+        <TouchableOpacity style={styles.menuItem} onPress={() => { setShowProfileMenu(false); router.push('/(principal)/account-setup' as any); }}>
+          <Text style={{ fontSize: 18, color: theme.text, width: 20, textAlign: 'center', fontWeight: 'bold' }}>₹</Text>
+          <Text style={styles.menuText}>Account Setup</Text>
+        </TouchableOpacity>
+        
         {/* Session Picker & Management */}
         <TouchableOpacity style={styles.menuItem} onPress={() => setShowSessionPicker(!showSessionPicker)}><Ionicons name="calendar-outline" size={20} color={theme.text} /><View style={{ flex: 1 }}><Text style={styles.menuText}>Academic Session</Text><Text style={{ fontSize: 11, color: theme.primary, fontWeight: '700' }}>{sessions.find(s => s.id === selectedSessionId)?.name || 'Select Session'}</Text></View><Ionicons name={showSessionPicker ? "chevron-up" : "chevron-down"} size={16} color={theme.textLight} /></TouchableOpacity>
         {showSessionPicker && <View style={styles.sessionMenuPicker}>
@@ -729,10 +884,31 @@ export default function PrincipalDashboard() {
             )}
         </View>}
 
-        <TouchableOpacity style={styles.menuItem} onPress={toggleTheme}><Ionicons name={isDark ? "sunny-outline" : "moon-outline"} size={20} color={theme.text} /><Text style={styles.menuText}>{isDark ? 'Light' : 'Dark'}</Text></TouchableOpacity><TouchableOpacity style={styles.menuItem} onPress={handleLogout}><Ionicons name="log-out-outline" size={20} color={theme.danger} /><Text style={[styles.menuText, { color: theme.danger }]}>Logout</Text></TouchableOpacity></View></TouchableOpacity></Modal>
+        <TouchableOpacity style={styles.menuItem} onPress={toggleTheme}>
+            <Ionicons name={isDark ? "sunny-outline" : "moon-outline"} size={20} color={theme.text} />
+            <View style={{ flex: 1 }}>
+                <Text style={styles.menuText}>{isDark ? 'Light Mode' : 'Dark Mode'}</Text>
+            </View>
+            <ModernToggle 
+                active={isDark} 
+                onToggle={toggleTheme}
+                theme={{ isDark }}
+            />
+        </TouchableOpacity>
 
-      <Modal visible={showNotifList} transparent animationType="fade" onRequestClose={() => setShowNotifList(false)}><TouchableOpacity style={styles.notifModalOverlay} activeOpacity={1} onPress={() => setShowNotifList(false)}><View style={styles.notifDropdown}><View style={{ flexDirection: 'row', justifyContent: 'space-between', marginBottom: 15 }}><Text style={{ fontWeight: '800', fontSize: 16, color: theme.text }}>Recent Updates</Text><TouchableOpacity onPress={clearAllNotifications}><Text style={{ color: '#ef4444', fontWeight: '700' }}>Clear All</Text></TouchableOpacity></View><ScrollView style={{ maxHeight: 400 }}>{notifications.map((item) => (<View key={item.id} style={styles.notifItem}><View style={[styles.notifItemDot, { backgroundColor: item.type === 'fee' ? '#10b981' : '#f59e0b' }]} /><View style={{ flex: 1 }}><Text style={{ fontWeight: '800', color: theme.text }}>{item.title}</Text><Text style={{ fontSize: 12, color: theme.textLight }}>{item.message}</Text></View><Text style={{ fontSize: 10, color: theme.textLight }}>{item.time}</Text></View>))}</ScrollView></View></TouchableOpacity></Modal>
+        <View style={{ height: 1, backgroundColor: theme.border, marginVertical: 8, marginHorizontal: 20 }} />
+        
+        <TouchableOpacity style={styles.menuItem} onPress={handleLogout}>
+            <Ionicons name="log-out-outline" size={20} color={theme.danger} />
+            <Text style={[styles.menuText, { color: theme.danger }]}>Logout</Text>
+        </TouchableOpacity>
+    </View>
+</TouchableOpacity>
+</Modal>
+
+      <Modal visible={showNotifList} transparent animationType="fade" onRequestClose={() => setShowNotifList(false)}><TouchableOpacity style={styles.notifModalOverlay} activeOpacity={1} onPress={() => setShowNotifList(false)}><View style={styles.notifDropdown}><View style={{ flexDirection: 'row', justifyContent: 'space-between', marginBottom: 15 }}><Text style={{ fontWeight: '800', fontSize: 16, color: theme.text }}>Recent Updates</Text><TouchableOpacity onPress={clearAllNotifications}><Text style={{ color: '#ef4444', fontWeight: '700' }}>Clear All</Text></TouchableOpacity></View><ScrollView style={{ maxHeight: 400 }}>{notifications.map((item) => (<View key={item.id} style={styles.notifItem}><View style={[styles.notifItemDot, { backgroundColor: '#f59e0b' }]} /><View style={{ flex: 1 }}><Text style={{ fontWeight: '800', color: theme.text }}>{item.title}</Text><Text style={{ fontSize: 12, color: theme.textLight }}>{item.message}</Text></View><Text style={{ fontSize: 10, color: theme.textLight }}>{item.time}</Text></View>))}</ScrollView></View></TouchableOpacity></Modal>
       {showAccountMenu && <TouchableOpacity style={styles.modalOverlay} activeOpacity={1} onPress={() => setShowAccountMenu(false)}><View style={styles.accountMenu}><Text style={{ fontSize: 12, fontWeight: '800', color: theme.textLight, marginBottom: 15, textTransform: 'uppercase' }}>Switch Account</Text>{savedAccounts.map((acc, index) => (<TouchableOpacity key={index} style={[styles.accountItem, userData?.email === acc.email && { backgroundColor: theme.primary + '10' }]} onPress={() => switchAccount(acc)}><Image source={acc.logo_url ? { uri: acc.logo_url } : require('../../assets/images/react-logo.png')} style={styles.accountLogo} /><View style={{ flex: 1 }}><Text style={{ fontSize: 15, fontWeight: '700', color: theme.text }}>{acc.userData?.institute_name || 'Institute'}</Text><Text style={{ fontSize: 12, color: theme.textLight }}>{acc.email}</Text></View>{userData?.email === acc.email && <Ionicons name="checkmark-circle" size={20} color="#27AE60" />}</TouchableOpacity>))}<TouchableOpacity style={{ flexDirection: 'row', alignItems: 'center', padding: 15, marginTop: 10, borderWidth: 1, borderStyle: 'dashed', borderColor: theme.primary, borderRadius: 15 }} onPress={() => { setShowAccountMenu(false); router.replace('/(auth)/institute-login'); }}><Ionicons name="add-circle-outline" size={24} color={theme.primary} /><Text style={{ marginLeft: 12, color: theme.primary, fontWeight: '800' }}>Login to another account</Text></TouchableOpacity></View></TouchableOpacity>}
     </View>
+    </TouchableWithoutFeedback>
   );
 }

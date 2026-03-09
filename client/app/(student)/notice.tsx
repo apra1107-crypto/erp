@@ -31,9 +31,10 @@ export default function StudentNoticeScreen() {
         try {
             setLoading(true);
             const token = await AsyncStorage.getItem('studentToken');
-            const userData = await AsyncStorage.getItem('studentData');
-            const selectedSessionId = await AsyncStorage.getItem('selectedSessionId');
-            const sessionId = selectedSessionId || (userData ? JSON.parse(userData).current_session_id : null);
+            const storedSessionId = await AsyncStorage.getItem('selectedSessionId');
+            const userDataStr = await AsyncStorage.getItem('studentData');
+            const userData = userDataStr ? JSON.parse(userDataStr) : null;
+            const sessionId = storedSessionId || (userData ? userData.current_session_id : null);
 
             const response = await axios.get(API_ENDPOINTS.NOTICE, {
                 headers: { 
@@ -64,17 +65,22 @@ export default function StudentNoticeScreen() {
     const styles = useMemo(() => StyleSheet.create({
         container: { flex: 1, backgroundColor: theme.background },
         header: {
-            backgroundColor: theme.card,
-            paddingTop: insets.top + 10,
-            paddingBottom: 15,
-            paddingHorizontal: 20,
             flexDirection: 'row',
             alignItems: 'center',
-            borderBottomWidth: 1,
-            borderBottomColor: theme.border,
+            paddingHorizontal: 24,
+            paddingTop: insets.top + 10,
+            paddingBottom: 15,
+            backgroundColor: 'transparent',
         },
-        backBtn: { padding: 5, marginRight: 15 },
-        headerTitle: { fontSize: 20, fontWeight: '900', color: theme.text },
+        backBtn: { 
+            width: 40, 
+            height: 40, 
+            borderRadius: 12, 
+            backgroundColor: isDark ? '#333' : '#f4f4f5', 
+            justifyContent: 'center', 
+            alignItems: 'center' 
+        },
+        headerTitle: { fontSize: 24, fontWeight: '900', color: theme.text, letterSpacing: -0.5, marginLeft: 16 },
         listContent: { padding: 15 },
         noticeCard: {
             backgroundColor: theme.card,
@@ -90,17 +96,13 @@ export default function StudentNoticeScreen() {
         modalOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.5)', justifyContent: 'center', padding: 20 },
         previewContent: {
             backgroundColor: '#fff',
-            borderRadius: 20,
-            padding: 20,
-            minHeight: 400,
+            borderRadius: 24,
+            padding: 24,
+            minHeight: 300,
+            maxHeight: '80%',
         },
-        previewHeader: { flexDirection: 'row', alignItems: 'center', marginBottom: 10 },
-        previewLogo: { width: 50, height: 50, borderRadius: 10, marginRight: 15 },
-        previewInstName: { fontSize: 20, fontWeight: '900', color: '#1a1a1a', flex: 1 },
-        previewAffiliation: { fontSize: 12, fontWeight: '700', color: '#666', textAlign: 'center', marginVertical: 5 },
-        previewAddress: { fontSize: 11, color: '#888', textAlign: 'center', lineHeight: 16 },
         previewLine: { height: 1, backgroundColor: '#eee', marginVertical: 15 },
-        previewNoticeContent: { fontSize: 16, color: '#333', lineHeight: 24, minHeight: 150 },
+        previewNoticeContent: { fontSize: 16, color: '#333', lineHeight: 24, minHeight: 100 },
         previewDate: { fontSize: 13, color: '#999', fontWeight: '700', marginTop: 20, textAlign: 'right' },
         closePreview: {
             marginTop: 20,
@@ -122,7 +124,7 @@ export default function StudentNoticeScreen() {
 
     return (
         <View style={styles.container}>
-            <StatusBar barStyle={theme.statusBarStyle} />
+            <StatusBar barStyle={theme.statusBarStyle} backgroundColor="transparent" translucent />
             <View style={styles.header}>
                 <TouchableOpacity style={styles.backBtn} onPress={() => router.back()}>
                     <Ionicons name="arrow-back" size={24} color={theme.text} />
@@ -138,9 +140,6 @@ export default function StudentNoticeScreen() {
                 renderItem={({ item }) => (
                     <TouchableOpacity style={styles.noticeCard} onPress={() => openPreview(item)}>
                         <Text style={styles.noticeTopic}>{item.topic}</Text>
-                        <Text style={{ fontSize: 13, color: theme.primary, fontWeight: '700', marginBottom: 8 }}>
-                            Posted by: {item.creator_name}
-                        </Text>
                         <Text style={styles.noticeDate}>
                             {new Date(item.created_at).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' })}
                         </Text>
@@ -157,18 +156,9 @@ export default function StudentNoticeScreen() {
             <Modal visible={previewVisible} animationType="fade" transparent={true}>
                 <View style={styles.modalOverlay}>
                     <View style={styles.previewContent}>
-                        <View style={styles.previewHeader}>
-                            {institute?.logo_url && <Image source={{ uri: institute.logo_url }} style={styles.previewLogo} />}
-                            <Text style={styles.previewInstName}>{institute?.institute_name}</Text>
-                        </View>
-                        <Text style={styles.previewAffiliation}>{institute?.affiliation || 'N/A'}</Text>
-                        <Text style={styles.previewAddress}>
-                            {institute?.address}, {institute?.landmark && `${institute.landmark}, `}
-                            {institute?.district}, {institute?.state} - {institute?.pincode}
-                        </Text>
-                        <View style={styles.previewLine} />
                         <ScrollView showsVerticalScrollIndicator={false}>
-                            <Text style={{ fontSize: 18, fontWeight: '900', color: '#1a1a1a', marginBottom: 15, textAlign: 'center' }}>{selectedNotice?.topic}</Text>
+                            <Text style={{ fontSize: 22, fontWeight: '900', color: '#1a1a1a', marginBottom: 15, textAlign: 'center' }}>{selectedNotice?.topic}</Text>
+                            <View style={styles.previewLine} />
                             <Text style={styles.previewNoticeContent}>{selectedNotice?.content}</Text>
                             <Text style={styles.previewDate}>Date: {new Date(selectedNotice?.created_at).toLocaleDateString('en-IN', { day: '2-digit', month: 'long', year: 'numeric' })}</Text>
                         </ScrollView>

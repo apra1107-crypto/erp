@@ -1,6 +1,10 @@
 import express from 'express';
 import multer from 'multer';
-import { verifyPhone, getStudents, verifyCode, login, getAllUserAccounts, getProfile, updateProfile, updatePushToken, sendTestNotification, getStudentDashboardData } from '../controllers/studentAuthController.js';
+import { 
+    verifyPhone, getStudents, verifyCode, login, getAllUserAccounts, 
+    getProfile, updateProfile, updatePushToken, sendTestNotification, 
+    getStudentDashboardData, getMyFees, getStudentFeesData 
+} from '../controllers/studentAuthController.js';
 import { protect } from '../middlewares/auth.js';
 
 const router = express.Router();
@@ -14,6 +18,8 @@ router.post('/login', login);
 router.post('/get-all-accounts', getAllUserAccounts);
 router.get('/profile', protect, getProfile);
 router.get('/dashboard', protect, getStudentDashboardData);
+router.get('/fees', protect, getMyFees);
+router.get('/fees-full', protect, getStudentFeesData);
 router.put('/profile', protect, upload.single('photo'), updateProfile);
 router.put('/update-token', protect, updatePushToken);
 router.post('/test-notification', protect, sendTestNotification);

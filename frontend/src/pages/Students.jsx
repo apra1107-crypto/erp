@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useParams } from 'react-router-dom';
 import axios from 'axios';
 import { toast } from 'react-toastify';
 import { API_ENDPOINTS } from '../config';
@@ -8,20 +8,97 @@ import './Students.css';
 
 const Students = () => {
     const navigate = useNavigate();
-    const [activeTab, setActiveTab] = useState('view'); // 'view' or 'add'
+    const { id: paramId } = useParams();
     const [viewMode, setViewMode] = useState('list'); // 'list', 'details', 'edit'
     const [students, setStudents] = useState([]);
     const [filteredStudents, setFilteredStudents] = useState([]);
     const [selectedStudent, setSelectedStudent] = useState(null);
     const [loading, setLoading] = useState(false);
+    const [showDetailsModal, setShowDetailsModal] = useState(false);
+    const [showAddModal, setShowAddModal] = useState(false);
+    const [showAttendanceView, setShowAttendanceView] = useState(false);
+    const [showFeesView, setShowFeesView] = useState(false);
+    const [attendanceData, setAttendanceData] = useState([]);
+    const [absentRequests, setAbsentRequests] = useState([]);
+    const [attendanceMonth, setAttendanceMonth] = useState(new Date());
+    const [feeHistory, setFeeHistory] = useState(null);
 
     // Filters
     const [filters, setFilters] = useState({
         class: '',
         section: '',
         roll_no: '',
-        transport: ''
+        transport: '',
+        gender: ''
     });
+
+    const fetchStudentFees = async (studentId) => {
+        setLoading(true);
+        try {
+            const token = localStorage.getItem('token');
+            const sessionId = localStorage.getItem('selectedSessionId');
+            const response = await axios.get(`${API_ENDPOINTS.PRINCIPAL}/student/${studentId}/fees-full`, {
+                headers: { 
+                    Authorization: `Bearer ${token}`,
+                    'x-academic-session-id': sessionId?.toString()
+                }
+            });
+            setFeeHistory(response.data);
+        } catch (error) {
+            console.error('Error fetching student fees:', error);
+            toast.error('Failed to load fee history');
+        } finally {
+            setLoading(false);
+        }
+    };
+
+    useEffect(() => {
+        if (showFeesView && selectedStudent) {
+            fetchStudentFees(selectedStudent.id);
+        }
+    }, [showFeesView, selectedStudent]);
+
+    const fetchStudentAttendance = async (studentId, monthDate) => {
+        setLoading(true);
+        try {
+            const token = localStorage.getItem('token');
+            const sessionId = localStorage.getItem('selectedSessionId');
+            const year = monthDate.getFullYear();
+            const month = String(monthDate.getMonth() + 1).padStart(2, '0');
+            const daysInMonth = new Date(year, monthDate.getMonth() + 1, 0).getDate();
+            
+            const startDate = `${year}-${month}-01`;
+            const endDate = `${year}-${month}-${String(daysInMonth).padStart(2, '0')}`;
+
+            const headers = { 
+                Authorization: `Bearer ${token}`,
+                'x-academic-session-id': sessionId?.toString()
+            };
+
+            // Fetch attendance
+            const attResponse = await axios.get(`${API_ENDPOINTS.ATTENDANCE}/student/${studentId}?startDate=${startDate}&endDate=${endDate}`, {
+                headers
+            });
+            setAttendanceData(attResponse.data.attendance || []);
+
+            // Fetch absent requests
+            const reqResponse = await axios.get(`${API_ENDPOINTS.ABSENT_REQUEST}/student/${studentId}`, {
+                headers
+            });
+            setAbsentRequests(reqResponse.data.requests || []);
+        } catch (error) {
+            console.error('Error fetching student attendance/requests:', error);
+            toast.error('Failed to load attendance details');
+        } finally {
+            setLoading(false);
+        }
+    };
+
+    useEffect(() => {
+        if (showAttendanceView && selectedStudent) {
+            fetchStudentAttendance(selectedStudent.id, attendanceMonth);
+        }
+    }, [showAttendanceView, attendanceMonth, selectedStudent]);
 
     // Form State
     const initialFormState = {
@@ -37,6 +114,8 @@ const Students = () => {
         email: '',
         address: '',
         transport_facility: 'false',
+        monthly_fees: '',
+        transport_fees: '',
         photo: null
     };
 
@@ -44,10 +123,19 @@ const Students = () => {
     const [previewPhoto, setPreviewPhoto] = useState(null);
 
     useEffect(() => {
-        if (activeTab === 'view') {
-            fetchStudents();
+        fetchStudents();
+    }, []);
+
+    // Handle incoming ID from URL params
+    useEffect(() => {
+        if (paramId && students.length > 0) {
+            const student = students.find(s => s.id.toString() === paramId.toString());
+            if (student) {
+                setSelectedStudent(student);
+                setShowDetailsModal(true);
+            }
         }
-    }, [activeTab]);
+    }, [paramId, students]);
 
     useEffect(() => {
         let result = students;
@@ -64,6 +152,9 @@ const Students = () => {
             const needsTransport = filters.transport === 'yes';
             result = result.filter(s => Boolean(s.transport_facility) === needsTransport);
         }
+        if (filters.gender) {
+            result = result.filter(s => s.gender === filters.gender);
+        }
         setFilteredStudents(result);
     }, [filters, students]);
 
@@ -71,14 +162,17 @@ const Students = () => {
         setLoading(true);
         try {
             const token = localStorage.getItem('token');
+            const sessionId = localStorage.getItem('selectedSessionId');
             const response = await axios.get(`${API_ENDPOINTS.PRINCIPAL}/student/list`, {
-                headers: { Authorization: `Bearer ${token}` }
+                headers: { 
+                    Authorization: `Bearer ${token}`,
+                    'x-academic-session-id': sessionId?.toString()
+                }
             });
             setStudents(response.data.students || []);
             setFilteredStudents(response.data.students || []);
         } catch (error) {
             console.error('Error fetching students:', error);
-            // toast.error('Failed to fetch students');
         } finally {
             setLoading(false);
         }
@@ -91,29 +185,20 @@ const Students = () => {
 
     const handleStudentClick = (student) => {
         setSelectedStudent(student);
-        setViewMode('details');
-    };
-
-    const handleBackToList = () => {
-        setViewMode('list');
-        setSelectedStudent(null);
+        setShowDetailsModal(true);
     };
 
     const handleEditClick = () => {
         if (!selectedStudent) return;
+        setShowDetailsModal(false);
 
-        // Populate form with student data
         let dobValue = '';
         if (selectedStudent.dob) {
-            // Handle common formats: DD/MM/YYYY or DD-MM-YYYY
             const separatorPattern = /^(\d{2})[/-](\d{2})[/-](\d{4})/;
             const match = selectedStudent.dob.match(separatorPattern);
-
             if (match) {
-                // Remove separators for DDMMYYYY display
                 dobValue = match[1] + match[2] + match[3];
             } else {
-                // Try parsing as ISO or standard date
                 const date = new Date(selectedStudent.dob);
                 if (!isNaN(date.getTime())) {
                     const year = date.getFullYear();
@@ -121,7 +206,6 @@ const Students = () => {
                     const day = String(date.getDate()).padStart(2, '0');
                     dobValue = `${day}${month}${year}`;
                 } else {
-                    // Fallback to removing all non-digits, but only if it's not a long ISO string
                     const digitsOnly = selectedStudent.dob.replace(/\D/g, '');
                     dobValue = digitsOnly.length > 8 ? digitsOnly.substring(0, 8) : digitsOnly;
                 }
@@ -141,6 +225,8 @@ const Students = () => {
             email: selectedStudent.email || '',
             address: selectedStudent.address || '',
             transport_facility: selectedStudent.transport_facility ? 'true' : 'false',
+            monthly_fees: selectedStudent.monthly_fees || '',
+            transport_fees: selectedStudent.transport_fees || '',
             photo: null
         });
         setPreviewPhoto(selectedStudent.photo_url);
@@ -148,475 +234,492 @@ const Students = () => {
     };
 
     const handleDeleteClick = async () => {
-        if (!selectedStudent || !window.confirm(`Are you sure you want to delete ${selectedStudent.name}? THIS ACTION CANNOT BE UNDONE.`)) return;
-
+        if (!selectedStudent || !window.confirm(`Are you sure?`)) return;
         setLoading(true);
+        setShowDetailsModal(false);
         try {
             const token = localStorage.getItem('token');
+            const sessionId = localStorage.getItem('selectedSessionId');
             await axios.delete(`${API_ENDPOINTS.PRINCIPAL}/student/delete/${selectedStudent.id}`, {
-                headers: { Authorization: `Bearer ${token}` }
+                headers: { 
+                    Authorization: `Bearer ${token}`,
+                    'x-academic-session-id': sessionId?.toString()
+                }
             });
-            toast.success('Student deleted successfully');
+            toast.success('Deleted');
             fetchStudents();
-            handleBackToList();
         } catch (error) {
-            console.error('Delete student error:', error);
-            toast.error(error.response?.data?.message || 'Failed to delete student');
+            toast.error('Failed');
         } finally {
             setLoading(false);
-        }
-    };
-
-    const handleInputChange = (e) => {
-        const { name, value } = e.target;
-        setFormData(prev => ({
-            ...prev,
-            [name]: value
-        }));
-    };
-
-    const handleFileChange = (e) => {
-        const file = e.target.files[0];
-        if (file) {
-            setFormData(prev => ({ ...prev, photo: file }));
-            const reader = new FileReader();
-            reader.onloadend = () => {
-                setPreviewPhoto(reader.result);
-            };
-            reader.readAsDataURL(file);
         }
     };
 
     const handleSubmit = async (e) => {
         e.preventDefault();
         setLoading(true);
-
         try {
             const data = new FormData();
             Object.keys(formData).forEach(key => {
                 let value = formData[key];
-                // Convert DOB to YYYY-MM-DD for backend
                 if (key === 'dob' && value) {
-                    // Try DD-MM-YYYY
-                    const ddmmyyyyPattern = /^(\d{2})-(\d{2})-(\d{4})$/;
-                    const match = value.match(ddmmyyyyPattern);
-                    if (match) {
-                        value = `${match[3]}-${match[2]}-${match[1]}`;
-                    } else {
-                        // Try DDMMYYYY (8 digits)
-                        const ddmmyyyyRawPattern = /^(\d{2})(\d{2})(\d{4})$/;
-                        const matchRaw = value.match(ddmmyyyyRawPattern);
-                        if (matchRaw) {
-                            value = `${matchRaw[3]}-${matchRaw[2]}-${matchRaw[1]}`;
-                        }
-                    }
+                    const ddmmyyyyRawPattern = /^(\d{2})(\d{2})(\d{4})$/;
+                    const matchRaw = value.match(ddmmyyyyRawPattern);
+                    if (matchRaw) value = `${matchRaw[3]}-${matchRaw[2]}-${matchRaw[1]}`;
                 }
                 data.append(key, value);
             });
 
             const token = localStorage.getItem('token');
+            const sessionId = localStorage.getItem('selectedSessionId');
+            const headers = { 
+                'Authorization': `Bearer ${token}`, 
+                'Content-Type': 'multipart/form-data',
+                'x-academic-session-id': sessionId?.toString()
+            };
 
-            if (activeTab === 'add') {
-                await axios.post(`${API_ENDPOINTS.PRINCIPAL}/student/add`, data, {
-                    headers: {
-                        'Authorization': `Bearer ${token}`,
-                        'Content-Type': 'multipart/form-data'
-                    }
-                });
-                toast.success('Student added successfully!');
-                setFormData(initialFormState);
-                setPreviewPhoto(null);
-                setActiveTab('view');
-            } else if (viewMode === 'edit' && selectedStudent) {
-                await axios.put(`${API_ENDPOINTS.PRINCIPAL}/student/update/${selectedStudent.id}`, data, {
-                    headers: {
-                        'Authorization': `Bearer ${token}`,
-                        'Content-Type': 'multipart/form-data'
-                    }
-                });
-                toast.success('Student updated successfully!');
-                fetchStudents();
+            if (showAddModal) {
+                await axios.post(`${API_ENDPOINTS.PRINCIPAL}/student/add`, data, { headers });
+                toast.success('Added');
+                setShowAddModal(false);
+            } else {
+                await axios.put(`${API_ENDPOINTS.PRINCIPAL}/student/update/${selectedStudent.id}`, data, { headers });
+                toast.success('Updated');
                 setViewMode('list');
-                setSelectedStudent(null);
             }
-
+            fetchStudents();
+            setFormData(initialFormState);
+            setPreviewPhoto(null);
         } catch (error) {
-            console.error('Student save error:', error);
-            toast.error(error.response?.data?.message || 'Failed to save student');
+            toast.error('Error');
         } finally {
             setLoading(false);
         }
     };
 
-    function renderForm() {
+    const renderFeesHistory = () => {
+        if (!feeHistory) return <div className="loading-spinner">Loading fees...</div>;
+
+        const months = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+        
+        // Merge activated months with payments to show Pending vs Paid
+        const monthlyRecords = (feeHistory.activated_months || []).map(m => {
+            const payment = (feeHistory.payments || []).find(p => p.month === m.month && p.year === m.year);
+            return {
+                month: m.month,
+                year: m.year,
+                status: payment ? 'paid' : 'pending',
+                paid_at: payment?.paid_at || null,
+                method: payment?.payment_method || null
+            };
+        });
+
         return (
-            <form onSubmit={handleSubmit} className="add-student-form">
+            <div className="fees-history-embedded animate-fade-in">
+                <div className="fees-columns-container">
+                    {/* Column 1: Monthly Fees */}
+                    <div className="fees-column-box monthly">
+                        <div className="column-header">
+                            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><rect x="3" y="4" width="18" height="18" rx="2" ry="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>
+                            <h3>Monthly Fees</h3>
+                        </div>
+                        <div className="column-scroll-area">
+                            {monthlyRecords.map((r, i) => (
+                                <div key={i} className={`mini-fee-card-v2 ${r.status}`}>
+                                    <div className="fee-card-main">
+                                        <div className="m-info">
+                                            <span className="m-name">{months[r.month - 1]} {r.year}</span>
+                                            <span className="m-type">Tuition + Transport</span>
+                                        </div>
+                                        <div className={`status-tag ${r.status}`}>{r.status.toUpperCase()}</div>
+                                    </div>
+                                    {r.status === 'paid' && (
+                                        <div className="fee-card-footer">
+                                            <span>{new Date(r.paid_at).toLocaleDateString()}</span>
+                                            <span>•</span>
+                                            <span>{r.method}</span>
+                                        </div>
+                                    )}
+                                </div>
+                            ))}
+                            {monthlyRecords.length === 0 && <p className="no-data-msg">No active months found</p>}
+                        </div>
+                    </div>
+
+                    {/* Column 2: One-Time Fees */}
+                    <div className="fees-column-box onetime">
+                        <div className="column-header">
+                            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><rect x="1" y="4" width="22" height="16" rx="2" ry="2"/><line x1="1" y1="10" x2="23" y2="10"/><path d="M16 14v4M12 14v4M8 14v4"/></svg>
+                            <h3>One-Time Fees</h3>
+                        </div>
+                        <div className="column-scroll-area">
+                            {(feeHistory.one_time_fees || []).map((f, i) => (
+                                <div key={i} className={`mini-fee-card-v2 ${f.status}`}>
+                                    <div className="fee-card-main">
+                                        <div className="m-info">
+                                            <span className="m-name">{f.reason}</span>
+                                            <span className="m-type">Total: ₹{f.due_amount}</span>
+                                        </div>
+                                        <div className={`status-tag ${f.status}`}>{f.status.toUpperCase()}</div>
+                                    </div>
+                                    <div className="ot-progress-bar">
+                                        <div className="progress-fill" style={{ width: `${(f.paid_amount / f.due_amount) * 100}%` }}></div>
+                                    </div>
+                                    <div className="fee-card-footer">
+                                        <span>Paid: ₹{f.paid_amount}</span>
+                                        <span>•</span>
+                                        <span>Bal: ₹{f.due_amount - f.paid_amount}</span>
+                                    </div>
+                                </div>
+                            ))}
+                            {feeHistory.one_time_fees?.length === 0 && <p className="no-data-msg">No one-time records</p>}
+                        </div>
+                    </div>
+                </div>
+            </div>
+        );
+    };
+
+    const renderAttendanceCalendar = () => {
+        const year = attendanceMonth.getFullYear();
+        const month = attendanceMonth.getMonth();
+        const daysInMonth = new Date(year, month + 1, 0).getDate();
+        const firstDayOfMonth = new Date(year, month, 1).getDay();
+        
+        const days = [];
+        for (let i = 0; i < firstDayOfMonth; i++) {
+            days.push({ isEmpty: true });
+        }
+        
+        for (let i = 1; i <= daysInMonth; i++) {
+            const dateStr = `${year}-${String(month + 1).padStart(2, '0')}-${String(i).padStart(2, '0')}`;
+            const att = attendanceData.find(a => a.date === dateStr);
+            days.push({
+                day: i,
+                status: att?.status || null,
+                isEmpty: false
+            });
+        }
+
+        const changeMonth = (offset) => {
+            const newDate = new Date(attendanceMonth);
+            newDate.setMonth(newDate.getMonth() + offset);
+            setAttendanceMonth(newDate);
+        };
+
+        const monthsLong = ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"];
+
+        return (
+            <div className="attendance-history-embedded animate-fade-in">
+                <div className="attendance-split-layout">
+                    {/* Left: Calendar */}
+                    <div className="attendance-calendar-side">
+                        <div className="attendance-calendar-header">
+                            <div className="month-nav">
+                                <button onClick={() => changeMonth(-1)}><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><polyline points="15 18 9 12 15 6"/></svg></button>
+                                <h3>{attendanceMonth.toLocaleDateString('en-US', { month: 'long', year: 'numeric' })}</h3>
+                                <button onClick={() => changeMonth(1)}><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><polyline points="9 18 15 12 9 6"/></svg></button>
+                            </div>
+                            <div className="attendance-mini-stats">
+                                <div className="mini-stat present"><span>P</span><strong>{attendanceData.filter(a => a.status === 'present').length}</strong></div>
+                                <div className="mini-stat absent"><span>A</span><strong>{attendanceData.filter(a => a.status === 'absent').length}</strong></div>
+                            </div>
+                        </div>
+                        <div className="calendar-mini-grid">
+                            {['S', 'M', 'T', 'W', 'T', 'F', 'S'].map(d => <div key={d} className="grid-day-head">{d}</div>)}
+                            {days.map((day, i) => (
+                                <div key={i} className={`grid-day ${day.isEmpty ? 'empty' : ''} ${day.status || ''}`}>
+                                    {day.day}
+                                </div>
+                            ))}
+                        </div>
+                    </div>
+
+                    {/* Right: Absent Notes */}
+                    <div className="absent-notes-side">
+                        <div className="notes-header">
+                            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/><polyline points="10 9 9 9 8 9"/></svg>
+                            <h3>Absent Notes History</h3>
+                        </div>
+                        <div className="notes-scroll-area">
+                            {absentRequests.map((note, i) => {
+                                const noteDate = new Date(note.date);
+                                return (
+                                    <div key={i} className={`absent-note-card ${note.status}`}>
+                                        <div className="note-card-header">
+                                            <div className="note-date">
+                                                <strong>{noteDate.getDate()} {monthsLong[noteDate.getMonth()].substring(0, 3)}</strong>
+                                                <span>{noteDate.getFullYear()}</span>
+                                            </div>
+                                            <div className={`note-status-pill ${note.status}`}>{note.status}</div>
+                                        </div>
+                                        <p className="note-reason">"{note.reason}"</p>
+                                        {note.status === 'approved' && note.approved_by_teacher_name && (
+                                            <div className="note-approved-by">
+                                                <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3"><path d="M20 6L9 17l-5-5"/></svg>
+                                                By {note.approved_by_teacher_name}
+                                            </div>
+                                        )}
+                                    </div>
+                                );
+                            })}
+                            {absentRequests.length === 0 && <p className="no-data-msg">No absent notes submitted</p>}
+                        </div>
+                    </div>
+                </div>
+            </div>
+        );
+    };
+
+    const renderForm = () => {
+        const isEditing = viewMode === 'edit';
+        const isAdding = showAddModal;
+        return (
+            <form onSubmit={handleSubmit} className="add-student-form form-in-modal">
                 <div className="form-section">
                     <h3>Basic Details</h3>
                     <div className="form-grid">
                         <div className="form-group photo-upload-group">
                             <div className="photo-preview">
-                                {previewPhoto ? (
-                                    <img src={previewPhoto} alt="Preview" />
-                                ) : (
-                                    <div className="placeholder">
-                                        <span>Photo</span>
-                                    </div>
-                                )}
+                                {previewPhoto ? <img src={previewPhoto} alt="Preview" /> : <div className="placeholder"><span>Photo</span></div>}
                             </div>
-                            <input
-                                type="file"
-                                accept="image/*"
-                                onChange={handleFileChange}
-                            />
+                            <input type="file" accept="image/*" onChange={(e) => {
+                                const file = e.target.files[0];
+                                if (file) {
+                                    setFormData(prev => ({ ...prev, photo: file }));
+                                    const reader = new FileReader();
+                                    reader.onloadend = () => setPreviewPhoto(reader.result);
+                                    reader.readAsDataURL(file);
+                                }
+                            }} />
                         </div>
                         <div className="form-group">
                             <label>Full Name *</label>
-                            <input
-                                type="text"
-                                name="name"
-                                value={formData.name}
-                                onChange={handleInputChange}
-                                required
-                            />
+                            <input type="text" name="name" value={formData.name} onChange={(e) => setFormData(p => ({...p, name: e.target.value}))} required />
                         </div>
                         <div className="form-group">
                             <label>Class *</label>
-                            <input
-                                type="text"
-                                name="class"
-                                value={formData.class}
-                                onChange={handleInputChange}
-                                required
-                            />
+                            <input type="text" name="class" value={formData.class} onChange={(e) => setFormData(p => ({...p, class: e.target.value}))} required />
                         </div>
                         <div className="form-group">
                             <label>Section *</label>
-                            <input
-                                type="text"
-                                name="section"
-                                value={formData.section}
-                                onChange={handleInputChange}
-                                required
-                            />
+                            <input type="text" name="section" value={formData.section} onChange={(e) => setFormData(p => ({...p, section: e.target.value}))} required />
                         </div>
                         <div className="form-group">
-                            <label>Roll Number *</label>
-                            <input
-                                type="text"
-                                name="roll_no"
-                                value={formData.roll_no}
-                                onChange={handleInputChange}
-                                required
-                            />
+                            <label>Roll No *</label>
+                            <input type="text" name="roll_no" value={formData.roll_no} onChange={(e) => setFormData(p => ({...p, roll_no: e.target.value}))} required />
                         </div>
                         <div className="form-group">
-                            <label>Date of Birth (DDMMYYYY) *</label>
-                            <input
-                                type="text"
-                                name="dob"
-                                value={formData.dob}
-                                onChange={handleInputChange}
-                                placeholder="DDMMYYYY or DD-MM-YYYY"
-                                pattern="(\d{8})|(\d{2}-\d{2}-\d{4})"
-                                title="Date should be in DDMMYYYY or DD-MM-YYYY format"
-                                required
-                            />
+                            <label>DOB (DDMMYYYY) *</label>
+                            <input type="text" name="dob" value={formData.dob} onChange={(e) => setFormData(p => ({...p, dob: e.target.value}))} required />
                         </div>
                         <div className="form-group">
                             <label>Gender *</label>
-                            <select
-                                name="gender"
-                                value={formData.gender}
-                                onChange={handleInputChange}
-                                required
-                            >
-                                <option value="">Select Gender</option>
+                            <select name="gender" value={formData.gender} onChange={(e) => setFormData(p => ({...p, gender: e.target.value}))} required>
+                                <option value="">Select</option>
                                 <option value="Male">Male</option>
                                 <option value="Female">Female</option>
-                                <option value="Other">Other</option>
                             </select>
                         </div>
                     </div>
                 </div>
-
                 <div className="form-section">
                     <h3>Parent Details</h3>
                     <div className="form-grid">
                         <div className="form-group">
                             <label>Father's Name *</label>
-                            <input
-                                type="text"
-                                name="father_name"
-                                value={formData.father_name}
-                                onChange={handleInputChange}
-                                required
-                            />
+                            <input type="text" name="father_name" value={formData.father_name} onChange={(e) => setFormData(p => ({...p, father_name: e.target.value}))} required />
                         </div>
                         <div className="form-group">
                             <label>Mother's Name *</label>
-                            <input
-                                type="text"
-                                name="mother_name"
-                                value={formData.mother_name}
-                                onChange={handleInputChange}
-                                required
-                            />
+                            <input type="text" name="mother_name" value={formData.mother_name} onChange={(e) => setFormData(p => ({...p, mother_name: e.target.value}))} required />
                         </div>
                         <div className="form-group">
-                            <label>Contact Mobile *</label>
-                            <input
-                                type="tel"
-                                name="mobile"
-                                value={formData.mobile}
-                                onChange={handleInputChange}
-                                required
-                            />
+                            <label>Mobile *</label>
+                            <input type="tel" name="mobile" value={formData.mobile} onChange={(e) => setFormData(p => ({...p, mobile: e.target.value}))} required />
                         </div>
                         <div className="form-group">
                             <label>Email *</label>
-                            <input
-                                type="email"
-                                name="email"
-                                value={formData.email}
-                                onChange={handleInputChange}
-                                required
-                            />
+                            <input type="email" name="email" value={formData.email} onChange={(e) => setFormData(p => ({...p, email: e.target.value}))} required />
                         </div>
                     </div>
                 </div>
-
                 <div className="form-section">
-                    <h3>Other Details</h3>
+                    <h3>Financials</h3>
                     <div className="form-grid">
                         <div className="form-group full-width">
                             <label>Address *</label>
-                            <textarea
-                                name="address"
-                                value={formData.address}
-                                onChange={handleInputChange}
-                                required
-                                rows="3"
-                            />
+                            <textarea name="address" value={formData.address} onChange={(e) => setFormData(p => ({...p, address: e.target.value}))} required rows="2" />
+                        </div>
+                        <div className="form-group">
+                            <label>Monthly Fees</label>
+                            <input type="number" name="monthly_fees" value={formData.monthly_fees} onChange={(e) => setFormData(p => ({...p, monthly_fees: e.target.value}))} />
                         </div>
                         <div className="form-group">
                             <label>Transport Facility</label>
-                            <select
-                                name="transport_facility"
-                                value={formData.transport_facility}
-                                onChange={handleInputChange}
-                            >
-                                <option value="false">No</option>
-                                <option value="true">Yes</option>
-                            </select>
+                            <div className="modern-toggle-container" onClick={() => setFormData(p => ({ ...p, transport_facility: p.transport_facility === 'true' ? 'false' : 'true' }))}>
+                                <div className={`modern-toggle-track ${formData.transport_facility === 'true' ? 'active' : ''}`}><div className="modern-toggle-thumb"></div></div>
+                                <span className="toggle-label">{formData.transport_facility === 'true' ? 'Yes' : 'No'}</span>
+                            </div>
                         </div>
+                        {formData.transport_facility === 'true' && (
+                            <div className="form-group">
+                                <label>Transport Fees</label>
+                                <input type="number" name="transport_fees" value={formData.transport_fees} onChange={(e) => setFormData(p => ({...p, transport_fees: e.target.value}))} />
+                            </div>
+                        )}
                     </div>
                 </div>
-
                 <div className="form-actions">
                     <button type="button" className="btn-cancel" onClick={() => {
-                        if (viewMode === 'edit') setViewMode('details');
-                        else setActiveTab('view');
+                        if (isEditing) { setViewMode('list'); setShowDetailsModal(true); }
+                        else setShowAddModal(false);
                     }}>Cancel</button>
-                    <button type="submit" className="btn-submit" disabled={loading}>
-                        {loading ? 'Saving...' : (viewMode === 'edit' ? 'Update Student' : 'Add Student')}
-                    </button>
+                    <button type="submit" className="btn-submit" disabled={loading}>{loading ? 'Saving...' : (isEditing ? 'Update' : 'Add')}</button>
                 </div>
             </form>
         );
-    }
+    };
 
     return (
         <div className="students-page">
             <div className="page-header">
-                <h2>Student Management</h2>
+                <div className="header-title-container">
+                    <button className="back-to-dash-btn" onClick={() => navigate('/dashboard')} title="Back"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3"><line x1="19" y1="12" x2="5" y2="12"></line><polyline points="12 19 5 12 12 5"></polyline></svg></button>
+                    <h2>Student Management</h2>
+                    <span className="total-count-pill">{students.length} Total</span>
+                </div>
                 <div className="header-actions">
-                    <button
-                        className={`tab-btn ${activeTab === 'view' ? 'active' : ''}`}
-                        onClick={() => {
-                            setActiveTab('view');
-                            setViewMode('list');
-                            setSelectedStudent(null);
-                        }}
-                    >
-                        View Students
-                    </button>
-                    <button
-                        className={`tab-btn ${activeTab === 'add' ? 'active' : ''}`}
-                        onClick={() => {
-                            setActiveTab('add');
-                            setViewMode('list');
-                            setFormData(initialFormState);
-                            setPreviewPhoto(null);
-                        }}
-                    >
-                        Add Student
-                    </button>
+                    <button className="tab-btn active" onClick={() => setViewMode('list')}>View Students</button>
+                    <button className="tab-btn" onClick={() => { setFormData(initialFormState); setPreviewPhoto(null); setShowAddModal(true); }}>Add Student</button>
+                </div>
+            </div>
+            <div className="page-content">
+                <div className="students-list-container">
+                    <div className="filters-bar">
+                        <input type="text" name="class" placeholder="Filter by Class" value={filters.class} onChange={handleFilterChange} className="filter-input" />
+                        <input type="text" name="section" placeholder="Section" value={filters.section} onChange={handleFilterChange} className="filter-input" />
+                        <input type="text" name="roll_no" placeholder="Roll No" value={filters.roll_no} onChange={handleFilterChange} className="filter-input" />
+                        <select name="transport" value={filters.transport} onChange={handleFilterChange} className="filter-input">
+                            <option value="">All Transport</option>
+                            <option value="yes">Yes</option>
+                            <option value="no">No</option>
+                        </select>
+                        <select name="gender" value={filters.gender} onChange={handleFilterChange} className="filter-input">
+                            <option value="">All Genders</option>
+                            <option value="Male">Male</option>
+                            <option value="Female">Female</option>
+                        </select>
+                    </div>
+                    {loading ? <div className="loading-spinner">Loading...</div> : (
+                        <div className="table-responsive">
+                            <table className="students-table">
+                                <thead><tr><th>Photo</th><th>Name</th><th>Class - Section</th><th>Roll No</th><th>Unique Code</th><th>Monthly Fees</th><th>Transport Fees</th><th>Mobile</th><th>Email</th></tr></thead>
+                                <tbody>
+                                    {filteredStudents.map(student => (
+                                        <tr key={student.id} onClick={() => handleStudentClick(student)} className="clickable-row">
+                                            <td><img src={student.photo_url || 'https://via.placeholder.com/40'} alt="" className="student-table-photo" /></td>
+                                            <td>{student.name}</td>
+                                            <td>{student.class} - {student.section}</td>
+                                            <td>{student.roll_no}</td>
+                                            <td className="unique-code-text">{student.unique_code}</td>
+                                            <td>₹{student.monthly_fees || 0}</td>
+                                            <td>{student.transport_facility ? `₹${student.transport_fees || 0}` : 'N/A'}</td>
+                                            <td>{student.mobile}</td>
+                                            <td>{student.email}</td>
+                                        </tr>
+                                    ))}
+                                </tbody>
+                            </table>
+                        </div>
+                    )}
                 </div>
             </div>
 
-            <div className="page-content">
-                {activeTab === 'view' ? (
-                    <>
-                        {viewMode === 'list' && (
-                            <div className="students-list-container">
-                                <div className="filters-bar">
-                                    <input
-                                        type="text"
-                                        name="class"
-                                        placeholder="Filter by Class"
-                                        value={filters.class}
-                                        onChange={handleFilterChange}
-                                        className="filter-input"
-                                    />
-                                    <input
-                                        type="text"
-                                        name="section"
-                                        placeholder="Section"
-                                        value={filters.section}
-                                        onChange={handleFilterChange}
-                                        className="filter-input"
-                                    />
-                                    <input
-                                        type="text"
-                                        name="roll_no"
-                                        placeholder="Roll No"
-                                        value={filters.roll_no}
-                                        onChange={handleFilterChange}
-                                        className="filter-input"
-                                    />
-                                    <select
-                                        name="transport"
-                                        value={filters.transport}
-                                        onChange={handleFilterChange}
-                                        className="filter-input"
-                                        style={{ minWidth: '180px' }}
-                                    >
-                                        <option value="">All Transport Modes</option>
-                                        <option value="yes">Transport: Yes</option>
-                                        <option value="no">Transport: No</option>
-                                    </select>
-                                </div>
-
-                                {loading ? (
-                                    <div className="loading-spinner">Loading...</div>
-                                ) : filteredStudents.length === 0 ? (
-                                    <div className="empty-state">No students found matching filters</div>
-                                ) : (
-                                    <div className="table-responsive">
-                                        <table className="students-table">
-                                            <thead>
-                                                <tr>
-                                                    <th>Photo</th>
-                                                    <th>Name</th>
-                                                    <th>Class - Section</th>
-                                                    <th>Roll No</th>
-                                                    <th>Unique Code</th>
-                                                    <th>Mobile</th>
-                                                    <th>Email</th>
-                                                </tr>
-                                            </thead>
-                                            <tbody>
-                                                {filteredStudents.map(student => (
-                                                    <tr key={student.id} onClick={() => handleStudentClick(student)} className="clickable-row">
-                                                        <td>
-                                                            <img
-                                                                src={student.photo_url || 'https://via.placeholder.com/40'}
-                                                                alt={student.name}
-                                                                className="student-table-photo"
-                                                            />
-                                                        </td>
-                                                        <td>{student.name}</td>
-                                                        <td>{student.class} - {student.section}</td>
-                                                        <td>{student.roll_no}</td>
-                                                        <td className="unique-code-text" title={explainCode(student.unique_code)}>{student.unique_code}</td>
-                                                        <td>{student.mobile}</td>
-                                                        <td>{student.email}</td>
-                                                    </tr>
-                                                ))}
-                                            </tbody>
-                                        </table>
+            {showDetailsModal && selectedStudent && (
+                <div className="student-modal-overlay" onClick={() => { setShowDetailsModal(false); setShowAttendanceView(false); setShowFeesView(false); setAttendanceMonth(new Date()); }}>
+                    <div className="student-modal-content" onClick={e => e.stopPropagation()}>
+                        <button className="modal-close-btn" onClick={() => { setShowDetailsModal(false); setShowAttendanceView(false); setShowFeesView(false); setAttendanceMonth(new Date()); }}><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button>
+                        <div className="modal-body-premium"><div className="modal-main-details">
+                            <div className="modal-header-section">
+                                <div className="modal-photo-wrapper"><img src={selectedStudent.photo_url || 'https://via.placeholder.com/150'} alt="" /><div className="modal-photo-ring"></div></div>
+                                <div className="modal-intro">
+                                    <h2 className="modal-student-name">{selectedStudent.name}</h2>
+                                    <div className="modal-meta-row">
+                                        <div className="modal-id-badge"><span className="badge-label">Unique Code</span><span className="badge-value">{selectedStudent.unique_code}</span></div>
+                                        <div className="modal-quick-nav-btns">
+                                            <button 
+                                                className={`nav-pill-btn attendance ${showAttendanceView ? 'active' : ''}`} 
+                                                onClick={() => { setShowAttendanceView(!showAttendanceView); setShowFeesView(false); }}
+                                            >
+                                                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg>
+                                                {showAttendanceView ? 'View Profile' : 'Attendance'}
+                                            </button>
+                                            <button 
+                                                className={`nav-pill-btn fees ${showFeesView ? 'active' : ''}`} 
+                                                onClick={() => { setShowFeesView(!showFeesView); setShowAttendanceView(false); }}
+                                            >
+                                                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><rect x="1" y="4" width="22" height="16" rx="2" ry="2"/><line x1="1" y1="10" x2="23" y2="10"/><path d="M16 14v4M12 14v4M8 14v4"/></svg>
+                                                {showFeesView ? 'View Profile' : 'Fees History'}
+                                            </button>
+                                        </div>
                                     </div>
+                                </div>
+                                <div className="modal-quick-actions">
+                                    <button className="modal-action-btn edit" onClick={handleEditClick}><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg></button>
+                                    <button className="modal-action-btn delete" onClick={handleDeleteClick}><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/><line x1="10" y1="11" x2="10" y2="17"/><line x1="14" y1="11" x2="14" y2="17"/></svg></button>
+                                </div>
+                            </div>
+                            <div className="modal-info-grid">
+                                {showAttendanceView ? (
+                                    <div className="info-group-box full attendance-container-box">
+                                        <label>Attendance History</label>
+                                        {renderAttendanceCalendar()}
+                                    </div>
+                                ) : showFeesView ? (
+                                    <div className="info-group-box full fees-container-box">
+                                        <label>Fees History</label>
+                                        {renderFeesHistory()}
+                                    </div>
+                                ) : (
+                                    <>
+                                        <div className="info-group-box">
+                                            <label>Academic Info</label>
+                                            <div className="info-row-item"><span className="info-label">Class & Section</span><span className="info-value highlight">{selectedStudent.class} - {selectedStudent.section}</span></div>
+                                            <div className="info-row-item"><span className="info-label">Roll No</span><span className="info-value">{selectedStudent.roll_no}</span></div>
+                                            <div className="info-row-item"><span className="info-label">DOB</span><span className="info-value">{selectedStudent.dob}</span></div>
+                                        </div>
+                                        <div className="info-group-box">
+                                            <label>Family Details</label>
+                                            <div className="info-row-item"><span className="info-label">Father</span><span className="info-value">{selectedStudent.father_name}</span></div>
+                                            <div className="info-row-item"><span className="info-label">Mother</span><span className="info-value">{selectedStudent.mother_name}</span></div>
+                                            <div className="info-row-item"><span className="info-label">Mobile</span><span className="info-value">{selectedStudent.mobile}</span></div>
+                                        </div>
+                                        <div className="info-group-box">
+                                            <label>Finance & Address</label>
+                                            <div className="info-row-item"><span className="info-label">Monthly Fees</span><span className="info-value currency">₹{selectedStudent.monthly_fees || 0}</span></div>
+                                            <div className="info-row-item"><span className="info-label">Transport</span><span className="info-value">{selectedStudent.transport_facility ? `Enabled (₹${selectedStudent.transport_fees || 0})` : 'None'}</span></div>
+                                            <div className="info-row-item address"><span className="info-label">Address</span><span className="info-value">{selectedStudent.address}</span></div>
+                                        </div>
+                                    </>
                                 )}
                             </div>
-                        )}
-
-                        {viewMode === 'details' && selectedStudent && (
-                            <div className="student-details-view">
-                                <div className="details-header">
-                                    <button className="back-btn" onClick={handleBackToList}>
-                                        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M19 12H5M12 19l-7-7 7-7" /></svg>
-                                        Back to List
-                                    </button>
-                                    <div className="details-actions">
-                                        <button className="btn-edit" onClick={handleEditClick}>Edit</button>
-                                        <button className="btn-delete" onClick={handleDeleteClick}>Delete</button>
-                                    </div>
-                                </div>
-                                <div className="details-card">
-                                    <div className="details-profile-header">
-                                        <img src={selectedStudent.photo_url || 'https://via.placeholder.com/100'} alt={selectedStudent.name} className="details-photo" />
-                                        <div className="details-title">
-                                            <h2>{selectedStudent.name}</h2>
-                                            <p className="subtitle unique-code-text" title={explainCode(selectedStudent.unique_code)}>{selectedStudent.unique_code}</p>
-                                        </div>
-                                    </div>
-                                    <div className="details-grid">
-                                        <div className="detail-item">
-                                            <label>Class - Section</label>
-                                            <p>{selectedStudent.class} - {selectedStudent.section}</p>
-                                        </div>
-                                        <div className="detail-item">
-                                            <label>Roll Number</label>
-                                            <p>{selectedStudent.roll_no}</p>
-                                        </div>
-                                        <div className="detail-item">
-                                            <label>Gender</label>
-                                            <p>{selectedStudent.gender}</p>
-                                        </div>
-                                        <div className="detail-item">
-                                            <label>Date of Birth</label>
-                                            <p>{selectedStudent.dob}</p>
-                                        </div>
-                                        <div className="detail-item">
-                                            <label>Father's Name</label>
-                                            <p>{selectedStudent.father_name}</p>
-                                        </div>
-                                        <div className="detail-item">
-                                            <label>Mother's Name</label>
-                                            <p>{selectedStudent.mother_name}</p>
-                                        </div>
-                                        <div className="detail-item">
-                                            <label>Mobile</label>
-                                            <p>{selectedStudent.mobile}</p>
-                                        </div>
-                                        <div className="detail-item">
-                                            <label>Email</label>
-                                            <p>{selectedStudent.email}</p>
-                                        </div>
-                                        <div className="detail-item full"><label>Address</label><p>{selectedStudent.address}</p></div>
-                                        <div className="detail-item"><label>Transport</label><p>{selectedStudent.transport_facility ? 'Yes' : 'No'}</p></div>
-                                    </div>
-                                </div>
-                            </div>
-                        )}
-
-                        {viewMode === 'edit' && (
-                            <div className="add-student-container">
-                                <div className="edit-header">
-                                    <h3>Edit Student: {selectedStudent?.name}</h3>
-                                    <button className="btn-cancel-sm" onClick={() => setViewMode('details')}>Cancel Edit</button>
-                                </div>
-                                {renderForm()}
-                            </div>
-                        )}
-                    </>
-                ) : (
-                    <div className="add-student-container">
-                        {renderForm()}
+                        </div></div>
                     </div>
-                )}
-            </div>
+                </div>
+            )}
+
+            {(viewMode === 'edit' || showAddModal) && (
+                <div className="student-modal-overlay" onClick={() => { if (viewMode === 'edit') { setViewMode('list'); setShowDetailsModal(true); } else setShowAddModal(false); }}>
+                    <div className="student-modal-content edit-modal-size" onClick={e => e.stopPropagation()}>
+                        <button className="modal-close-btn" onClick={() => { if (viewMode === 'edit') { setViewMode('list'); setShowDetailsModal(true); } else setShowAddModal(false); }}><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button>
+                        <div className="modal-main-details">
+                            <div className="modal-header-section minimal"><h2 className="modal-student-name">{showAddModal ? 'Add Student' : `Edit: ${selectedStudent?.name}`}</h2></div>
+                            <div className="modal-scrollable-form">{renderForm()}</div>
+                        </div>
+                    </div>
+                </div>
+            )}
         </div>
     );
 };

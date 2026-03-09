@@ -204,7 +204,7 @@ export default function MyAbsentRequests() {
                                     {item.status === 'approved' && (
                                         <View style={styles.approvalSection}>
                                             <Text style={styles.approvalText}>
-                                                Approved by {item.approved_by_teacher_name}
+                                                Approved by {item.approved_by_teacher_name || item.approved_by_principal_name || 'Principal'}
                                             </Text>
                                         </View>
                                     )}

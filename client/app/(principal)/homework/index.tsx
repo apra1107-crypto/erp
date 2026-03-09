@@ -25,9 +25,15 @@ export default function PrincipalHomeworkClassSelection() {
         try {
             setLoading(true);
             const token = await AsyncStorage.getItem('token'); // Principal token
+            const storedSessionId = await AsyncStorage.getItem('selectedSessionId');
+            const userData = await AsyncStorage.getItem('userData');
+            const sessionId = storedSessionId || (userData ? JSON.parse(userData).current_session_id : null);
             
             const response = await axios.get(`${API_ENDPOINTS.PRINCIPAL}/student/list`, {
-                headers: { Authorization: `Bearer ${token}` }
+                headers: { 
+                    Authorization: `Bearer ${token}`,
+                    'x-academic-session-id': sessionId?.toString()
+                }
             });
             
             if (response.data && Array.isArray(response.data.students)) {

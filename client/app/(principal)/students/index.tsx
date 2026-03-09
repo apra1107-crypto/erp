@@ -16,19 +16,30 @@ export default function SelectClass() {
     const [sections, setSections] = useState<string[]>([]);
     const [filterClass, setFilterClass] = useState<string>('');
     const [filterSection, setFilterSection] = useState<string>('');
+    const [filterGender, setFilterGender] = useState<string>('');
     const [filteredStudents, setFilteredStudents] = useState<any[]>([]);
     const [loading, setLoading] = useState(true);
+    const [showFilters, setShowFilters] = useState(false);
     const { isDark, theme } = useTheme();
 
     useEffect(() => {
         fetchClasses();
     }, []);
 
+    useEffect(() => {
+        let filtered = allStudents;
+        if (filterClass) filtered = filtered.filter(s => s.class === filterClass);
+        if (filterSection) filtered = filtered.filter(s => s.section === filterSection);
+        if (filterGender) filtered = filtered.filter(s => (s.gender || '').toLowerCase() === filterGender.toLowerCase());
+        setFilteredStudents(filtered);
+    }, [filterClass, filterSection, filterGender, allStudents]);
+
     const fetchClasses = async () => {
         try {
             const token = await AsyncStorage.getItem('token');
+            const storedSessionId = await AsyncStorage.getItem('selectedSessionId');
             const userData = await AsyncStorage.getItem('userData');
-            const sessionId = userData ? JSON.parse(userData).current_session_id : null;
+            const sessionId = storedSessionId || (userData ? JSON.parse(userData).current_session_id : null);
 
             const response = await axios.get(
                 `${API_ENDPOINTS.PRINCIPAL}/student/list`,
@@ -41,8 +52,14 @@ export default function SelectClass() {
             );
 
             const data = response.data.students;
-            setAllStudents(data);
-            setFilteredStudents(data);
+            // Sort by Class, Section, then Roll Number (numerically)
+            const sortedData = data.sort((a: any, b: any) => {
+                if (a.class !== b.class) return a.class.toString().localeCompare(b.class.toString(), undefined, { numeric: true });
+                if (a.section !== b.section) return a.section.localeCompare(b.section);
+                return parseInt(a.roll_no) - parseInt(b.roll_no);
+            });
+            setAllStudents(sortedData);
+            setFilteredStudents(sortedData);
             const uniqueClasses = [...new Set(data.map((s: any) => s.class))].sort();
             setClasses(uniqueClasses as string[]);
         } catch (error) {
@@ -64,7 +81,6 @@ export default function SelectClass() {
             const uniqueSections = [...new Set(classStudents.map((s: any) => s.section))].sort();
             setSections(uniqueSections as string[]);
             setFilterSection('');
-            setFilteredStudents(classStudents);
         }
     };
 
@@ -72,18 +88,14 @@ export default function SelectClass() {
         setFilterClass('');
         setSections([]);
         setFilterSection('');
-        setFilteredStudents(allStudents);
+        setFilterGender('');
     };
 
     const handleSectionFilter = (sec: string) => {
         if (filterSection === sec) {
             setFilterSection('');
-            const classStudents = allStudents.filter((s: any) => s.class === filterClass);
-            setFilteredStudents(classStudents);
         } else {
             setFilterSection(sec);
-            const sectionStudents = allStudents.filter((s: any) => s.class === filterClass && s.section === sec);
-            setFilteredStudents(sectionStudents);
         }
     };
 
@@ -165,8 +177,8 @@ export default function SelectClass() {
         },
         clearText: {
             color: theme.primary,
-            fontSize: 12,
-            fontWeight: 'bold',
+            fontSize: 14,
+            fontWeight: '900',
         },
         noDataText: {
             textAlign: 'center',
@@ -174,45 +186,95 @@ export default function SelectClass() {
             color: theme.textLight,
             marginTop: 50,
         },
-        filterBar: {
-            backgroundColor: 'transparent',
-            paddingHorizontal: 20,
+        filterIconBtn: {
+            width: 44,
+            height: 44,
+            borderRadius: 14,
+            backgroundColor: theme.card,
+            justifyContent: 'center',
+            alignItems: 'center',
+            borderWidth: 1,
+            borderColor: theme.border,
+        },
+        modalOverlay: {
+            flex: 1,
+            backgroundColor: 'rgba(0,0,0,0.5)',
+            justifyContent: 'flex-end',
+        },
+        bottomSheet: {
+            backgroundColor: theme.card,
+            borderTopLeftRadius: 32,
+            borderTopRightRadius: 32,
+            maxHeight: '80%',
+        },
+        sheetHeader: {
+            alignItems: 'center',
             paddingVertical: 10,
         },
-        filterTitle: {
-            fontSize: 12,
-            fontWeight: 'bold',
+        sheetHandle: {
+            width: 40,
+            height: 5,
+            backgroundColor: theme.border,
+            borderRadius: 3,
+            marginTop: 10,
+            marginBottom: 5,
+        },
+        sheetTitle: {
+            fontSize: 20,
+            fontWeight: '900',
             color: theme.text,
         },
         filterGroup: {
             flexDirection: 'row',
             alignItems: 'center',
+            marginBottom: 20,
         },
         filterLabel: {
-            fontWeight: 'bold',
-            marginRight: 10,
-            fontSize: 12,
-            color: theme.text,
+            fontWeight: '900',
+            fontSize: 13,
+            color: theme.textLight,
+            marginBottom: 12,
+            textTransform: 'uppercase',
+            letterSpacing: 1,
         },
         filterChip: {
-            paddingHorizontal: 12,
-            paddingVertical: 6,
-            borderRadius: 20,
-            marginRight: 8,
+            paddingHorizontal: 16,
+            paddingVertical: 10,
+            borderRadius: 14,
+            marginRight: 10,
             borderWidth: 1,
             borderColor: theme.border,
+            backgroundColor: theme.background,
         },
         filterChipActive: {
             backgroundColor: theme.primary,
             borderColor: theme.primary,
         },
         filterText: {
-            fontSize: 12,
+            fontSize: 14,
             color: theme.text,
+            fontWeight: '700',
         },
         filterTextActive: {
             color: '#fff',
-            fontWeight: 'bold',
+            fontWeight: '900',
+        },
+        applyBtn: {
+            backgroundColor: theme.primary,
+            paddingVertical: 18,
+            borderRadius: 18,
+            alignItems: 'center',
+            marginTop: 10,
+            shadowColor: theme.primary,
+            shadowOffset: { width: 0, height: 4 },
+            shadowOpacity: 0.3,
+            shadowRadius: 8,
+            elevation: 4,
+        },
+        applyBtnText: {
+            color: '#fff',
+            fontWeight: '900',
+            fontSize: 16,
         },
         promoteBtn: {
             flexDirection: 'row',
@@ -331,52 +393,105 @@ export default function SelectClass() {
                 <TouchableOpacity onPress={() => router.back()} style={styles.backButton}>
                     <Ionicons name="chevron-back" size={24} color={theme.text} />
                 </TouchableOpacity>
-                <Text style={[styles.title, { color: theme.text }]}>All Students</Text>
-            </View>
-
-            {/* Filter Bar */}
-            <View style={styles.filterBar}>
-                <View style={styles.filterHeader}>
-                    <Text style={styles.filterTitle}>Filter Students:</Text>
-                    {(filterClass || filterSection) && (
-                        <TouchableOpacity onPress={resetFilters}>
-                            <Text style={styles.clearText}>Clear All</Text>
-                        </TouchableOpacity>
-                    )}
+                <View style={{ flex: 1 }}>
+                    <Text style={[styles.title, { color: theme.text }]}>All Students</Text>
+                    <Text style={{ fontSize: 12, color: theme.primary, fontWeight: '800' }}>
+                        Total: {filteredStudents.length} Students
+                    </Text>
                 </View>
-
-                <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ marginBottom: 10 }}>
-                    <View style={styles.filterGroup}>
-                        <Text style={styles.filterLabel}>Class:</Text>
-                        {classes.map((cls: string) => (
-                            <TouchableOpacity
-                                key={cls}
-                                style={[styles.filterChip, { backgroundColor: isDark ? '#333' : '#f8f9fa' }, filterClass === cls && { backgroundColor: theme.primary, borderColor: theme.primary }]}
-                                onPress={() => handleClassFilter(cls)}
-                            >
-                                <Text style={[styles.filterText, { color: theme.text }, filterClass === cls && { color: '#fff', fontWeight: 'bold' }]}>{cls}</Text>
-                            </TouchableOpacity>
-                        ))}
-                    </View>
-                </ScrollView>
-
-                {filterClass && sections.length > 0 && (
-                    <ScrollView horizontal showsHorizontalScrollIndicator={false}>
-                        <View style={styles.filterGroup}>
-                            <Text style={styles.filterLabel}>Section:</Text>
-                            {sections.map(sec => (
-                                <TouchableOpacity
-                                    key={sec}
-                                    style={[styles.filterChip, { backgroundColor: isDark ? '#333' : '#f8f9fa' }, filterSection === sec && { backgroundColor: theme.primary, borderColor: theme.primary }]}
-                                    onPress={() => handleSectionFilter(sec)}
-                                >
-                                    <Text style={[styles.filterText, { color: theme.text }, filterSection === sec && { color: '#fff', fontWeight: 'bold' }]}>{sec}</Text>
-                                </TouchableOpacity>
-                            ))}
-                        </View>
-                    </ScrollView>
-                )}
+                <TouchableOpacity 
+                    style={[styles.filterIconBtn, (filterClass || filterSection || filterGender) && { backgroundColor: theme.primary }]} 
+                    onPress={() => setShowFilters(true)}
+                >
+                    <Ionicons name="filter" size={20} color={(filterClass || filterSection || filterGender) ? "#fff" : theme.text} />
+                </TouchableOpacity>
             </View>
+
+            {/* Filter BottomSheet */}
+            <Modal
+                visible={showFilters}
+                transparent
+                animationType="slide"
+                onRequestClose={() => setShowFilters(false)}
+            >
+                <TouchableOpacity 
+                    style={styles.modalOverlay} 
+                    activeOpacity={1} 
+                    onPress={() => setShowFilters(false)}
+                >
+                    <TouchableOpacity 
+                        activeOpacity={1} 
+                        style={styles.bottomSheet}
+                    >
+                        <View style={styles.sheetHeader}>
+                            <View style={styles.sheetHandle} />
+                            <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', width: '100%', paddingHorizontal: 20, marginTop: 10 }}>
+                                <Text style={styles.sheetTitle}>Filter Students</Text>
+                                <TouchableOpacity onPress={resetFilters}>
+                                    <Text style={styles.clearText}>Reset All</Text>
+                                </TouchableOpacity>
+                            </View>
+                        </View>
+
+                        <ScrollView style={{ padding: 20 }}>
+                            <Text style={styles.filterLabel}>Select Class:</Text>
+                            <View style={styles.filterGroup}>
+                                <ScrollView horizontal showsHorizontalScrollIndicator={false}>
+                                    {classes.map((cls: string) => (
+                                        <TouchableOpacity
+                                            key={cls}
+                                            style={[styles.filterChip, filterClass === cls && styles.filterChipActive]}
+                                            onPress={() => handleClassFilter(cls)}
+                                        >
+                                            <Text style={[styles.filterText, filterClass === cls && styles.filterTextActive]}>{cls}</Text>
+                                        </TouchableOpacity>
+                                    ))}
+                                </ScrollView>
+                            </View>
+
+                            {filterClass && sections.length > 0 && (
+                                <>
+                                    <Text style={styles.filterLabel}>Select Section:</Text>
+                                    <View style={styles.filterGroup}>
+                                        <ScrollView horizontal showsHorizontalScrollIndicator={false}>
+                                            {sections.map(sec => (
+                                                <TouchableOpacity
+                                                    key={sec}
+                                                    style={[styles.filterChip, filterSection === sec && styles.filterChipActive]}
+                                                    onPress={() => handleSectionFilter(sec)}
+                                                >
+                                                    <Text style={[styles.filterText, filterSection === sec && styles.filterTextActive]}>{sec}</Text>
+                                                </TouchableOpacity>
+                                            ))}
+                                        </ScrollView>
+                                    </View>
+                                </>
+                            )}
+
+                            <Text style={styles.filterLabel}>Gender:</Text>
+                            <View style={styles.filterGroup}>
+                                {['Male', 'Female'].map(g => (
+                                    <TouchableOpacity
+                                        key={g}
+                                        style={[styles.filterChip, filterGender.toLowerCase() === g.toLowerCase() && styles.filterChipActive]}
+                                        onPress={() => setFilterGender(filterGender.toLowerCase() === g.toLowerCase() ? '' : g)}
+                                    >
+                                        <Text style={[styles.filterText, filterGender.toLowerCase() === g.toLowerCase() && styles.filterTextActive]}>{g}</Text>
+                                    </TouchableOpacity>
+                                ))}
+                            </View>
+
+                            <TouchableOpacity 
+                                style={styles.applyBtn} 
+                                onPress={() => setShowFilters(false)}
+                            >
+                                <Text style={styles.applyBtnText}>Apply Filters</Text>
+                            </TouchableOpacity>
+                            <View style={{ height: 40 }} />
+                        </ScrollView>
+                    </TouchableOpacity>
+                </TouchableOpacity>
+            </Modal>
 
             <ScrollView contentContainerStyle={styles.listContainer}>
                 {filteredStudents.length === 0 ? (
@@ -400,6 +515,11 @@ export default function SelectClass() {
                             <View style={styles.studentInfo}>
                                 <Text style={[styles.studentName, { color: theme.text }]}>{item.name}</Text>
                                 <Text style={[styles.studentMeta, { color: theme.textLight }]}>Class {item.class}-{item.section} • Roll: {item.roll_no}</Text>
+                            </View>
+                            <View style={{ alignItems: 'flex-end', marginRight: 10 }}>
+                                <View style={{ backgroundColor: theme.primary + '10', paddingHorizontal: 8, paddingVertical: 4, borderRadius: 8 }}>
+                                    <Text style={{ fontSize: 10, color: theme.primary, fontWeight: '900' }}>{item.unique_code}</Text>
+                                </View>
                             </View>
                             <TouchableOpacity onPress={() => router.push(`/(principal)/students/details/${item.id}`)}>
                                 <Ionicons name="chevron-forward" size={20} color={theme.icon} />

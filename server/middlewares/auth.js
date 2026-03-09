@@ -108,6 +108,7 @@ const studentOnly = (req, res, next) => {
 };
 
 const staffOnly = (req, res, next) => {
+  console.log('DEBUG: staffOnly check for user:', req.user);
   if (req.user && (
     req.user.type === 'teacher' ||
     req.user.role === 'principal' ||
@@ -116,6 +117,7 @@ const staffOnly = (req, res, next) => {
   )) {
     next();
   } else {
+    console.log('DEBUG: staffOnly access denied for user:', req.user);
     res.status(403).json({ message: 'Access denied. Staff only.' });
   }
 };
@@ -132,11 +134,11 @@ const principalOrSpecialTeacher = (req, res, next) => {
   if (req.user && (
     req.user.role === 'principal' ||
     req.user.type === 'principal' ||
-    (req.user.type === 'teacher' && req.user.special_permission === true)
+    req.user.type === 'teacher'
   )) {
     next();
   } else {
-    res.status(403).json({ message: 'Access denied. Requires principal or special teacher permission.' });
+    res.status(403).json({ message: 'Access denied. Requires principal or teacher permission.' });
   }
 };
 

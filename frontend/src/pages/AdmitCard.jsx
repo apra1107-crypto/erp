@@ -17,13 +17,90 @@ const AdmitCard = () => {
     const [loading, setLoading] = useState(false);
     const [viewMode, setViewMode] = useState('list'); // list, create, event-details, individual
     const [isPrinting, setIsPrinting] = useState(false);
+    const [searchQuery, setSearchQuery] = useState('');
+    const [showSearch, setShowSearch] = useState(false);
 
     // Form States
     const [examName, setExamName] = useState('');
     const [availableClassSections, setAvailableClassSections] = useState([]);
     const [selectedClasses, setSelectedClasses] = useState([]); // [{class, section}]
-    const [schedule, setSchedule] = useState([{ date: '', day: '', subject: '', time: '' }]);
+    const [expandedClass, setExpandedClass] = useState(null); // The class currently showing sections
+    const [schedule, setSchedule] = useState([{ date: '', day: '', subject: '', start_time: '10:00', end_time: '13:00' }]);
     const [creationStep, setCreationStep] = useState(1);
+
+    const [activePicker, setActivePicker] = useState(null); // {label}
+
+    // Handle Click Outside to close time picker
+    useEffect(() => {
+        const handleClickOutside = (event) => {
+            if (activePicker && !event.target.closest('.modern-clock-wrapper')) {
+                setActivePicker(null);
+            }
+        };
+        document.addEventListener('mousedown', handleClickOutside);
+        return () => document.removeEventListener('mousedown', handleClickOutside);
+    }, [activePicker]);
+
+    // Time Helpers
+    const parseTime12To24 = (h, m, period) => {
+        let hours = parseInt(h);
+        if (period === 'PM' && hours < 12) hours += 12;
+        if (period === 'AM' && hours === 12) hours = 0;
+        return `${String(hours).padStart(2, '0')}:${m}`;
+    };
+
+    const parseTime24ToParts = (time24) => {
+        if (!time24) return { h: '10', m: '00', p: 'AM' };
+        const [h24, m] = time24.split(':');
+        let h = parseInt(h24);
+        const p = h >= 12 ? 'PM' : 'AM';
+        h = h % 12 || 12;
+        return { h: String(h).padStart(2, '0'), m, p };
+    };
+
+    const ModernTimePicker = ({ value, label, onSelect }) => {
+        const { h, m, p } = parseTime24ToParts(value);
+        const hours = ['01','02','03','04','05','06','07','08','09','10','11','12'];
+        const minutes = ['00', '15', '30', '45'];
+        const isOpen = activePicker?.label === label;
+
+        return (
+            <div className="modern-clock-wrapper">
+                <span className="tiny-label">{label.startsWith('start') ? 'Start' : 'End'}</span>
+                <div className={`time-display-trigger ${isOpen ? 'active' : ''}`} onClick={() => setActivePicker(isOpen ? null : { label })}>
+                    <span className="val">{h}:{m}</span>
+                    <span className="period">{p}</span>
+                </div>
+
+                {isOpen && (
+                    <div className="clock-popover fadeIn">
+                        <div className="popover-arrow"></div>
+                        <div className="period-toggle-row">
+                            <button className={p === 'AM' ? 'active' : ''} onClick={() => onSelect(parseTime12To24(h, m, 'AM'))}>AM</button>
+                            <button className={p === 'PM' ? 'active' : ''} onClick={() => onSelect(parseTime12To24(h, m, 'PM'))}>PM</button>
+                        </div>
+                        <div className="popover-grid hours">
+                            {hours.map(hr => (
+                                <button key={hr} className={h === hr ? 'selected' : ''} onClick={() => onSelect(parseTime12To24(hr, m, p))}>
+                                    {hr}
+                                </button>
+                            ))}
+                        </div>
+                        <div className="popover-grid minutes">
+                            {minutes.map(min => (
+                                <button key={min} className={m === min ? 'selected' : ''} onClick={() => {
+                                    onSelect(parseTime12To24(h, min, p));
+                                    setActivePicker(null);
+                                }}>
+                                    {min}
+                                </button>
+                            ))}
+                        </div>
+                    </div>
+                )}
+            </div>
+        );
+    };
 
     // View States
     const [currentEvent, setCurrentEvent] = useState(null);
@@ -71,8 +148,12 @@ const AdmitCard = () => {
     const fetchAdmitCardEvents = async () => {
         try {
             setLoading(true);
+            const sessionId = localStorage.getItem('selectedSessionId');
             const response = await axios.get(`${API_ENDPOINTS.ADMIT_CARD}/list`, {
-                headers: { Authorization: `Bearer ${token}` }
+                headers: { 
+                    Authorization: `Bearer ${token}`,
+                    'x-academic-session-id': sessionId?.toString()
+                }
             });
             setAdmitCardEvents(response.data || []);
         } catch (error) {
@@ -119,7 +200,8 @@ const AdmitCard = () => {
             date: '',
             day: '',
             subject: '',
-            time: lastRow ? lastRow.time : ''
+            start_time: lastRow ? lastRow.start_time : '',
+            end_time: lastRow ? lastRow.end_time : ''
         }]);
     };
 
@@ -139,6 +221,15 @@ const AdmitCard = () => {
             }
         }
         setSchedule(newSchedule);
+    };
+
+    const formatTime = (timeStr) => {
+        if (!timeStr) return '';
+        const [hours, minutes] = timeStr.split(':');
+        const h = parseInt(hours);
+        const ampm = h >= 12 ? 'PM' : 'AM';
+        const displayH = h % 12 || 12;
+        return `${String(displayH).padStart(2, '0')}:${minutes} ${ampm}`;
     };
 
     const formatDate = (dateStr) => {
@@ -346,25 +437,39 @@ const AdmitCard = () => {
     const renderCardToString = (student, instLogoB64, photoB64) => {
         return `
             <div style="width: 794px; height: 1122px; padding: 30px; background: #ffffff; color: #000000; font-family: Arial, sans-serif; box-sizing: border-box; display: flex; flex-direction: column; position: relative; overflow: hidden;">
-                <!-- Header -->
-                <div style="width: 100%; border-bottom: 3px solid #000; padding-bottom: 15px; margin-bottom: 20px;">
-                    <div style="display: flex; justify-content: space-between; align-items: center; width: 100%; margin-bottom: 10px;">
-                        <div style="display: flex; align-items: center; gap: 15px;">
-                            ${instLogoB64 ? `<img src="${instLogoB64}" style="height: 55px; width: auto; display: block;" />` : ''}
-                            <h1 style="margin: 0; font-size: 24px; font-weight: 900; color: #000; letter-spacing: -0.5px;">${(instProfile?.institute_name || 'INSTITUTE').toUpperCase()}</h1>
-                        </div>
-                        <div style="font-size: 14px; font-weight: 900; color: #000; background: #EEE; padding: 4px 10px; border: 1px solid #000; border-radius: 4px;">${formatDate(new Date())}</div>
+                <!-- Header Section -->
+                <div style="width: 100%; text-align: center; margin-bottom: 25px; position: relative;">
+                    <!-- Logo and Name in One Row -->
+                    <div style="display: flex; align-items: center; justify-content: center; gap: 15px; margin-bottom: 0;">
+                        ${instLogoB64 ? `<img src="${instLogoB64}" style="height: 55px; width: auto; display: block;" />` : ''}
+                        <h1 style="margin: 0; font-size: 28px; font-weight: 900; color: #000; letter-spacing: -0.5px;">${(instProfile?.institute_name || 'INSTITUTE').toUpperCase()}</h1>
                     </div>
-                    <div style="text-align: center; width: 100%;">
-                        <p style="margin: 0; font-size: 12px; font-weight: bold; color: #222;">
+
+                    <!-- Affiliation -->
+                    ${instProfile.affiliation ? `
+                        <div style="margin-bottom: 5px;">
+                            <span style="font-size: 11px; font-weight: 700; color: #444; text-transform: uppercase; letter-spacing: 1px;">
+                                ${instProfile.affiliation}
+                            </span>
+                        </div>
+                    ` : ''}
+
+                    <!-- Address and Date Row -->
+                    <div style="width: 100%; position: relative; display: flex; justify-content: center; alignItems: center; margin-top: 5px;">
+                        <p style="margin: 0; font-size: 13px; font-weight: 700; color: #333;">
                             ${(instProfile?.address || instProfile?.institute_address) || ''}, ${instProfile?.district || ''}, ${instProfile?.state || ''} - ${instProfile?.pincode || ''}
                         </p>
+                        <div style="position: absolute; right: 0; top: 0; font-size: 14px; font-weight: 900; color: #000;">
+                            ${formatDate(new Date())}
+                        </div>
                     </div>
+
+                    <div style="height: 3px; background: #000; width: 100%; margin: 15px 0;"></div>
                 </div>
 
                 <!-- Exam Title -->
                 <div style="text-align: center; margin: 10px 0 25px 0;">
-                    <h2 style="margin: 0; font-size: 22px; font-weight: 900; color: #000; border: 2px solid #000; display: inline-block; padding: 8px 45px; border-radius: 6px; text-transform: uppercase;">
+                    <h2 style="margin: 0; font-size: 24px; font-weight: 900; color: #000; border: 2px solid #000; display: inline-block; padding: 8px 45px; border-radius: 6px; text-transform: uppercase;">
                         ${currentEvent.exam_name.toUpperCase()}
                     </h2>
                 </div>
@@ -405,7 +510,7 @@ const AdmitCard = () => {
                                 <tr>
                                     <td style="padding: 6px 8px; border: 1px solid #000; font-weight: 800; font-size: 12px;">${formatDate(row.date)} (${row.day})</td>
                                     <td style="padding: 6px 8px; border: 1px solid #000; font-weight: 800; font-size: 12px;">${row.subject}</td>
-                                    <td style="padding: 6px 8px; border: 1px solid #000; font-weight: 800; font-size: 12px;">${row.time}</td>
+                                    <td style="padding: 6px 8px; border: 1px solid #000; font-weight: 800; font-size: 12px;">${formatTime(row.start_time)} - ${formatTime(row.end_time)}</td>
                                 </tr>
                             `).join('')}
                         </tbody>
@@ -441,16 +546,20 @@ const AdmitCard = () => {
     const handleCreateEvent = async () => {
         if (!examName) return toast.warning('Enter exam name');
         if (selectedClasses.length === 0) return toast.warning('Select at least one class');
-        if (schedule.some(s => !s.date || !s.subject)) return toast.warning('Fill all schedule details');
+        if (schedule.some(s => !s.date || !s.subject || !s.start_time || !s.end_time)) return toast.warning('Fill all schedule details');
 
         try {
             setLoading(true);
+            const sessionId = localStorage.getItem('selectedSessionId');
             await axios.post(`${API_ENDPOINTS.ADMIT_CARD}/create`, {
                 exam_name: examName,
                 classes: selectedClasses,
                 schedule: schedule
             }, {
-                headers: { Authorization: `Bearer ${token}` }
+                headers: { 
+                    Authorization: `Bearer ${token}`,
+                    'x-academic-session-id': sessionId?.toString()
+                }
             });
             toast.success('Admit Card Event Created!');
             setViewMode('list');
@@ -463,10 +572,38 @@ const AdmitCard = () => {
         }
     };
 
+    const toggleVisibility = async (event) => {
+        try {
+            const newStatus = !event.is_published;
+            const sessionId = localStorage.getItem('selectedSessionId');
+            
+            // Optimistic Update
+            setAdmitCardEvents(prev => prev.map(e => 
+                e.id === event.id ? { ...e, is_published: newStatus } : e
+            ));
+
+            await axios.patch(`${API_ENDPOINTS.ADMIT_CARD}/visibility/${event.id}`, 
+                { is_published: newStatus },
+                { 
+                    headers: { 
+                        Authorization: `Bearer ${token}`,
+                        'x-academic-session-id': sessionId?.toString()
+                    } 
+                }
+            );
+            toast.success(newStatus ? 'Admit Cards Published! 🚀' : 'Moved to Drafts');
+        } catch (error) {
+            console.error('Visibility toggle error:', error);
+            // Revert on error
+            fetchAdmitCardEvents();
+            toast.error('Failed to update visibility');
+        }
+    };
+
     const resetForm = () => {
         setExamName('');
         setSelectedClasses([]);
-        setSchedule([{ date: '', day: '', subject: '', time: '' }]);
+        setSchedule([{ date: '', day: '', subject: '', start_time: '10:00', end_time: '13:00' }]);
         setCreationStep(1);
     };
 
@@ -475,10 +612,14 @@ const AdmitCard = () => {
         setViewMode('event-details');
         try {
             setLoading(true);
+            const sessionId = localStorage.getItem('selectedSessionId');
             const response = await axios.post(`${API_ENDPOINTS.ADMIT_CARD}/students`, {
                 classes: event.classes
             }, {
-                headers: { Authorization: `Bearer ${token}` }
+                headers: { 
+                    Authorization: `Bearer ${token}`,
+                    'x-academic-session-id': sessionId?.toString()
+                }
             });
             setStudents(response.data);
             const firstClass = event.classes[0];
@@ -503,8 +644,12 @@ const AdmitCard = () => {
         e.stopPropagation();
         if (!window.confirm('Delete this admit card event?')) return;
         try {
+            const sessionId = localStorage.getItem('selectedSessionId');
             await axios.delete(`${API_ENDPOINTS.ADMIT_CARD}/${id}`, {
-                headers: { Authorization: `Bearer ${token}` }
+                headers: { 
+                    Authorization: `Bearer ${token}`,
+                    'x-academic-session-id': sessionId?.toString()
+                }
             });
             toast.success('Deleted');
             fetchAdmitCardEvents();
@@ -551,20 +696,67 @@ const AdmitCard = () => {
 
                             <div className="form-group-modern">
                                 <label>Target Classes & Sections</label>
-                                <p style={{ fontSize: '13px', color: '#64748b', margin: '0 0 10px 0' }}>Pick the classes this schedule applies to:</p>
-                                <div className="class-chips-box">
-                                    {availableClassSections.map((cs, i) => {
-                                        const isSelected = selectedClasses.some(item => item.class === cs.class && item.section === cs.section);
-                                        return (
-                                            <div
-                                                key={i}
-                                                className={`pill-chip ${isSelected ? 'selected' : ''}`}
-                                                onClick={() => handleClassToggle(cs)}
+                                <div className="pill-selection-system">
+                                    {/* Selected Summary */}
+                                    <div className="selection-summary-strip">
+                                        <span className="summary-label">Selected:</span>
+                                        <div className="summary-tags">
+                                            {selectedClasses.length === 0 ? (
+                                                <span className="none-text">None</span>
+                                            ) : (
+                                                selectedClasses.map((cs, i) => (
+                                                    <span key={i} className="mini-tag">
+                                                        {cs.class}-{cs.section}
+                                                        <i onClick={() => handleClassToggle(cs)}>✕</i>
+                                                    </span>
+                                                ))
+                                            )}
+                                        </div>
+                                    </div>
+
+                                    {/* Class Selection Row */}
+                                    <div className="class-pills-row">
+                                        {[...new Set(availableClassSections.map(c => c.class))].map(cls => (
+                                            <button 
+                                                key={cls}
+                                                type="button"
+                                                className={`class-main-pill ${expandedClass === cls ? 'expanded' : ''} ${selectedClasses.some(s => s.class === cls) ? 'has-selection' : ''}`}
+                                                onClick={() => setExpandedClass(expandedClass === cls ? null : cls)}
                                             >
-                                                Class {cs.class} - {cs.section}
+                                                Grade {cls}
+                                                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3"><polyline points="6 9 12 15 18 9"/></svg>
+                                            </button>
+                                        ))}
+                                    </div>
+
+                                    {/* Section Selection Area (Conditional) */}
+                                    {expandedClass && (
+                                        <div className="section-reveal-box fadeIn">
+                                            <div className="reveal-header">
+                                                <span>Select Sections for Grade {expandedClass}:</span>
+                                                <button type="button" className="done-btn-pill" onClick={() => setExpandedClass(null)}>Done</button>
                                             </div>
-                                        );
-                                    })}
+                                            <div className="section-pills-grid">
+                                                {availableClassSections
+                                                    .filter(cs => cs.class === expandedClass)
+                                                    .map((cs, i) => {
+                                                        const isSelected = selectedClasses.some(item => item.class === cs.class && item.section === cs.section);
+                                                        return (
+                                                            <button
+                                                                key={i}
+                                                                type="button"
+                                                                className={`section-pill ${isSelected ? 'active' : ''}`}
+                                                                onClick={() => handleClassToggle(cs)}
+                                                            >
+                                                                {cs.section}
+                                                                {isSelected && <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="4"><polyline points="20 6 9 17 4 12"/></svg>}
+                                                            </button>
+                                                        );
+                                                    })
+                                                }
+                                            </div>
+                                        </div>
+                                    )}
                                 </div>
                             </div>
                         </div>
@@ -581,17 +773,26 @@ const AdmitCard = () => {
                                             <span className="tiny-label">Day</span>
                                             <input type="text" className="premium-input-small" readOnly placeholder="Auto" value={row.day} style={{ opacity: 0.7 }} />
                                         </div>
-                                        <div className="form-group-modern">
-                                            <span className="tiny-label">Subject</span>
-                                            <input type="text" className="premium-input-small" placeholder="Subject Name" value={row.subject} onChange={(e) => updateScheduleRow(i, 'subject', e.target.value)} />
+                                        <div className="form-group-modern flex-3">
+                                            <span className="tiny-label">Subject Name</span>
+                                            <input type="text" className="premium-input-small" placeholder="e.g. Mathematics" value={row.subject} onChange={(e) => updateScheduleRow(i, 'subject', e.target.value)} />
                                         </div>
-                                        <div className="form-group-modern">
-                                            <span className="tiny-label">Timing</span>
-                                            <input type="text" className="premium-input-small" placeholder="e.g. 10 AM - 1 PM" value={row.time} onChange={(e) => updateScheduleRow(i, 'time', e.target.value)} />
+                                        
+                                        <div className="schedule-time-actions-group">
+                                            <ModernTimePicker 
+                                                label={`start-${i}`} 
+                                                value={row.start_time || '10:00'} 
+                                                onSelect={(val) => updateScheduleRow(i, 'start_time', val)} 
+                                            />
+                                            <ModernTimePicker 
+                                                label={`end-${i}`} 
+                                                value={row.end_time || '13:00'} 
+                                                onSelect={(val) => updateScheduleRow(i, 'end_time', val)} 
+                                            />
+                                            <button className="row-delete-icon" onClick={() => removeScheduleRow(i)}>
+                                                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><path d="M3 6h18M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2" /></svg>
+                                            </button>
                                         </div>
-                                        <button className="row-delete-icon" onClick={() => removeScheduleRow(i)}>
-                                            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><path d="M3 6h18M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2" /></svg>
-                                        </button>
                                     </div>
                                 ))}
                             </div>
@@ -633,31 +834,38 @@ const AdmitCard = () => {
                 <div id="printable-area">
                     <div className="professional-card-print">
                         {/* Header Section - Modern Institutional Layout */}
-                        <div className="card-top-header" style={{ position: 'relative', marginBottom: '30px' }}>
-                            {/* Top row: Logo+Name and Date */}
-                            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', width: '100%', padding: '0 10px' }}>
-                                <div style={{ display: 'flex', alignItems: 'center', gap: '15px', flex: 1, overflow: 'hidden' }}>
-                                    {instProfile.logo_url || instProfile.institute_logo ? (
-                                        <img
-                                            src={instProfile.logo_url || instProfile.institute_logo}
-                                            alt="Logo"
-                                            style={{ height: '45px', width: 'auto', objectFit: 'contain', flexShrink: 0 }}
-                                        />
-                                    ) : null}
-                                    <h1 style={{ margin: 0, fontSize: '24px', fontWeight: '900', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', color: '#000' }}>
-                                        {instProfile.institute_name.toUpperCase()}
-                                    </h1>
-                                </div>
-                                <div style={{ fontSize: '18px', fontWeight: '900', color: '#000', whiteSpace: 'nowrap', marginLeft: '20px' }}>
-                                    {formatDate(new Date())}
-                                </div>
+                        <div className="card-top-header" style={{ position: 'relative', marginBottom: '30px', textAlign: 'center' }}>
+                            {/* Logo and Name in One Row */}
+                            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '15px', marginBottom: '0' }}>
+                                {instProfile.logo_url || instProfile.institute_logo ? (
+                                    <img
+                                        src={instProfile.logo_url || instProfile.institute_logo}
+                                        alt="Logo"
+                                        style={{ height: '55px', width: 'auto', objectFit: 'contain' }}
+                                    />
+                                ) : null}
+                                <h1 style={{ margin: 0, fontSize: '28px', fontWeight: '900', color: '#000', letterSpacing: '-0.5px' }}>
+                                    {instProfile.institute_name.toUpperCase()}
+                                </h1>
                             </div>
 
-                            {/* Middle row: Centered Address */}
-                            <div style={{ textAlign: 'center', marginTop: '12px', width: '100%' }}>
+                            {/* Affiliation Centered Below */}
+                            {instProfile.affiliation && (
+                                <div style={{ marginBottom: '5px' }}>
+                                    <span style={{ fontSize: '11px', fontWeight: '700', color: '#444', textTransform: 'uppercase', letterSpacing: '1px' }}>
+                                        {instProfile.affiliation}
+                                    </span>
+                                </div>
+                            )}
+
+                            {/* Address Centered with Date at Right */}
+                            <div style={{ width: '100%', position: 'relative', display: 'flex', justifyContent: 'center', alignItems: 'center', marginTop: '5px' }}>
                                 <p style={{ margin: 0, fontSize: '13px', fontWeight: '700', color: '#333' }}>
                                     {instProfile.address || instProfile.institute_address}, {instProfile.district}, {instProfile.state} - {instProfile.pincode}
                                 </p>
+                                <div style={{ position: 'absolute', right: '10px', fontSize: '14px', fontWeight: '900', color: '#000' }}>
+                                    {formatDate(new Date())}
+                                </div>
                             </div>
 
                             <div className="header-divider-line" style={{ height: '3px', background: '#000', width: '100%', margin: '15px 0' }}></div>
@@ -714,7 +922,7 @@ const AdmitCard = () => {
                                             <td style={{ padding: '12px', fontSize: '13px', fontWeight: '700' }}>{formatDate(row.date)}</td>
                                             <td style={{ padding: '12px', fontSize: '13px', fontWeight: '700' }}>{row.day}</td>
                                             <td style={{ padding: '12px', fontSize: '13px', fontWeight: '700' }}>{row.subject}</td>
-                                            <td style={{ padding: '12px', fontSize: '13px', fontWeight: '700' }}>{row.time}</td>
+                                            <td style={{ padding: '12px', fontSize: '13px', fontWeight: '700' }}>{formatTime(row.start_time)} - {formatTime(row.end_time)}</td>
                                         </tr>
                                     ))}
                                 </tbody>
@@ -756,12 +964,43 @@ const AdmitCard = () => {
 
             {viewMode === 'list' && (
                 <header className="page-header">
-                    <div>
+                    <div className="header-title-container">
+                        <button className="back-btn-minimal" onClick={() => window.history.back()} title="Back">
+                            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
+                                <path d="M19 12H5M12 19l-7-7 7-7" />
+                            </svg>
+                        </button>
                         <h2>Admit Card Registry</h2>
-                        <p>Standardized examination identification management</p>
+                        
+                        {/* Search/Filter Hub */}
+                        <div className={`registry-filter-hub ${showSearch ? 'active' : ''}`}>
+                            <button className="filter-trigger-btn" onClick={() => setShowSearch(!showSearch)} title="Filter by Title">
+                                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
+                                    <polygon points="22 3 2 3 10 12.46 10 19 14 21 14 12.46 22 3"/>
+                                </svg>
+                                {searchQuery && <span className="active-filter-dot"></span>}
+                            </button>
+                            
+                            {showSearch && (
+                                <div className="filter-dropdown-popover fadeIn">
+                                    <div className="filter-option" onClick={() => { setSearchQuery(''); setShowSearch(false); }}>
+                                        All Examinations
+                                    </div>
+                                    {[...new Set(admitCardEvents.map(e => e.exam_name))].map(title => (
+                                        <div 
+                                            key={title} 
+                                            className={`filter-option ${searchQuery === title ? 'selected' : ''}`}
+                                            onClick={() => { setSearchQuery(title); setShowSearch(false); }}
+                                        >
+                                            {title}
+                                        </div>
+                                    ))}
+                                </div>
+                            )}
+                        </div>
                     </div>
                     <button className="btn-primary-gradient" onClick={() => setViewMode('create')}>
-                        + Initialize New Exam Event
+                        Create Admit Card
                     </button>
                 </header>
             )}
@@ -771,8 +1010,21 @@ const AdmitCard = () => {
                     <div className="events-grid">
                         {loading ? (
                             <div className="loader-box">Loading...</div>
-                        ) : admitCardEvents.map(event => (
+                        ) : admitCardEvents
+                            .filter(e => e.exam_name.toLowerCase().includes(searchQuery.toLowerCase()))
+                            .map(event => (
                             <div key={event.id} className="exam-event-card fadeIn" onClick={() => handleViewEvent(event)}>
+                                <div style={{ position: 'absolute', top: '15px', right: '15px', zIndex: 10, display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '4px' }}>
+                                    <div 
+                                        className={`modern-toggle-mini ${event.is_published ? 'active' : ''}`}
+                                        onClick={(e) => { e.stopPropagation(); toggleVisibility(event); }}
+                                    >
+                                        <div className="toggle-thumb-mini"></div>
+                                    </div>
+                                    <span style={{ fontSize: '8px', fontWeight: '900', color: event.is_published ? '#10b981' : '#64748b' }}>
+                                        {event.is_published ? 'LIVE' : 'DRAFT'}
+                                    </span>
+                                </div>
                                 <div className="event-icon-box">
                                     <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><rect x="3" y="4" width="18" height="16" rx="2" /><line x1="7" y1="8" x2="17" y2="8" /><line x1="7" y1="12" x2="17" y2="12" /><line x1="7" y1="16" x2="13" y2="16" /></svg>
                                 </div>
@@ -865,24 +1117,10 @@ const AdmitCard = () => {
                                     >
                                         {isSelectionMode && (
                                             <div
-                                                className="card-checkbox"
+                                                className={`card-checkbox ${selectionMap[student.id] ? 'active' : ''}`}
                                                 onClick={(e) => toggleStudentSelection(student.id, e)}
-                                                style={{
-                                                    position: 'absolute',
-                                                    top: '15px',
-                                                    right: '15px',
-                                                    width: '24px',
-                                                    height: '24px',
-                                                    borderRadius: '6px',
-                                                    border: '2px solid #6366f1',
-                                                    background: selectionMap[student.id] ? '#6366f1' : 'transparent',
-                                                    display: 'flex',
-                                                    alignItems: 'center',
-                                                    justifyContent: 'center',
-                                                    zIndex: 5
-                                                }}
                                             >
-                                                {selectionMap[student.id] && <span style={{ color: 'white', fontSize: '14px', fontWeight: 'bold' }}>✓</span>}
+                                                {selectionMap[student.id] && <span>✓</span>}
                                             </div>
                                         )}
                                         <div style={{ display: 'flex', gap: '15px', alignItems: 'center' }}>

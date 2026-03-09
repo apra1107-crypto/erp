@@ -152,29 +152,30 @@ export default function StudentLogin() {
 
   const saveSessionAndNavigate = async (token: string, studentData: any) => {
     try {
+      const studentWithToken = { ...studentData, authToken: token };
       await AsyncStorage.setItem('studentToken', token);
-      await AsyncStorage.setItem('studentData', JSON.stringify(studentData));
+      await AsyncStorage.setItem('studentData', JSON.stringify(studentWithToken));
 
       // Join Socket Room
-      if (studentData.institute_id && studentData.class && studentData.section) {
-        const room = `${studentData.institute_id}-${studentData.class}-${studentData.section}`;
+      if (studentWithToken.institute_id && studentWithToken.class && studentWithToken.section) {
+        const room = `${studentWithToken.institute_id}-${studentWithToken.class}-${studentWithToken.section}`;
         joinRoom(room);
-      } else if (selectedInstitute?.id && studentData.class && studentData.section) {
+      } else if (selectedInstitute?.id && studentWithToken.class && studentWithToken.section) {
         // Fallback if institute_id is missing in student object but we have it from selection
-        const room = `${selectedInstitute.id}-${studentData.class}-${studentData.section}`;
+        const room = `${selectedInstitute.id}-${studentWithToken.class}-${studentWithToken.section}`;
         joinRoom(room);
       }
 
       const savedAccounts = await AsyncStorage.getItem('studentAccounts');
       let accounts = savedAccounts ? JSON.parse(savedAccounts) : [];
-      const existingIndex = accounts.findIndex((acc: any) => acc.id === studentData.id);
+      const existingIndex = accounts.findIndex((acc: any) => acc.id === studentWithToken.id);
       if (existingIndex !== -1) {
-        accounts[existingIndex] = studentData;
+        accounts[existingIndex] = studentWithToken;
       } else {
-        accounts.push(studentData);
+        accounts.push(studentWithToken);
       }
       await AsyncStorage.setItem('studentAccounts', JSON.stringify(accounts));
-      Toast.show({ type: 'success', text1: 'Login Successful', text2: `Welcome, ${studentData.name}!` });
+      Toast.show({ type: 'success', text1: 'Login Successful', text2: `Welcome, ${studentWithToken.name}!` });
       router.replace('/(student)/dashboard');
     } catch (error) {
       console.error('Save session error:', error);

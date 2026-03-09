@@ -1,496 +1,276 @@
-@import url('https://fonts.googleapis.com/css2?family=Playfair+Display:wght@700&family=Crimson+Text:ital,wght@0,400;0,600;0,700;1,400&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Playfair+Display:wght@700;900&family=Crimson+Text:ital,wght@0,400;0,600;0,700;1,400&family=Inter:wght@400;600;700;800;900&display=swap');
 
+/* Base Container - Matches mobile preview background */
 .report-card-container {
-    background: white;
-    /* Clean paper white */
+    background: #f0f2f5;
     min-height: 100vh;
-    padding: 0;
+    padding: 40px 20px;
     display: flex;
     justify-content: center;
     align-items: flex-start;
-    font-family: 'Crimson Text', serif;
+    font-family: 'Helvetica', Arial, sans-serif;
 }
 
-.report-card-box {
-    width: 100%;
-    max-width: none;
-    /* Take full page area */
-    background: white;
-    box-shadow: none;
-    border-radius: 0;
+.report-card-container.is-exporting {
     padding: 0;
+    background: #fff;
+}
+
+/* The Paper - Fixed A4 proportions */
+.report-card { 
+    width: 210mm; 
+    min-height: 290mm; 
+    padding: 15px; 
+    padding-top: 25px; 
+    box-sizing: border-box; 
+    background: #fff; 
+    display: flex; 
+    flex-direction: column;
+    position: relative; 
+    border: 2.5px solid #000; 
+    border-radius: 2px;
     overflow: hidden;
+    margin: 0 auto;
+    box-shadow: 0 12px 20px rgba(0,0,0,0.4); /* Elevation matches mobile */
 }
 
-.report-card-inner {
-    background: white;
-    width: 100%;
-    padding: 60px 6%;
-    /* Slightly more spacious on screen */
+.is-exporting .report-card {
+    box-shadow: none;
+    margin: 0;
     border-radius: 0;
+}
+
+/* Inner thin border */
+.paper-inner-border {
+    position: absolute;
+    top: 4px; left: 4px; right: 4px; bottom: 4px;
+    border: 0.8px solid #333;
+    pointer-events: none;
+    z-index: 0;
+}
+
+/* Header */
+.rc-header { 
     display: flex;
     flex-direction: column;
-}
-
-/* Specific Export Padding to prevent 'compact' feeling in PDF */
-.is-exporting .report-card-inner {
-    padding: 40px !important;
-    /* Fixed standard margin for print */
-    width: 1000px !important;
-    /* Lock width for high-quality capture */
-}
-
-/* Optimization for PDF/Image Export */
-.report-card-container.is-exporting {
-    padding: 0 !important;
-}
-
-.report-card-container.is-exporting .report-card-box {
-    max-width: none !important;
-}
-
-
-.card-header {
-    padding: 30px 60px;
-    border-bottom: 2px solid #1e3a8a;
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    justify-content: center;
+    align-items: center; 
+    margin-bottom: 20px; 
+    z-index: 10; 
     text-align: center;
 }
 
-.header-primary-row {
+.rc-inst-row { 
     display: flex;
-    justify-content: center;
+    flex-direction: row; 
+    align-items: center; 
+    justify-content: center; 
+    gap: 12px; 
+    margin-bottom: 5px; 
+}
+
+.rc-logo { width: 60px; height: 60px; object-fit: contain; }
+
+.rc-inst-name { 
+    font-size: 26px; 
+    font-weight: 900; 
+    color: #1e1b4b; 
+    text-transform: uppercase; 
+    line-height: 28px;
+    margin: 0;
+}
+
+.rc-inst-affiliation { 
+    font-size: 14px; 
+    color: #4f46e5; 
+    font-weight: 700; 
+    margin-top: -8px; 
+    margin-bottom: 2px; 
+}
+
+.rc-inst-sub { 
+    font-size: 10.5px; 
+    color: #444; 
+    text-align: center; 
+    font-weight: 700; 
+    margin-top: 0; 
+}
+
+.rc-exam-title-container { 
+    margin-top: 15px; 
+    padding: 6px 35px; 
+    background: #1e1b4b; 
+    border-radius: 4px;
+    transform: skewX(-10deg);
+}
+
+.rc-exam-title { 
+    font-size: 15px; 
+    font-weight: 900; 
+    color: #fff; 
+    text-align: center; 
+    text-transform: uppercase;
+    transform: skewX(10deg); /* Counter skew for text */
+}
+
+/* Student Info Section */
+.rc-student-section { 
+    display: flex;
+    flex-direction: row; 
+    justify-content: space-between; 
+    margin-bottom: 20px; 
+    padding: 12px; 
+    background: #f8fafc;
+    border-radius: 12px;
+    border: 1.5px solid #e2e8f0;
+}
+
+.rc-info-grid { flex: 1; margin-right: 10px; }
+
+.rc-info-row { 
+    display: flex;
+    flex-direction: row; 
+    border-bottom: 1px solid #cbd5e1; 
+    padding: 5px 0; 
+}
+
+.rc-info-label { width: 90px; font-size: 9px; font-weight: 800; color: #64748b; }
+.rc-info-value { flex: 1; font-size: 12px; font-weight: 900; color: #0f172a; }
+
+.rc-photo-box { 
+    width: 85px; height: 105px; 
+    border: 3px solid #fff; 
+    background: #fff; 
+    box-shadow: 0 4px 5px rgba(0,0,0,0.2);
+    display: flex;
+    justify-content: center; 
     align-items: center;
+    overflow: hidden;
+    border-radius: 4px;
+    flex-shrink: 0;
+}
+
+.rc-photo { width: 100%; height: 100%; object-fit: cover; }
+
+/* Marks Table */
+.rc-table-wrapper { 
+    margin-bottom: 20px; 
+    border-radius: 12px; 
+    overflow: hidden; 
+    border: 2px solid #1e1b4b; 
+}
+
+.rc-table {
     width: 100%;
+    border-collapse: collapse;
+}
+
+.rc-table-header { 
+    background: #1e1b4b; 
+}
+
+.rc-table-header th {
+    color: #fff;
+    padding: 10px 6px;
+    font-size: 10px;
+    font-weight: 900;
+    text-align: center;
+}
+
+.rc-table-row { 
+    border-bottom: 1px solid #e2e8f0; 
+}
+
+.rc-table-row td {
+    padding: 10px 6px;
+    font-size: 10px;
+    font-weight: 800;
+    color: #000;
+    text-align: center;
+}
+
+.rc-table-row.alternate {
+    background-color: #f8fafc;
+}
+
+.rc-text-left { 
+    text-align: left !important; 
+    padding-left: 15px !important;
+}
+
+/* Summary Box */
+.rc-summary-box { 
+    display: flex;
+    flex-direction: row; 
+    justify-content: space-between; 
+    background: #1e1b4b; 
+    padding: 15px; 
+    border-radius: 12px;
     margin-bottom: 15px;
+    box-shadow: 0 4px 6px rgba(0,0,0,0.1);
 }
 
-.institute-brand-sync {
+.rc-summary-item { display: flex; flex-direction: column; align-items: center; }
+.rc-summary-label { font-size: 9px; font-weight: 800; color: #94a3b8; margin-bottom: 2px; }
+.rc-summary-value { font-size: 18px; font-weight: 900; color: #fff; }
+
+/* Achievement Medals */
+.rc-medal-row { 
     display: flex;
-    align-items: center;
-    justify-content: center;
-    gap: 25px;
-    flex-wrap: nowrap;
+    flex-direction: row; 
+    gap: 10px; 
+    margin-top: 5px; 
+    margin-bottom: 15px; 
 }
 
-.header-logo-img {
-    width: 65px;
-    height: 65px;
-    object-fit: contain;
-    flex-shrink: 0;
-}
-
-.institute-name-main {
-    font-family: 'Playfair Display', serif;
-    font-size: 36px;
-    color: #1e3a8a;
-    margin: 0;
-    text-transform: uppercase;
-    font-weight: 800;
-    line-height: 1.1;
-    white-space: nowrap;
-}
-
-.header-secondary-info {
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    width: 100%;
-    gap: 8px;
-}
-
-.inst-address-line {
-    font-size: 15px;
-    color: #334155;
-    margin: 0;
-    text-transform: uppercase;
-    letter-spacing: 0.8px;
-    max-width: 80%;
-    line-height: 1.4;
-    font-weight: 600;
-}
-
-.inst-affiliation-line {
-    font-weight: 700;
-    color: #1e293b;
-    text-transform: uppercase;
-    font-size: 13px;
-    letter-spacing: 2px;
-    margin-top: 2px;
-}
-
-/* Optimization for PDF/Image Export 
-   Matches screen look exactly while removing web-only shadows */
-.report-card-container.is-exporting {
-    background: white !important;
-    padding: 0 !important;
-    /* Standard print buffer */
-    min-height: auto !important;
-    display: block !important;
-}
-
-.report-card-container.is-exporting .report-card-box {
-    box-shadow: none !important;
-    max-width: none !important;
-    margin: 0 auto !important;
-    border: 1px solid #e2e8f0 !important;
-}
-
-.is-exporting .card-top-bar,
-.is-exporting .card-bottom-bar {
-    display: block !important;
-}
-
-
-.centered-exam-label {
-    text-align: center;
-    padding: 0;
-    margin-top: -28px;
-    /* Slightly lower but still uplifted */
-}
-
-.exam-title-colorful {
-    display: inline-block;
-    font-family: 'Playfair Display', serif;
-    font-size: 28px;
-    letter-spacing: 4px;
-    text-transform: uppercase;
-    margin: 0;
-    color: #1e3a8a;
-    font-weight: 800;
-}
-
-.school-branding {
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    gap: 15px;
-    width: 100%;
-}
-
-.student-meta-section-container {
-    padding: 25px 60px 20px;
-    border-bottom: 1px solid #f1f5f9;
-    display: flex;
-    justify-content: space-between;
-    align-items: flex-start;
-    gap: 40px;
-}
-
-.meta-details-left {
+.rc-medal { 
     flex: 1;
+    display: flex;
+    flex-direction: row; 
+    align-items: center; 
+    background: #f5f3ff; 
+    border: 1.5px solid #4f46e5; 
+    padding: 8px 10px; 
+    border-radius: 12px; 
+    gap: 10px; 
 }
 
-.is-exporting .inst-address-line,
-.is-exporting .inst-affiliation-line {
-    width: 100% !important;
-    white-space: normal !important;
-    word-wrap: break-word !important;
-}
+.rc-medal-icon { font-size: 18px; }
+.rc-medal-text { font-size: 10px; font-weight: 900; color: #1e1b4b; }
+.rc-medal-score { font-size: 8px; font-weight: 800; color: #4338ca; }
 
-.is-exporting .institute-name-main {
-    width: auto !important;
-    white-space: nowrap !important;
-}
-
-.meta-grid-new {
-    display: grid;
-    grid-template-columns: repeat(3, 1fr);
-    gap: 25px 30px;
-}
-
-.meta-photo-right {
-    flex-shrink: 0;
-}
-
-.student-profile-raw img {
-    width: 130px;
-    /* Slightly larger */
-    height: 150px;
-    object-fit: cover;
-}
-
-.meta-item label {
-    display: block;
-    font-size: 13px;
-    text-transform: uppercase;
-    color: #64748b;
-    font-weight: 700;
-    margin-bottom: 6px;
-}
-
-.meta-item span {
-    font-size: 20px;
-    font-weight: 600;
-    color: #1e293b;
-}
-
-.meta-item .value-name {
-    font-family: 'Playfair Display', serif;
-    font-size: 26px;
-}
-
-
-.marks-table-section {
-    padding: 30px 60px;
+/* Remarks */
+.rc-remarks { 
+    padding: 12px; 
+    background: #fffbeb; 
+    border-radius: 10px; 
+    border-left: 5px solid #f59e0b;
     margin-bottom: 20px;
 }
 
-.report-table {
-    width: 100%;
-    border-collapse: collapse;
-    table-layout: auto;
-    border: 1px solid #e2e8f0;
+.rc-remark-title { font-size: 10px; font-weight: 900; color: #92400e; margin-bottom: 3px; }
+.rc-remark-text { font-size: 11px; font-style: italic; color: #451a03; font-weight: 600; }
+
+/* Signatures */
+.rc-signatures { 
+    display: flex;
+    flex-direction: row; 
+    justify-content: space-between; 
+    margin-top: auto; 
+    padding: 0 5px 25px 5px; 
 }
 
-.report-table th {
-    background: #f8fafc;
-    color: #1e3a8a;
-    padding: 20px 15px;
-    text-transform: uppercase;
-    font-size: 14px;
-    font-weight: 800;
-    border-bottom: 3px solid #1e3a8a;
-    letter-spacing: 1px;
-}
-
-.report-table td {
-    padding: 18px 15px;
-    text-align: center;
-    border-bottom: 1px solid #e2e8f0;
-    font-size: 20px;
-    color: #1e293b;
-    font-weight: 600;
-}
-
-
-.report-table th,
-.report-table td {
-    border: 1px solid #e2e8f0;
-    word-wrap: break-word;
-    /* Allow text wrapping if it stretches too much */
-}
-
-.subject-name,
-.report-table th:first-child {
-    width: 35% !important;
-    /* Subject column takes a fixed portion */
-    text-align: left !important;
-    padding-left: 25px !important;
-}
-
-/* Every other column (Max, Pass, Obtained, Highest, Grade) will share the remaining 65% equally */
-.report-table th:not(:first-child),
-.report-table td:not(:first-child) {
-    text-align: center;
-}
-
-.grade-badge {
-    padding: 4px 10px;
-    background: #f1f5f9;
-    border-radius: 4px;
-    font-weight: 700;
-}
-
-.total-row {
-    background: #1e3a8a !important;
-}
-
-.total-row td {
-    color: white !important;
-    font-weight: 800 !important;
-    border: none;
-    font-size: 22px;
-    padding: 20px 15px;
-}
-
-
-.text-right {
-    text-align: right !important;
-    padding-right: 30px !important;
-}
-
-.total-val {
-    font-size: 20px !important;
-}
-
-.font-bold {
-    font-weight: 700;
-}
-
-.percentage-display {
-    margin-top: 20px;
-    font-size: 26px;
-    text-align: right;
-    padding-right: 20px;
-}
-
-
-.toppers-medal-section {
-    margin: 30px 60px;
-    background: #fffbeb;
-    border: 2px dashed #f59e0b;
-    padding: 20px;
-    display: grid;
-    grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
-    gap: 20px;
-    border-radius: 8px;
-    text-align: center;
-}
-
-.medal-item {
+.rc-sig-line { 
+    border-top: 2px solid #1e1b4b; 
+    width: 85px; 
     display: flex;
     flex-direction: column;
-    align-items: center;
-    justify-content: center;
+    align-items: center; 
+    padding-top: 8px; 
 }
 
-.medal-item .label {
-    font-weight: 700;
-    color: #b45309;
-    font-size: 13px;
-    text-transform: uppercase;
-    margin-bottom: 4px;
-}
-
-.medal-item .value {
-    font-weight: 700;
-    color: #1e293b;
-    font-size: 18px;
-}
-
-
-.remarks-row {
-    padding: 30px 60px;
-    display: grid;
-    grid-template-columns: 1.8fr 1fr;
-    gap: 40px;
-    margin-top: 10px;
-}
-
-.remarks-box {
-    min-height: 150px;
-    display: flex;
-    flex-direction: column;
-}
-
-.remarks-box h3,
-.grading-scale-box h3 {
-    font-size: 16px;
-    text-transform: uppercase;
-    color: #1e3a8a;
-    margin-bottom: 12px;
-    font-weight: 800;
-}
-
-.remark-text {
-    font-style: italic;
-    color: #1e293b;
-    font-size: 22px;
-    /* Increased Size */
-    line-height: 1.6;
-    border-left: 5px solid #3b82f6;
-    /* Thicker accent line */
-    padding-left: 25px;
-    margin: 0;
-    flex: 1;
-    display: flex;
-    align-items: center;
-    /* Removed background/radius to make it 'Free' */
-}
-
-.scale-list {
-    display: grid;
-    grid-template-columns: repeat(3, 1fr);
-    gap: 15px;
-    padding: 10px 0;
-}
-
-.scale-item {
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-    padding-bottom: 5px;
-    border-bottom: 1px solid #e2e8f0;
-}
-
-.scale-grade {
-    font-weight: 800;
-    color: #1e3a8a;
-    font-size: 15px;
-    /* Increased */
-}
-
-.scale-range {
-    font-size: 13px;
-    /* Increased */
-    color: #64748b;
-    font-family: 'Crimson Text', serif;
-}
-
-.report-footer {
-    padding: 80px 60px 60px;
-    /* Increased Padding for Size */
-}
-
-.signature-area {
-    display: flex;
-    justify-content: space-between;
-    margin-bottom: 50px;
-}
-
-.sig-block {
-    width: 220px;
-    /* Wider Blocks */
-    text-align: center;
-}
-
-.sig-line {
-    border-top: 2px solid #1e293b;
-    /* Thicker Line */
-    margin-bottom: 12px;
-}
-
-.sig-block span {
-    font-weight: 700;
-    font-size: 18px;
-    /* Even Larger */
-    text-transform: uppercase;
-    color: #1e293b;
-}
-
-
-.footer-disclaimer {
-    text-align: center;
-    font-size: 13px;
-    margin-top: 30px;
-    color: #64748b;
-}
+.rc-sig-text { font-size: 9px; font-weight: 900; color: #1e1b4b; }
 
 @media print {
-    .report-card-container {
-        padding: 0;
-        background: white;
-    }
-
-    .report-card-box {
-        box-shadow: none;
-        border-radius: 0;
-    }
-
-    .card-top-bar,
-    .card-bottom-bar {
-        print-color-adjust: exact;
-    }
-
-    .exam-tag {
-        print-color-adjust: exact;
-    }
-
-    .report-card-inner {
-        padding: 40px !important;
-    }
+    .report-card-container { padding: 0; background: #fff; }
+    .report-card { box-shadow: none; margin: 0; border-radius: 0; }
 }

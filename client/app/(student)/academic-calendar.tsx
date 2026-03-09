@@ -54,29 +54,41 @@ export default function StudentAcademicCalendarScreen() {
     const styles = useMemo(() => StyleSheet.create({
         container: { flex: 1, backgroundColor: theme.background },
         header: {
-            backgroundColor: theme.card,
-            paddingTop: insets.top + 10,
-            paddingBottom: 15,
-            paddingHorizontal: 20,
             flexDirection: 'row',
             alignItems: 'center',
-            borderBottomWidth: 1,
-            borderBottomColor: theme.border,
+            paddingHorizontal: 24,
+            paddingTop: insets.top + 10,
+            paddingBottom: 15,
+            backgroundColor: 'transparent',
         },
-        backBtn: { padding: 5, marginRight: 15 },
-        headerTitle: { fontSize: 20, fontWeight: '900', color: theme.text },
+        backBtn: { 
+            width: 40, 
+            height: 40, 
+            borderRadius: 12, 
+            backgroundColor: isDark ? '#333' : '#f4f4f5', 
+            justifyContent: 'center', 
+            alignItems: 'center' 
+        },
+        headerTitle: { fontSize: 24, fontWeight: '900', color: theme.text, letterSpacing: -0.5, marginLeft: 16 },
         
         filterContainer: {
             flexDirection: 'row',
-            padding: 15,
+            paddingHorizontal: 24,
+            paddingVertical: 10,
             justifyContent: 'space-between',
             alignItems: 'center',
-            backgroundColor: theme.card,
-            borderBottomWidth: 1,
-            borderBottomColor: theme.border,
+            backgroundColor: 'transparent',
         },
         monthSelector: { flexDirection: 'row', alignItems: 'center', gap: 10 },
-        monthText: { fontSize: 16, fontWeight: '800', color: theme.text, width: 100, textAlign: 'center' },
+        monthText: { fontSize: 18, fontWeight: '800', color: theme.text, textAlign: 'center' },
+        navBtn: { 
+            width: 36, 
+            height: 36, 
+            borderRadius: 10, 
+            backgroundColor: isDark ? '#333' : '#f4f4f5', 
+            justifyContent: 'center', 
+            alignItems: 'center' 
+        },
         
         listContent: { padding: 15 },
         eventCard: {
@@ -126,7 +138,7 @@ export default function StudentAcademicCalendarScreen() {
 
     return (
         <View style={styles.container}>
-            <StatusBar barStyle={theme.statusBarStyle} />
+            <StatusBar barStyle={theme.statusBarStyle} backgroundColor="transparent" translucent />
             <View style={styles.header}>
                 <TouchableOpacity style={styles.backBtn} onPress={() => router.back()}>
                     <Ionicons name="arrow-back" size={24} color={theme.text} />
@@ -135,14 +147,14 @@ export default function StudentAcademicCalendarScreen() {
             </View>
 
             <View style={styles.filterContainer}>
-                <TouchableOpacity onPress={() => changeMonth(-1)}>
-                    <Ionicons name="chevron-back" size={24} color={theme.text} />
+                <TouchableOpacity style={styles.navBtn} onPress={() => changeMonth(-1)}>
+                    <Ionicons name="chevron-back" size={20} color={theme.text} />
                 </TouchableOpacity>
                 <View style={styles.monthSelector}>
                     <Text style={styles.monthText}>{monthNames[selectedMonth]} {selectedYear}</Text>
                 </View>
-                <TouchableOpacity onPress={() => changeMonth(1)}>
-                    <Ionicons name="chevron-forward" size={24} color={theme.text} />
+                <TouchableOpacity style={styles.navBtn} onPress={() => changeMonth(1)}>
+                    <Ionicons name="chevron-forward" size={20} color={theme.text} />
                 </TouchableOpacity>
             </View>
 

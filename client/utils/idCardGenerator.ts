@@ -29,37 +29,68 @@ export const generateIDCardHTML = (data: IDCardData, template: 'classic' | 'mode
     // CSS VARIABLES FOR TEMPLATES
     let styles = `
         /* COMMON */
-        body { font-family: 'Roboto', sans-serif; margin: 0; padding: 20px; background-color: #f5f5f5; display: flex; justify-content: center; align-items: flex-start; }
-        .card { width: 350px; height: 550px; background: #fff; border-radius: 20px; box-shadow: 0 10px 30px rgba(0,0,0,0.1); overflow: hidden; position: relative; border: 1px solid #e0e0e0; }
+        * { -webkit-print-color-adjust: exact !important; color-adjust: exact !important; print-color-adjust: exact !important; }
+        body { font-family: 'Roboto', sans-serif; margin: 0; padding: 0; background-color: #fff; }
+        .card { width: 360px; height: 210px; background: #fff !important; border: 1.5px solid #e2e8f0; border-radius: 10px; overflow: hidden; color: #000; position: relative; box-sizing: border-box; }
         .info-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 15px; text-align: left; margin-bottom: 20px; width: 100%; }
-        .info-item { font-size: 12px; }
-        .label { color: #757575; font-size: 10px; text-transform: uppercase; font-weight: 500; margin-bottom: 2px; }
-        .value { color: #333; font-weight: 600; }
-        .full-width { grid-column: span 2; }
     `;
 
     // TEMPLATE SPECIFIC STYLES
     if (template === 'landscape') {
         styles += `
-            .card { width: 550px; height: 350px; display: flex; flex-direction: row; }
-            .land-left { width: 180px; background: #f0f4f8; display: flex; flex-direction: column; align-items: center; justify-content: center; padding: 15px; border-right: 1px solid #eee; }
-            .land-right { flex: 1; padding: 20px; position: relative; }
-            .photo { width: 100px; height: 100px; border-radius: 50%; border: 3px solid #fff; margin-bottom: 10px; object-fit: cover; }
-            .student-name { font-size: 16px; font-weight: 700; color: #333; text-align: center; }
-            .class-info { font-size: 12px; color: #666; font-weight: 600; margin-bottom: 5px; }
-            .roll-no { font-size: 10px; color: #888; }
+            .header-strip { 
+                background: linear-gradient(135deg, #667eea 0%, #764ba2 100%) !important; 
+                padding: 6px 12px; 
+                display: flex; 
+                align-items: center; 
+                justify-content: center; 
+                gap: 10px; 
+            }
+            .inst-logo { width: 22px; height: 22px; object-fit: contain; border-radius: 50%; background: rgba(255,255,255,0.2); }
+            .inst-name { margin: 0; font-size: 11px; font-weight: 900; color: white !important; text-transform: uppercase; letter-spacing: 0.5px; }
             
-            .header { display: flex; align-items: center; border-bottom: 1px solid #eee; padding-bottom: 10px; margin-bottom: 15px; }
-            .logo { width: 40px; height: 40px; object-fit: contain; margin-right: 10px; }
-            .inst-name { font-size: 16px; font-weight: 700; color: #1e3c72; text-transform: uppercase; }
-            .inst-addr { font-size: 10px; color: #666; }
+            .sub-header { 
+                background: #ffffff !important; 
+                padding: 4px 10px; 
+                text-align: center; 
+                color: #000 !important; 
+                font-size: 7px; 
+                font-weight: 800; 
+                border-bottom: 1.2px solid #e2e8f0; 
+                letter-spacing: 0.1px; 
+            }
             
-            .land-grid { display: grid; grid-template-columns: 1fr; gap: 8px; font-size: 11px; }
-            .land-row { display: flex; }
-            .land-label { width: 60px; font-weight: 700; color: #888; }
-            .land-value { flex: 1; color: #333; font-weight: 600; }
+            .card-body { padding: 10px 12px; display: flex; gap: 12px; background: #ffffff !important; height: 145px; }
+            .left-col { flex: 1; display: flex; flex-direction: column; }
+            .name-box { margin-bottom: 4px; }
+            .field-label { font-size: 6px; color: #000 !important; font-weight: 900; text-transform: uppercase; display: block; letter-spacing: 0.2px; margin-bottom: 1px; }
+            .student-name-val { font-size: 11px; color: #000 !important; font-weight: 900; text-transform: uppercase; }
             
-            .footer { position: absolute; bottom: 10px; right: 20px; font-size: 10px; color: #aaa; letter-spacing: 1px; text-transform: uppercase; }
+            .stats-row { display: flex; gap: 8px; margin-bottom: 4px; }
+            .stat-val { font-size: 9px; font-weight: 900; color: #000 !important; }
+            
+            .details-grid { border-top: 1.2px solid #e2e8f0; padding-top: 4px; display: grid; grid-template-columns: 1fr 1fr; gap: 4px; }
+            .detail-val { font-size: 8px; color: #000 !important; font-weight: 900; }
+            
+            .right-col { width: 80px; display: flex; flex-direction: column; align-items: center; gap: 5px; flex-shrink: 0; }
+            .photo-box { height: 75px; width: 75px; border: 1.5px solid #e2e8f0; border-radius: 4px; overflow: hidden; background: #fff !important; flex-shrink: 0; }
+            .photo-box img { width: 100%; height: 100%; object-fit: cover; display: block; }
+            .addr-text { font-size: 6.5px; font-weight: 900; color: #000 !important; line-height: 8px; word-break: break-all; text-align: left; }
+            
+            .footer-strip { 
+                background: #ffffff !important; 
+                border-top: 1.2px solid #e2e8f0; 
+                padding: 4px; 
+                text-align: center; 
+                color: #000 !important; 
+                font-size: 8px; 
+                font-weight: 900; 
+                letter-spacing: 1.2px; 
+                text-transform: uppercase;
+                position: absolute;
+                bottom: 0;
+                width: 100%;
+            }
         `;
     } else if (template === 'classic') {
         styles += `
@@ -134,28 +165,42 @@ export const generateIDCardHTML = (data: IDCardData, template: 'classic' | 'mode
     if (template === 'landscape') {
         htmlContent = `
             <div class="card">
-                <div class="land-left">
-                    <img src="${photo}" class="photo" />
-                    <div class="student-name">${student.name}</div>
-                    <div class="class-info">Class ${student.class} - ${student.section}</div>
-                    <div class="roll-no">Roll: ${student.roll_no}</div>
+                <div class="header-strip">
+                    ${logo ? `<img src="${logo}" class="inst-logo">` : `<div style="font-size: 14px; font-weight: 900; color: white;">${institute.name.charAt(0)}</div>`}
+                    <h2 class="inst-name">${institute.name}</h2>
                 </div>
-                <div class="land-right">
-                    <div class="header">
-                        <img src="${logo}" class="logo" />
-                        <div>
-                            <div class="inst-name">${institute.name}</div>
-                            <div class="inst-addr">${institute.address}</div>
+                <div class="sub-header">
+                    ${institute.address}
+                </div>
+                <div class="card-body">
+                    <div class="left-col">
+                        <div class="name-box">
+                            <label class="field-label">Student Name</label>
+                            <span class="student-name-val">${student.name}</span>
+                        </div>
+                        <div class="stats-row">
+                            <div class="stat-item"><label class="field-label">Class</label><div class="stat-val">${student.class}</div></div>
+                            <div class="stat-item"><label class="field-label">Sec</label><div class="stat-val">${student.section}</div></div>
+                            <div class="stat-item"><label class="field-label">Roll</label><div class="stat-val">${student.roll_no}</div></div>
+                        </div>
+                        <div class="details-grid">
+                            <div><label class="field-label">Father</label><div class="detail-val">${student.father_name}</div></div>
+                            <div><label class="field-label">Mother</label><div class="detail-val">${student.mother_name || 'N/A'}</div></div>
+                            <div><label class="field-label">DOB</label><div class="detail-val">${student.dob || '-'}</div></div>
+                            <div><label class="field-label">Contact</label><div class="detail-val">${student.mobile}</div></div>
                         </div>
                     </div>
-                    <div class="land-grid">
-                        <div class="land-row"><div class="land-label">Father:</div><div class="land-value">${student.father_name}</div></div>
-                        <div class="land-row"><div class="land-label">Contact:</div><div class="land-value">${student.mobile}</div></div>
-                        <div class="land-row"><div class="land-label">Email:</div><div class="land-value">${student.email}</div></div>
-                        <div class="land-row"><div class="land-label">Address:</div><div class="land-value">${student.address}</div></div>
+                    <div class="right-col">
+                        <div class="photo-box">
+                            <img src="${photo}">
+                        </div>
+                        <div style="width: 100%;">
+                            <label class="field-label">Address</label>
+                            <div class="addr-text">${student.address}</div>
+                        </div>
                     </div>
-                    <div class="footer">Identity Card</div>
                 </div>
+                <div class="footer-strip">STUDENT IDENTITY CARD</div>
             </div>
         `;
     } else if (template === 'classic') {
@@ -265,7 +310,6 @@ export const generateIDCardHTML = (data: IDCardData, template: 'classic' | 'mode
 <head>
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, minimum-scale=1.0, user-scalable=no" />
     <style>
-        @import url('https://fonts.googleapis.com/css2?family=Roboto:wght@400;500;700&display=swap');
         ${styles}
     </style>
 </head>

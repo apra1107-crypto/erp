@@ -35,3 +35,16 @@ export const getRemainingTimeText = (expiryDateString) => {
     if (diffMins > 0) return `${diffMins} mins left`;
     return '< 1 min left';
 };
+
+export const getISTDate = () => {
+    const now = new Date();
+    // Use Intl.DateTimeFormat to get parts in IST
+    const formatter = new Intl.DateTimeFormat('en-CA', {
+        timeZone: 'Asia/Kolkata',
+        year: 'numeric',
+        month: '2-digit',
+        day: '2-digit'
+    });
+    // en-CA gives YYYY-MM-DD
+    return formatter.format(now);
+};

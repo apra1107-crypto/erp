@@ -372,6 +372,8 @@ export const getProfile = async (req, res) => {
             email: student.email,
             address: student.address,
             transport_facility: student.transport_facility,
+            monthly_fees: student.monthly_fees,
+            transport_fees: student.transport_fees,
             photo_url: student.photo_url,
             institute_id: student.institute_id,
             institute_name: student.institute_name,
@@ -451,7 +453,7 @@ export const updateProfile = async (req, res) => {
     }
 };
 
-// Get Dashboard Data (Attendance + Homework Summary)
+// Get Dashboard Data (Attendance + Homework Summary + Fees Activation)
 export const getStudentDashboardData = async (req, res) => {
     try {
         const studentId = req.user.id;
@@ -460,12 +462,21 @@ export const getStudentDashboardData = async (req, res) => {
         const section = req.user.section;
         const sessionId = req.headers['x-academic-session-id'] || req.user.current_session_id;
 
-        const today = new Date().toISOString().split('T')[0];
+        const now = new Date();
+        const today = now.toISOString().split('T')[0];
+        const currentMonth = now.getMonth() + 1;
+        const currentYear = now.getFullYear();
 
         // 1. Fetch Today's Attendance
         const attendanceRes = await pool.query(
             'SELECT status FROM attendance WHERE student_id = $1 AND date = $2 AND session_id = $3',
             [studentId, today, sessionId]
+        );
+
+        // Fetch Today's Approved Absent Request (if any)
+        const absentRequestRes = await pool.query(
+            "SELECT status, reason, approved_by_teacher_name FROM absent_requests WHERE student_id = $1 AND date = $2 AND status = 'approved'",
+            [studentId, today]
         );
 
         // 2. Fetch Today's Homework for summary
@@ -486,14 +497,192 @@ export const getStudentDashboardData = async (req, res) => {
             [instituteId, sessionId, today]
         );
 
+        // 4. Fetch Monthly Fee Activation Status
+        const feeActivationRes = await pool.query(
+            `SELECT is_activated FROM monthly_fee_activations 
+             WHERE institute_id = $1 AND session_id = $2 AND month = $3 AND year = $4`,
+            [instituteId, sessionId, currentMonth, currentYear]
+        );
+
+        // 5. Fetch Student's own fee structure and status for current month
+        const studentFeeDetailsRes = await pool.query(
+            `SELECT s.monthly_fees, s.transport_fees, s.transport_facility, s.admission_date,
+                    (SELECT status FROM student_fees f WHERE f.student_id = s.id AND f.month = $2 AND f.year = $3 AND f.session_id = $4) as payment_status
+             FROM students s WHERE s.id = $1`,
+            [studentId, currentMonth, currentYear, sessionId]
+        );
+
+        // Fetch extra charges for this month
+        const extraChargesRes = await pool.query(
+            `SELECT reason, amount FROM monthly_extra_charges 
+             WHERE student_id = $1 AND institute_id = $2 AND session_id = $3 AND month = $4 AND year = $5`,
+            [studentId, instituteId, sessionId, currentMonth, currentYear]
+        );
+
+        // 6. Fetch Transport Information (if assigned)
+        const transportRes = await pool.query(
+            `SELECT b.id, b.bus_number, b.driver_name, b.driver_mobile, b.start_point, b.end_point,
+                    bs.stop_name, bsa.stop_id
+             FROM bus_stop_assignments bsa
+             JOIN buses b ON bsa.bus_id = b.id
+             JOIN bus_stops bs ON bsa.stop_id = bs.id
+             WHERE bsa.student_id = $1`,
+            [studentId]
+        );
+
+        const studentData = studentFeeDetailsRes.rows[0];
+        const isAdmitted = studentData ? new Date(studentData.admission_date) <= new Date(currentYear, currentMonth, 0) : false;
+
+        const feeData = {
+            is_activated: (feeActivationRes.rows[0]?.is_activated && isAdmitted) || false,
+            month: currentMonth,
+            year: currentYear,
+            details: studentData || null,
+            extra_charges: isAdmitted ? extraChargesRes.rows : []
+        };
+
         res.json({
             attendance: attendanceRes.rows[0] || null,
+            absent_request: absentRequestRes.rows[0] || null,
             homework: homeworkRes.rows,
             today_events: todayEventsRes.rows,
+            fees_activation: feeData,
+            transport: transportRes.rows[0] || null,
             server_time: new Date()
         });
     } catch (error) {
         console.error('Get student dashboard data error:', error);
         res.status(500).json({ message: 'Server error' });
+    }
+};
+
+// Get Student Fees Data (Activated Months + History + One Time Fees)
+export const getStudentFeesData = async (req, res) => {
+    try {
+        const studentId = req.user.id;
+        const instituteId = req.user.institute_id;
+        let sessionId = req.headers['x-academic-session-id'] || req.user.current_session_id;
+
+        // Fallback if sessionId is null/undefined
+        if (!sessionId || sessionId === 'null' || sessionId === 'undefined') {
+            const sessionRes = await pool.query(
+                'SELECT current_session_id FROM institutes WHERE id = $1',
+                [instituteId]
+            );
+            sessionId = sessionRes.rows[0]?.current_session_id;
+        }
+
+        if (!sessionId) {
+            return res.status(400).json({ message: 'No active academic session found' });
+        }
+
+        // 1. Get student fee structure
+        const studentRes = await pool.query(
+            'SELECT monthly_fees, transport_fees, transport_facility FROM students WHERE id = $1',
+            [studentId]
+        );
+        const student = studentRes.rows[0];
+
+        // 2. Get all activated monthly fees for this session
+        const activatedMonthsRes = await pool.query(
+            `SELECT month, year FROM monthly_fee_activations 
+             WHERE institute_id = $1 AND session_id = $2 AND is_activated = true
+             ORDER BY year DESC, month DESC`,
+            [instituteId, sessionId]
+        );
+
+        // 3. Get all published one-time fees for this student (Refined)
+        const oneTimeFeesRes = await pool.query(
+            `SELECT p.id as payment_id, p.status, p.paid_amount, p.due_amount, p.updated_at,
+                    g.id as group_id, g.reason, g.created_at,
+                    c.base_amount as original_amount,
+                    p.reasons as breakdown,
+                    (SELECT json_agg(t ORDER BY t.created_at ASC) 
+                     FROM one_time_fee_transactions t 
+                     WHERE t.payment_id = p.id) as transactions
+             FROM one_time_fee_payments p
+             JOIN one_time_fee_groups g ON p.group_id = g.id
+             JOIN students s ON p.student_id = s.id
+             JOIN one_time_fee_class_configs c ON c.group_id = g.id AND c.class_name = s.class
+             WHERE p.student_id = $1 AND g.institute_id = $2 AND g.session_id = $3
+             ORDER BY g.created_at DESC`,
+            [studentId, instituteId, sessionId]
+        );
+
+        // 4. Get monthly payment records
+        const paymentsRes = await pool.query(
+            `SELECT month, year, status, paid_at, payment_method, transaction_id, collected_by
+             FROM student_fees 
+             WHERE student_id = $1 AND institute_id = $2 AND session_id = $3
+             ORDER BY paid_at DESC`,
+            [studentId, instituteId, sessionId]
+        );
+
+        // 5. Get all monthly extra charges for this student in this session
+        const extraChargesRes = await pool.query(
+            `SELECT month, year, reason, amount, status, created_at
+             FROM monthly_extra_charges
+             WHERE student_id = $1 AND institute_id = $2 AND session_id = $3
+             ORDER BY year DESC, month DESC`,
+            [studentId, instituteId, sessionId]
+        );
+
+        res.status(200).json({
+            fee_structure: {
+                monthly_fees: parseFloat(student.monthly_fees || 0),
+                transport_fees: parseFloat(student.transport_fees || 0),
+                transport_facility: student.transport_facility
+            },
+            activated_months: activatedMonthsRes.rows,
+            one_time_fees: oneTimeFeesRes.rows,
+            payments: paymentsRes.rows,
+            extra_charges: extraChargesRes.rows,
+            debug_info: { sessionId }
+        });
+    } catch (error) {
+        console.error('Get student fees data error:', error);
+        res.status(500).json({ message: 'Server error' });
+    }
+};
+
+// Get My Fees History
+export const getMyFees = async (req, res) => {
+    try {
+        const studentId = req.user.id;
+        const instituteId = req.user.institute_id;
+        const sessionId = req.user.current_session_id;
+
+        // Get student details (to get monthly/transport fee amounts)
+        const studentRes = await pool.query(
+            'SELECT monthly_fees, transport_fees, transport_facility FROM students WHERE id = $1',
+            [studentId]
+        );
+
+        if (studentRes.rows.length === 0) {
+            return res.status(404).json({ message: 'Student details not found' });
+        }
+
+        const student = studentRes.rows[0];
+
+        // Get payment records
+        const feesRes = await pool.query(
+            `SELECT month, year, status, paid_at 
+             FROM student_fees 
+             WHERE student_id = $1 AND institute_id = $2 AND session_id = $3
+             ORDER BY year DESC, month DESC`,
+            [studentId, instituteId, sessionId]
+        );
+
+        res.status(200).json({
+            fee_structure: {
+                monthly_fees: parseFloat(student.monthly_fees || 0),
+                transport_fees: parseFloat(student.transport_fees || 0),
+                transport_facility: student.transport_facility
+            },
+            payments: feesRes.rows
+        });
+    } catch (error) {
+        console.error('Get my fees error:', error);
+        res.status(500).json({ message: 'Server error while fetching fee history' });
     }
 };

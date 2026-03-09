@@ -26,20 +26,31 @@ export default function StudentProfile() {
             // Load from cache first
             const data = await AsyncStorage.getItem('studentData');
             const token = await AsyncStorage.getItem('studentToken');
+            const storedSessionId = await AsyncStorage.getItem('selectedSessionId');
 
-            if (data) {
+            if (data && !storedSessionId) { // Only use cache if no session override is set
                 setStudentData(JSON.parse(data));
             }
 
             // Fetch fresh data
             if (token) {
+                const student = data ? JSON.parse(data) : null;
+                const sessionId = storedSessionId || (student ? student.current_session_id : null);
+
                 const response = await axios.get(`${API_URL}/profile`, {
-                    headers: { Authorization: `Bearer ${token}` }
+                    headers: { 
+                        Authorization: `Bearer ${token}`,
+                        'x-academic-session-id': sessionId?.toString()
+                    }
                 });
 
                 if (response.data.student) {
-                    setStudentData(response.data.student);
-                    await AsyncStorage.setItem('studentData', JSON.stringify(response.data.student));
+                    const freshData = { ...response.data.student, authToken: token };
+                    setStudentData(freshData);
+                    // Only cache if it's the default/current session to avoid data mixup
+                    if (!storedSessionId || String(storedSessionId) === String(response.data.student.current_session_id)) {
+                        await AsyncStorage.setItem('studentData', JSON.stringify(freshData));
+                    }
                 }
             }
         } catch (error) {
@@ -53,28 +64,23 @@ export default function StudentProfile() {
         container: { flex: 1, backgroundColor: theme.background },
         center: { flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: theme.background },
         header: {
-            backgroundColor: theme.card,
-            paddingTop: insets.top + 10,
-            paddingBottom: 15,
-            paddingHorizontal: 20,
             flexDirection: 'row',
             alignItems: 'center',
-            justifyContent: 'space-between',
-            borderBottomWidth: 1,
-            borderBottomColor: theme.border,
+            paddingHorizontal: 24,
+            paddingTop: insets.top + 10,
+            paddingBottom: 15,
+            backgroundColor: 'transparent',
             zIndex: 10,
-            shadowColor: '#000',
-            shadowOffset: { width: 0, height: 2 },
-            shadowOpacity: isDark ? 0.2 : 0.05,
-            shadowRadius: 10,
-            elevation: 5,
         },
-        backBtn: {
-            padding: 8,
-            borderRadius: 12,
-            backgroundColor: theme.background,
+        backBtn: { 
+            width: 40, 
+            height: 40, 
+            borderRadius: 12, 
+            backgroundColor: isDark ? '#333' : '#f4f4f5', 
+            justifyContent: 'center', 
+            alignItems: 'center' 
         },
-        title: { fontSize: 20, fontWeight: '900', color: theme.text },
+        title: { fontSize: 24, fontWeight: '900', color: theme.text, letterSpacing: -0.5, marginLeft: 16 },
         placeholder: { width: 40 },
         content: { padding: 20 },
         profileCard: {
@@ -142,13 +148,12 @@ export default function StudentProfile() {
 
     return (
         <View style={styles.container}>
-            <StatusBar barStyle={theme.statusBarStyle} backgroundColor={theme.card} translucent={true} />
+            <StatusBar barStyle={theme.statusBarStyle} backgroundColor="transparent" translucent={true} />
             <View style={styles.header}>
                 <TouchableOpacity onPress={() => router.back()} style={styles.backBtn}>
-                    <Ionicons name="chevron-back" size={24} color={theme.text} />
+                    <Ionicons name="arrow-back" size={24} color={theme.text} />
                 </TouchableOpacity>
                 <Text style={styles.title}>Student Profile</Text>
-                <View style={styles.placeholder} />
             </View>
 
             <ScrollView style={styles.content} showsVerticalScrollIndicator={false}>
@@ -178,8 +183,17 @@ export default function StudentProfile() {
                     <InfoItem label="Date of Birth" value={studentData?.dob} styles={styles} />
                     <InfoItem label="Gender" value={studentData?.gender} styles={styles} />
                     <InfoItem label="Father's Name" value={studentData?.father_name} styles={styles} />
-                    <InfoItem label="Mother's Name" value={studentData?.mother_name} styles={styles} />
-                    <InfoItem label="Transport Facility" value={studentData?.transport_facility ? 'Yes' : 'No'} styles={styles} isLast />
+                    <InfoItem label="Mother's Name" value={studentData?.mother_name} styles={styles} isLast />
+                </View>
+
+                <Text style={styles.sectionTitle}>Fees Information</Text>
+                <View style={styles.infoSection}>
+                    <InfoItem label="Monthly Tuition Fee" value={`₹${parseFloat(studentData?.monthly_fees || 0).toLocaleString()}`} styles={styles} />
+                    <InfoItem label="Transport Facility" value={studentData?.transport_facility ? 'Yes' : 'No'} styles={styles} />
+                    {studentData?.transport_facility && (
+                        <InfoItem label="Monthly Transport Fee" value={`₹${parseFloat(studentData?.transport_fees || 0).toLocaleString()}`} styles={styles} />
+                    )}
+                    <InfoItem label="Total Monthly Payable" value={`₹${(parseFloat(studentData?.monthly_fees || 0) + (studentData?.transport_facility ? parseFloat(studentData?.transport_fees || 0) : 0)).toLocaleString()}`} styles={styles} isLast />
                 </View>
 
 

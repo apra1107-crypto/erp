@@ -15,16 +15,19 @@ import {
     Image,
     Platform,
     BackHandler,
+    Switch,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import axios from 'axios';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as Print from 'expo-print';
 import * as Sharing from 'expo-sharing';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { API_ENDPOINTS, BASE_URL } from '../../constants/Config';
 import { useNavigation } from 'expo-router';
 import Toast from 'react-native-toast-message';
 import { useTheme } from '../../context/ThemeContext';
+import DateTimePicker from '@react-native-community/datetimepicker';
 
 const { width } = Dimensions.get('window');
 
@@ -38,6 +41,8 @@ interface ScheduleRow {
     day: string;
     subject: string;
     time: string;
+    startTime?: string;
+    endTime?: string;
 }
 
 interface AdmitCardEvent {
@@ -46,6 +51,7 @@ interface AdmitCardEvent {
     classes: ClassSection[];
     schedule: ScheduleRow[];
     created_at?: string;
+    is_published: boolean;
 }
 
 interface Student {
@@ -74,8 +80,42 @@ interface InstituteProfile {
     institute_logo?: string;
 }
 
+const ModernToggle = ({ active, onToggle, theme }: { active: boolean, onToggle: () => void, theme: any }) => {
+    return (
+        <TouchableOpacity 
+            activeOpacity={0.8}
+            onPress={onToggle}
+            style={{
+                width: 44,
+                height: 24,
+                borderRadius: 12,
+                backgroundColor: active ? '#27AE60' : (theme.isDark ? '#333' : '#fff'),
+                borderWidth: active ? 0 : 1.5,
+                borderColor: active ? 'transparent' : '#E0E0E0',
+                padding: 2,
+                flexDirection: 'row',
+                alignItems: 'center',
+                justifyContent: active ? 'flex-end' : 'flex-start',
+            }}
+        >
+            <View style={{
+                width: 18,
+                height: 18,
+                borderRadius: 9,
+                backgroundColor: active ? '#fff' : (theme.isDark ? '#bbb' : '#E0E0E0'),
+                elevation: 2,
+                shadowColor: '#000',
+                shadowOffset: { width: 0, height: 1 },
+                shadowOpacity: 0.2,
+                shadowRadius: 1.5,
+            }} />
+        </TouchableOpacity>
+    );
+};
+
 const AdmitCardScreen = () => {
     const navigation = useNavigation();
+    const insets = useSafeAreaInsets();
     const { theme, isDark } = useTheme();
     const [admitCardEvents, setAdmitCardEvents] = useState<AdmitCardEvent[]>([]);
     const [loading, setLoading] = useState(false);
@@ -85,7 +125,7 @@ const AdmitCardScreen = () => {
     const [examName, setExamName] = useState('');
     const [availableClassSections, setAvailableClassSections] = useState<ClassSection[]>([]);
     const [selectedClasses, setSelectedClasses] = useState<ClassSection[]>([]); 
-    const [schedule, setSchedule] = useState<ScheduleRow[]>([{ date: '', day: '', subject: '', time: '' }]);
+    const [schedule, setSchedule] = useState<ScheduleRow[]>([{ date: '', day: '', subject: '', time: '', startTime: '', endTime: '' }]);
     const [creationStep, setCreationStep] = useState(1);
 
     // View States
@@ -98,6 +138,26 @@ const AdmitCardScreen = () => {
     const [isGeneratingPDF, setIsGeneratingPDF] = useState(false);
     const [isSelectionMode, setIsSelectionMode] = useState(false);
     const [selectedStudent, setSelectedStudent] = useState<Student | null>(null);
+    const [filterTitle, setFilterTitle] = useState('All');
+    
+    // Schedule Date Picker States
+    const [showScheduleDatePicker, setShowScheduleDatePicker] = useState(false);
+    const [activeScheduleRowIdx, setActiveScheduleRowIdx] = useState<number | null>(null);
+
+    // Time Picker States
+    const [showStartTimePicker, setShowStartTimePicker] = useState(false);
+    const [showEndTimePicker, setShowEndTimePicker] = useState(false);
+    const [activeTimeRowIdx, setActiveTimeRowIdx] = useState<number | null>(null);
+
+    const uniqueTitles = useMemo(() => {
+        const titles = ['All', ...new Set(admitCardEvents.map(e => e.exam_name))];
+        return titles;
+    }, [admitCardEvents]);
+
+    const filteredEvents = useMemo(() => {
+        if (filterTitle === 'All') return admitCardEvents;
+        return admitCardEvents.filter(event => event.exam_name === filterTitle);
+    }, [admitCardEvents, filterTitle]);
 
     const styles = useMemo(() => StyleSheet.create({
         container: { flex: 1, backgroundColor: theme.background },
@@ -106,7 +166,7 @@ const AdmitCardScreen = () => {
         subtitle: { fontSize: 14, color: theme.textLight },
         floatingAddBtn: {
             position: 'absolute',
-            bottom: 30,
+            bottom: Math.max(30, insets.bottom + 10),
             right: 25,
             width: 65,
             height: 65,
@@ -134,7 +194,7 @@ const AdmitCardScreen = () => {
         metaBadgeText: { fontSize: 11, fontWeight: '800', color: '#27ae60' },
         classChipsRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 6 },
         miniClassChip: { fontSize: 10, fontWeight: '700', color: theme.textLight, backgroundColor: isDark ? '#333' : '#f1f5f9', paddingHorizontal: 6, paddingVertical: 3, borderRadius: 4, borderWidth: 1, borderColor: theme.border },
-        deleteIcon: { padding: 8, position: 'absolute', top: 12, right: 12 },
+        deleteIcon: { padding: 8, position: 'absolute', bottom: 12, right: 12 },
         modalHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', padding: 20, paddingTop: 60, backgroundColor: theme.card, borderBottomWidth: 1, borderBottomColor: theme.border },
         modalTitle: { fontSize: 18, fontWeight: 'bold', color: theme.text },
         createContent: { padding: 20 },
@@ -146,7 +206,13 @@ const AdmitCardScreen = () => {
         chipSelected: { backgroundColor: theme.primary, borderColor: theme.primary },
         chipText: { color: theme.textLight, fontSize: 13, fontWeight: '500' },
         chipTextSelected: { color: '#fff' },
-        footer: { padding: 20, backgroundColor: theme.card, borderTopWidth: 1, borderTopColor: theme.border },
+        footer: { 
+            padding: 20, 
+            paddingBottom: Math.max(20, insets.bottom + 10),
+            backgroundColor: theme.card, 
+            borderTopWidth: 1, 
+            borderTopColor: theme.border 
+        },
         footerRow: { flexDirection: 'row' },
         primaryBtn: { backgroundColor: theme.primary, padding: 16, borderRadius: 12, alignItems: 'center' },
         primaryBtnText: { color: '#fff', fontSize: 16, fontWeight: 'bold' },
@@ -181,7 +247,7 @@ const AdmitCardScreen = () => {
         checkboxSelected: { backgroundColor: theme.primary },
         selectionHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingHorizontal: 20, paddingVertical: 12, backgroundColor: isDark ? '#1a1a1a' : '#f8fafc', borderBottomWidth: 1, borderBottomColor: theme.border },
         selectionHeaderText: { fontSize: 14, fontWeight: '700', color: theme.textLight },
-        bulkFooter: { position: 'absolute', bottom: 30, left: 20, right: 20, zIndex: 1000 },
+        bulkFooter: { position: 'absolute', bottom: Math.max(30, insets.bottom + 10), left: 20, right: 20, zIndex: 1000 },
         downloadBtn: { backgroundColor: theme.success, padding: 18, borderRadius: 20, flexDirection: 'row', justifyContent: 'center', alignItems: 'center', elevation: 10, shadowColor: theme.success, shadowOffset: { width: 0, height: 6 }, shadowOpacity: 0.4, shadowRadius: 10 },
         downloadBtnText: { color: '#fff', fontSize: 17, fontWeight: '800' },
 
@@ -224,7 +290,7 @@ const AdmitCardScreen = () => {
         paperSigLine: { borderTopWidth: 1, borderTopColor: '#000', width: 120, alignItems: 'center', paddingTop: 5 },
         paperSigText: { fontSize: 9, fontWeight: '900' },
         modalOverlay: { position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, backgroundColor: 'rgba(0,0,0,0.7)', justifyContent: 'center', alignItems: 'center', zIndex: 9999 },
-    }), [theme, isDark]);
+    }), [theme, isDark, insets]);
 
     useEffect(() => {
         const backAction = () => {
@@ -282,6 +348,38 @@ const AdmitCardScreen = () => {
         }
     };
 
+    const toggleVisibility = async (event: AdmitCardEvent) => {
+        try {
+            const token = await AsyncStorage.getItem('token');
+            const newStatus = !event.is_published;
+            
+            console.log(`[AdmitCard] Toggling visibility for ${event.id} to ${newStatus}`);
+
+            // Optimistic local update
+            setAdmitCardEvents(prev => prev.map(e => 
+                e.id === event.id ? { ...e, is_published: newStatus } : e
+            ));
+
+            const response = await axios.patch(`${API_ENDPOINTS.ADMIT_CARD}/visibility/${event.id}`, 
+                { is_published: newStatus },
+                { headers: { Authorization: `Bearer ${token}` } }
+            );
+
+            console.log('[AdmitCard] Toggle Response:', response.data);
+
+            Toast.show({ 
+                type: 'success', 
+                text1: newStatus ? 'Published' : 'Unpublished',
+                text2: newStatus ? 'Students can now see this admit card' : 'Hidden from student dashboard'
+            });
+        } catch (error: any) {
+            console.error('[AdmitCard] Toggle Error Details:', error.response?.data || error.message);
+            // Revert on error
+            fetchAdmitCardEvents();
+            Toast.show({ type: 'error', text1: 'Update failed', text2: error.response?.data?.message || '' });
+        }
+    };
+
     const fetchClassSections = async () => {
         try {
             const token = await AsyncStorage.getItem('token');
@@ -319,12 +417,15 @@ const AdmitCardScreen = () => {
             date: '',
             day: '',
             subject: '',
-            time: lastRow ? lastRow.time : ''
+            time: lastRow ? lastRow.time : '',
+            startTime: lastRow ? lastRow.startTime : '',
+            endTime: lastRow ? lastRow.endTime : ''
         }]);
     };
 
     const updateScheduleRow = (index: number, field: keyof ScheduleRow, value: string) => {
         const newSchedule = [...schedule];
+        // @ts-ignore
         newSchedule[index][field] = value;
         if (field === 'date' && value) {
             const days = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
@@ -333,13 +434,27 @@ const AdmitCardScreen = () => {
                 newSchedule[index].day = days[dateObj.getDay()];
             }
         }
+        
+        // Auto-update 'time' string when startTime or endTime changes
+        if (field === 'startTime' || field === 'endTime') {
+            const s = newSchedule[index].startTime || '';
+            const e = newSchedule[index].endTime || '';
+            if (s && e) {
+                newSchedule[index].time = `${s} - ${e}`;
+            } else if (s) {
+                newSchedule[index].time = s;
+            } else if (e) {
+                newSchedule[index].time = e;
+            }
+        }
+        
         setSchedule(newSchedule);
     };
 
     const handleCreateEvent = async () => {
         if (!examName) return Alert.alert('Error', 'Enter exam name');
         if (selectedClasses.length === 0) return Alert.alert('Error', 'Select at least one class');
-        if (schedule.some(s => !s.date || !s.subject)) return Alert.alert('Error', 'Fill all schedule details');
+        if (schedule.some(s => !s.date || !s.subject || !s.time)) return Alert.alert('Error', 'Fill all schedule details');
 
         try {
             setLoading(true);
@@ -365,7 +480,7 @@ const AdmitCardScreen = () => {
     const resetForm = () => {
         setExamName('');
         setSelectedClasses([]);
-        setSchedule([{ date: '', day: '', subject: '', time: '' }]);
+        setSchedule([{ date: '', day: '', subject: '', time: '', startTime: '', endTime: '' }]);
         setCreationStep(1);
     };
 
@@ -669,39 +784,80 @@ const AdmitCardScreen = () => {
                     </View>
                 </View>
 
+                {/* Title Picker Filter */}
+                {!loading && admitCardEvents.length > 0 && (
+                    <View style={{ marginBottom: 15 }}>
+                        <ScrollView 
+                            horizontal 
+                            showsHorizontalScrollIndicator={false} 
+                            contentContainerStyle={{ paddingHorizontal: 20, gap: 10 }}
+                        >
+                            {uniqueTitles.map((title) => (
+                                <TouchableOpacity 
+                                    key={title} 
+                                    onPress={() => setFilterTitle(title)}
+                                    style={[
+                                        { paddingHorizontal: 16, paddingVertical: 8, borderRadius: 12, borderWidth: 1, borderColor: theme.border },
+                                        filterTitle === title ? { backgroundColor: theme.primary, borderColor: theme.primary } : { backgroundColor: theme.card }
+                                    ]}
+                                >
+                                    <Text style={[
+                                        { fontSize: 13, fontWeight: '700' },
+                                        filterTitle === title ? { color: '#fff' } : { color: theme.textLight }
+                                    ]}>
+                                        {title}
+                                    </Text>
+                                </TouchableOpacity>
+                            ))}
+                        </ScrollView>
+                    </View>
+                )}
+
                 {loading ? (
                     <ActivityIndicator size="large" color={theme.primary} style={{ marginTop: 50 }} />
-                ) : admitCardEvents.length === 0 ? (
+                ) : filteredEvents.length === 0 ? (
                     <View style={styles.emptyState}>
                         <Ionicons name="document-text-outline" size={80} color={theme.border} />
-                        <Text style={styles.emptyText}>No exam events found</Text>
-                        <TouchableOpacity style={styles.createBtn} onPress={() => setViewMode('create')}>
-                            <Text style={styles.createBtnText}>Create Your First Event</Text>
-                        </TouchableOpacity>
+                        <Text style={styles.emptyText}>
+                            {filterTitle === 'All' ? 'No exam events found' : `No events found for ${filterTitle}`}
+                        </Text>
+                        {filterTitle === 'All' && (
+                            <TouchableOpacity style={styles.createBtn} onPress={() => setViewMode('create')}>
+                                <Text style={styles.createBtnText}>Create Your First Event</Text>
+                            </TouchableOpacity>
+                        )}
                     </View>
                 ) : (
                     <View style={styles.grid}>
-                        {admitCardEvents.map(event => (
+                        {filteredEvents.map(event => (
                             <TouchableOpacity 
                                 key={event.id} 
                                 style={styles.eventCard}
                                 onPress={() => handleViewEvent(event)}
                                 activeOpacity={0.9}
                             >
+                                {/* Top Right Toggle Switch */}
+                                <View style={{ position: 'absolute', top: 15, right: 15, zIndex: 10, alignItems: 'center' }}>
+                                    <ModernToggle 
+                                        active={event.is_published} 
+                                        onToggle={() => toggleVisibility(event)}
+                                        theme={{ isDark }}
+                                    />
+                                    <Text style={{ fontSize: 8, fontWeight: '900', color: event.is_published ? '#27AE60' : theme.textLight, marginTop: 4 }}>
+                                        {event.is_published ? 'PUBLISHED' : 'DRAFT'}
+                                    </Text>
+                                </View>
+
                                 <View style={styles.eventIcon}>
                                     <Ionicons name="document-text" size={28} color={theme.primary} />
                                 </View>
                                 <View style={{ flex: 1 }}>
                                     <Text style={styles.eventName}>{event.exam_name}</Text>
-                                    <View style={styles.eventMetaRow}>
-                                        <View style={styles.metaBadge}>
-                                            <Ionicons name="people" size={12} color="#27ae60" />
-                                            <Text style={styles.metaBadgeText}>{event.classes?.length} Classes</Text>
-                                        </View>
-                                        <View style={[styles.metaBadge, { backgroundColor: isDark ? '#2D1B36' : '#F3E5F5' }]}>
-                                            <Ionicons name="shield-checkmark" size={12} color="#8E44AD" />
-                                            <Text style={[styles.metaBadgeText, { color: '#8E44AD' }]}>Official</Text>
-                                        </View>
+                                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 5, marginBottom: 8 }}>
+                                        <Ionicons name="calendar-outline" size={12} color={theme.textLight} />
+                                        <Text style={{ fontSize: 11, color: theme.textLight, fontWeight: '600' }}>
+                                            {event.created_at ? new Date(event.created_at).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' }) : 'N/A'}
+                                        </Text>
                                     </View>
                                     <View style={styles.classChipsRow}>
                                         {event.classes?.slice(0, 3).map((c, idx) => (
@@ -710,11 +866,13 @@ const AdmitCardScreen = () => {
                                         {event.classes?.length > 3 && <Text style={styles.miniClassChip}>+{event.classes.length - 3} More</Text>}
                                     </View>
                                 </View>
+
+                                {/* Bottom Right Delete */}
                                 <TouchableOpacity 
-                                    style={styles.deleteIcon}
+                                    style={{ position: 'absolute', bottom: 12, right: 12, padding: 6, backgroundColor: theme.danger + '10', borderRadius: 8 }}
                                     onPress={() => handleDeleteEvent(event.id)}
                                 >
-                                    <Ionicons name="trash-outline" size={20} color={theme.danger} />
+                                    <Ionicons name="trash-outline" size={18} color={theme.danger} />
                                 </TouchableOpacity>
                             </TouchableOpacity>
                         ))}
@@ -782,19 +940,30 @@ const AdmitCardScreen = () => {
                         {schedule.map((row, i) => (
                             <View key={i} style={styles.scheduleRow}>
                                 <View style={styles.rowHeader}>
-                                    <Text style={styles.rowNum}>Date {i + 1}</Text>
+                                    <Text style={styles.rowNum}>Schedule {i + 1}</Text>
                                     <TouchableOpacity onPress={() => setSchedule(schedule.filter((_, idx) => idx !== i))}>
                                         <Ionicons name="close-circle" size={20} color={theme.danger} />
                                     </TouchableOpacity>
                                 </View>
-                                <View style={styles.rowInputs}>
-                                    <TextInput
-                                        style={[styles.input, { flex: 1, marginRight: 5 }]}
-                                        placeholder="YYYY-MM-DD"
-                                        placeholderTextColor={theme.textLight}
-                                        value={row.date}
-                                        onChangeText={(v) => updateScheduleRow(i, 'date', v)}
-                                    />
+                                
+                                <View style={[styles.rowInputs, { marginBottom: 10 }]}>
+                                    {/* Date Selection */}
+                                    <TouchableOpacity 
+                                        style={[styles.input, { flex: 1, marginRight: 5, justifyContent: 'center' }]} 
+                                        onPress={() => {
+                                            setActiveScheduleRowIdx(i);
+                                            setShowScheduleDatePicker(true);
+                                        }}
+                                    >
+                                        <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+                                            <Ionicons name="calendar-outline" size={16} color={theme.primary} style={{ marginRight: 8 }} />
+                                            <Text style={{ color: row.date ? theme.text : theme.textLight, fontSize: 13 }}>
+                                                {row.date ? formatDate(row.date) : 'Pick Date'}
+                                            </Text>
+                                        </View>
+                                    </TouchableOpacity>
+
+                                    {/* Subject Input */}
                                     <TextInput
                                         style={[styles.input, { flex: 1 }]}
                                         placeholder="Subject"
@@ -803,13 +972,45 @@ const AdmitCardScreen = () => {
                                         onChangeText={(v) => updateScheduleRow(i, 'subject', v)}
                                     />
                                 </View>
-                                <TextInput
-                                    style={[styles.input, { marginTop: 10 }]}
-                                    placeholder="Timing (e.g. 10AM - 1PM)"
-                                    placeholderTextColor={theme.textLight}
-                                    value={row.time}
-                                    onChangeText={(v) => updateScheduleRow(i, 'time', v)}
-                                />
+
+                                {/* Professional Time Pickers */}
+                                <View style={{ flexDirection: 'row', gap: 10 }}>
+                                    <TouchableOpacity 
+                                        style={[styles.input, { flex: 1, justifyContent: 'center', backgroundColor: isDark ? '#1a1a1a' : '#f8fafc' }]}
+                                        onPress={() => {
+                                            setActiveTimeRowIdx(i);
+                                            setShowStartTimePicker(true);
+                                        }}
+                                    >
+                                        <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+                                            <Ionicons name="time-outline" size={16} color={theme.success} style={{ marginRight: 8 }} />
+                                            <View>
+                                                <Text style={{ fontSize: 9, color: theme.textLight, fontWeight: '700' }}>START TIME</Text>
+                                                <Text style={{ color: row.startTime ? theme.text : theme.textLight, fontSize: 13, fontWeight: '600' }}>
+                                                    {row.startTime || '--:--'}
+                                                </Text>
+                                            </View>
+                                        </View>
+                                    </TouchableOpacity>
+
+                                    <TouchableOpacity 
+                                        style={[styles.input, { flex: 1, justifyContent: 'center', backgroundColor: isDark ? '#1a1a1a' : '#f8fafc' }]}
+                                        onPress={() => {
+                                            setActiveTimeRowIdx(i);
+                                            setShowEndTimePicker(true);
+                                        }}
+                                    >
+                                        <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+                                            <Ionicons name="time-outline" size={16} color={theme.danger} style={{ marginRight: 8 }} />
+                                            <View>
+                                                <Text style={{ fontSize: 9, color: theme.textLight, fontWeight: '700' }}>END TIME</Text>
+                                                <Text style={{ color: row.endTime ? theme.text : theme.textLight, fontSize: 13, fontWeight: '600' }}>
+                                                    {row.endTime || '--:--'}
+                                                </Text>
+                                            </View>
+                                        </View>
+                                    </TouchableOpacity>
+                                </View>
                             </View>
                         ))}
                         <TouchableOpacity style={styles.addRowBtn} onPress={addScheduleRow}>
@@ -839,6 +1040,56 @@ const AdmitCardScreen = () => {
                     </View>
                 )}
             </View>
+
+            {/* Modal Date Picker */}
+            {showScheduleDatePicker && (
+                <DateTimePicker
+                    value={activeScheduleRowIdx !== null && schedule[activeScheduleRowIdx].date ? new Date(schedule[activeScheduleRowIdx].date) : new Date()}
+                    mode="date"
+                    display="default"
+                    onChange={(event, date) => {
+                        setShowScheduleDatePicker(false);
+                        if (date && activeScheduleRowIdx !== null) {
+                            const dateStr = date.toISOString().split('T')[0];
+                            updateScheduleRow(activeScheduleRowIdx, 'date', dateStr);
+                        }
+                    }}
+                />
+            )}
+
+            {/* Start Time Picker */}
+            {showStartTimePicker && (
+                <DateTimePicker
+                    value={new Date()}
+                    mode="time"
+                    is24Hour={false}
+                    display="default"
+                    onChange={(event, date) => {
+                        setShowStartTimePicker(false);
+                        if (date && activeTimeRowIdx !== null) {
+                            const timeStr = date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', hour12: true });
+                            updateScheduleRow(activeTimeRowIdx, 'startTime', timeStr);
+                        }
+                    }}
+                />
+            )}
+
+            {/* End Time Picker */}
+            {showEndTimePicker && (
+                <DateTimePicker
+                    value={new Date()}
+                    mode="time"
+                    is24Hour={false}
+                    display="default"
+                    onChange={(event, date) => {
+                        setShowEndTimePicker(false);
+                        if (date && activeTimeRowIdx !== null) {
+                            const timeStr = date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', hour12: true });
+                            updateScheduleRow(activeTimeRowIdx, 'endTime', timeStr);
+                        }
+                    }}
+                />
+            )}
         </View>
     );
 
@@ -983,18 +1234,32 @@ const AdmitCardScreen = () => {
 
     const renderIndividualPreview = () => (
         <View style={styles.container}>
-            <View style={styles.modalHeader}>
-                <TouchableOpacity onPress={() => setViewMode('event-details')}>
-                    <Ionicons name="arrow-back" size={24} color={theme.text} />
-                </TouchableOpacity>
-                <Text style={styles.modalTitle}>Admit Card Preview</Text>
-                <TouchableOpacity onPress={generatePDF} style={{ padding: 4 }}>
-                    <Ionicons name="share-social-outline" size={24} color={theme.primary} />
-                </TouchableOpacity>
-            </View>
+            {/* Free Flow Back Button */}
+            <TouchableOpacity 
+                onPress={() => setViewMode('event-details')}
+                style={{ 
+                    position: 'absolute', 
+                    top: insets.top + 15, 
+                    left: 20, 
+                    zIndex: 100,
+                    width: 45,
+                    height: 45,
+                    borderRadius: 22.5,
+                    backgroundColor: theme.card,
+                    justifyContent: 'center',
+                    alignItems: 'center',
+                    elevation: 4,
+                    shadowColor: '#000',
+                    shadowOffset: { width: 0, height: 2 },
+                    shadowOpacity: 0.2,
+                    shadowRadius: 4
+                }}
+            >
+                <Ionicons name="arrow-back" size={24} color={theme.text} />
+            </TouchableOpacity>
 
             <ScrollView style={styles.previewScroll} showsVerticalScrollIndicator={false}>
-                <View style={styles.previewContainer}>
+                <View style={[styles.previewContainer, { paddingTop: insets.top + 80 }]}>
                     <View style={styles.admitCardPaper}>
                         {/* Professional Header Section */}
                         <View style={styles.paperHeader}>
@@ -1071,7 +1336,7 @@ const AdmitCardScreen = () => {
                                 </View>
                                 {currentEvent?.schedule.map((row, idx) => (
                                     <View key={idx} style={styles.paperGridRow}>
-                                        <View style={styles.paperGridCell}><Text style={styles.paperGridText}>{formatDate(row.date)} (${row.day})</Text></View>
+                                        <View style={styles.paperGridCell}><Text style={styles.paperGridText}>{`${String(formatDate(row.date)).trim()} (${String(row.day).trim()})`}</Text></View>
                                         <View style={styles.paperGridCell}><Text style={styles.paperGridText}>{row.subject}</Text></View>
                                         <View style={styles.paperGridCell}><Text style={styles.paperGridText}>{row.time}</Text></View>
                                     </View>

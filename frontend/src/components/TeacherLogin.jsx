@@ -5,7 +5,7 @@ import { toast } from 'react-toastify';
 import { API_ENDPOINTS } from '../config';
 import './AuthForms.css';
 
-const TeacherLogin = ({ onBack, onClose }) => {
+const TeacherLogin = ({ onBack, onClose, isSplitView }) => {
     const navigate = useNavigate();
     const [loading, setLoading] = useState(false);
     const [step, setStep] = useState(1); // 1: phone, 2: institute, 3: teacher, 4: code
@@ -101,7 +101,7 @@ const TeacherLogin = ({ onBack, onClose }) => {
 
     const handleBack = () => {
         if (step === 1) {
-            onBack();
+            if (!isSplitView) onBack();
         } else if (step === 2) {
             setStep(1);
             setInstitutes([]);
@@ -117,28 +117,44 @@ const TeacherLogin = ({ onBack, onClose }) => {
 
     return (
         <div className="auth-step-container">
-            <button className="step-back-btn" onClick={handleBack}>
-                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
-                    <path d="M19 12H5M12 19l-7-7 7-7" />
-                </svg>
-                Back
-            </button>
-
-            <div className="auth-view-header">
-                <div className="auth-view-icon blue">
-                    <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
-                        <path d="M12 14l9-5-9-5-9 5 9 5z" />
-                        <path d="M12 14l6.16-3.422a12.083 12.083 0 01.665 6.479A11.952 11.952 0 0012 20.055a11.952 11.952 0 00-6.824-2.998 12.078 12.078 0 01.665-6.479L12 14z" />
-                    </svg>
+            {isSplitView && (
+                <div className="split-view-header">
+                    <div className="auth-view-icon purple">
+                        <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
+                            <path d="M12 14l9-5-9-5-9 5 9 5z" />
+                            <path d="M12 14l6.16-3.422a12.083 12.083 0 01.665 6.479A11.952 11.952 0 0012 20.055a11.952 11.952 0 00-6.824-2.998 12.078 12.078 0 01.665-6.479L12 14z" />
+                        </svg>
+                    </div>
+                    <h2 className="auth-view-title">Teacher Portal</h2>
+                    <p className="auth-view-subtitle">Access your educator tools</p>
                 </div>
-                <h2 className="auth-view-title">Teacher Portal</h2>
-                <p className="auth-view-subtitle">
-                    {step === 1 && 'Enter your registered mobile number'}
-                    {step === 2 && 'Select your institute'}
-                    {step === 3 && 'Select your profile'}
-                    {step === 4 && 'Enter your access code'}
-                </p>
-            </div>
+            )}
+            {!isSplitView && (
+                <div className="auth-view-header">
+                    <div className="auth-view-icon purple">
+                        <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
+                            <path d="M12 14l9-5-9-5-9 5 9 5z" />
+                            <path d="M12 14l6.16-3.422a12.083 12.083 0 01.665 6.479A11.952 11.952 0 0012 20.055a11.952 11.952 0 00-6.824-2.998 12.078 12.078 0 01.665-6.479L12 14z" />
+                        </svg>
+                    </div>
+                    <h2 className="auth-view-title">Teacher Portal</h2>
+                    <p className="auth-view-subtitle">
+                        {step === 1 && 'Enter your registered mobile number'}
+                        {step === 2 && 'Select your institute'}
+                        {step === 3 && 'Select your profile'}
+                        {step === 4 && 'Enter your access code'}
+                    </p>
+                </div>
+            )}
+
+            {step !== 1 && (
+                <button className="step-back-btn" style={{ display: 'flex' }} onClick={handleBack}>
+                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
+                        <path d="M19 12H5M12 19l-7-7 7-7" />
+                    </svg>
+                    Back
+                </button>
+            )}
 
             {step === 1 && (
                 <form onSubmit={handleVerifyPhone} className="auth-view-form">
@@ -171,57 +187,61 @@ const TeacherLogin = ({ onBack, onClose }) => {
 
             {step === 2 && (
                 <div className="auth-view-form">
-                    {institutes.map((institute) => (
-                        <div
-                            key={institute.id}
-                            className="selection-card modern-card"
-                            onClick={() => handleSelectInstitute(institute)}
-                        >
-                            <div className="selection-logo modern-logo">
-                                {institute.logo_url ? (
-                                    <img src={institute.logo_url} alt={institute.institute_name} />
-                                ) : (
-                                    <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                                        <path d="M3 21h18M3 7l9-4 9 4M5 21V10M19 21V10M9 21v-6h6v6" />
-                                    </svg>
-                                )}
+                    <div className="selection-list-container">
+                        {institutes.map((institute) => (
+                            <div
+                                key={institute.id}
+                                className="selection-card modern-card"
+                                onClick={() => handleSelectInstitute(institute)}
+                            >
+                                <div className="selection-logo modern-logo">
+                                    {institute.logo_url ? (
+                                        <img src={institute.logo_url} alt={institute.institute_name} />
+                                    ) : (
+                                        <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                                            <path d="M3 21h18M3 7l9-4 9 4M5 21V10M19 21V10M9 21v-6h6v6" />
+                                        </svg>
+                                    )}
+                                </div>
+                                <div className="selection-info">
+                                    <h3>{institute.institute_name}</h3>
+                                    <p>{institute.address}</p>
+                                </div>
+                                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" style={{ opacity: 0.5 }}>
+                                    <path d="M9 18l6-6-6-6" />
+                                </svg>
                             </div>
-                            <div className="selection-info">
-                                <h3>{institute.institute_name}</h3>
-                                <p>{institute.address}</p>
-                            </div>
-                            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                                <path d="M9 18l6-6-6-6" />
-                            </svg>
-                        </div>
-                    ))}
+                        ))}
+                    </div>
                 </div>
             )}
 
             {step === 3 && (
                 <div className="auth-view-form">
-                    {teachers.map((teacher) => (
-                        <div
-                            key={teacher.id}
-                            className="selection-card modern-card"
-                            onClick={() => handleSelectTeacher(teacher)}
-                        >
-                            <div className="selection-logo modern-logo">
-                                {teacher.photo_url ? (
-                                    <img src={teacher.photo_url} alt={teacher.name} className="round-photo" />
-                                ) : (
-                                    <div className="placeholder-avatar teacher-avatar">{teacher.name.charAt(0)}</div>
-                                )}
+                    <div className="selection-list-container">
+                        {teachers.map((teacher) => (
+                            <div
+                                key={teacher.id}
+                                className="selection-card modern-card"
+                                onClick={() => handleSelectTeacher(teacher)}
+                            >
+                                <div className="selection-logo modern-logo">
+                                    {teacher.photo_url ? (
+                                        <img src={teacher.photo_url} alt={teacher.name} className="round-photo" />
+                                    ) : (
+                                        <div className="placeholder-avatar teacher-avatar" style={{ fontSize: '14px' }}>{teacher.name.charAt(0)}</div>
+                                    )}
+                                </div>
+                                <div className="selection-info">
+                                    <h3>{teacher.name}</h3>
+                                    <p>{teacher.subject} | {teacher.qualification}</p>
+                                </div>
+                                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" style={{ opacity: 0.5 }}>
+                                    <path d="M9 18l6-6-6-6" />
+                                </svg>
                             </div>
-                            <div className="selection-info">
-                                <h3>{teacher.name}</h3>
-                                <p>{teacher.subject} | {teacher.qualification}</p>
-                            </div>
-                            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                                <path d="M9 18l6-6-6-6" />
-                            </svg>
-                        </div>
-                    ))}
+                        ))}
+                    </div>
                 </div>
             )}
 

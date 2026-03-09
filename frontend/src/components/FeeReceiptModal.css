@@ -1,0 +1,331 @@
+.receipt-modal-overlay {
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background: rgba(0, 0, 0, 0.75);
+    backdrop-filter: blur(8px);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 2000;
+}
+
+.receipt-modal-card {
+    background: white;
+    width: 95%;
+    max-width: 800px;
+    max-height: 90vh;
+    border-radius: 16px;
+    overflow-y: auto;
+    color: #1a1a1a;
+    position: relative;
+    box-shadow: 0 30px 60px -12px rgba(0, 0, 0, 0.6);
+}
+
+.receipt-actions {
+    padding: 0.8rem 1.2rem;
+    display: flex;
+    justify-content: flex-end;
+    background: white;
+    border-bottom: 1px solid #f1f5f9;
+    position: sticky;
+    top: 0;
+    z-index: 10;
+}
+
+.close-btn-modern {
+    background: #f8fafc;
+    border: 1.5px solid #e2e8f0;
+    color: #64748b;
+    width: 36px;
+    height: 36px;
+    border-radius: 10px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.close-btn-modern:hover {
+    background: #f1f5f9;
+    color: #6366f1;
+    border-color: #6366f1;
+    transform: rotate(90deg) scale(1.1);
+    box-shadow: 0 4px 12px rgba(99, 102, 241, 0.15);
+}
+
+.close-btn-modern:active {
+    transform: rotate(90deg) scale(0.95);
+}
+
+.receipt-content {
+    padding: 3rem;
+    position: relative;
+    min-height: 600px;
+}
+
+/* Watermark */
+.paid-watermark {
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%) rotate(-35deg);
+    font-size: 8rem;
+    font-weight: 900;
+    color: rgba(16, 185, 129, 0.06);
+    pointer-events: none;
+    user-select: none;
+    border: 10px solid rgba(16, 185, 129, 0.06);
+    padding: 1rem 3rem;
+    border-radius: 20px;
+    z-index: 0;
+}
+
+/* Centered Header Styles */
+.receipt-header-centered {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    text-align: center;
+    border-bottom: 2px solid #1a1a1a;
+    padding-bottom: 1.5rem;
+    margin-bottom: 2rem;
+}
+
+.header-main-row {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 1rem;
+    margin-bottom: 4px;
+}
+
+.receipt-logo-centered {
+    width: 60px;
+    height: 60px;
+    object-fit: contain;
+}
+
+.inst-name-centered {
+    margin: 0;
+    font-size: 1.8rem;
+    font-weight: 900;
+    color: #1a1a1a;
+    text-transform: uppercase;
+}
+
+.inst-aff-centered {
+    margin: 0;
+    font-size: 0.75rem;
+    font-weight: 700;
+    color: #64748b;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+}
+
+.inst-address-centered {
+    margin-top: 6px;
+    font-size: 0.7rem;
+    color: #475569;
+    font-weight: 600;
+    max-width: 80%;
+}
+
+.inst-address-centered p {
+    margin: 0;
+    line-height: 1.4;
+}
+
+.receipt-title-simple {
+    margin-bottom: 2.5rem;
+}
+
+.receipt-title-simple h2 {
+    margin: 0;
+    font-size: 1.4rem;
+    font-weight: 800;
+    letter-spacing: 2px;
+    color: #1a1a1a;
+    border-left: 5px solid #6366f1;
+    padding-left: 15px;
+}
+
+/* New Stacked/Flexible Details Styling */
+.receipt-details-container {
+    display: flex;
+    flex-direction: column;
+    gap: 1.5rem;
+    margin-bottom: 2.5rem;
+}
+
+.detail-section-full {
+    border-bottom: 1px solid #f1f5f9;
+    padding-bottom: 1rem;
+}
+
+.detail-section-full label {
+    display: block;
+    font-size: 0.65rem;
+    font-weight: 800;
+    color: #64748b;
+    margin-bottom: 10px;
+    letter-spacing: 1px;
+    text-transform: uppercase;
+}
+
+.details-row-flex {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 2rem;
+}
+
+.details-row-flex p {
+    margin: 0;
+    font-size: 0.9rem;
+    color: #475569;
+}
+
+.details-row-flex p strong {
+    color: #1a1a1a;
+    margin-left: 4px;
+}
+
+.receipt-table {
+    width: 100%;
+    border-collapse: collapse;
+    margin-bottom: 3rem;
+}
+
+.receipt-table th {
+    background: #f1f5f9;
+    padding: 10px 15px;
+    text-align: left;
+    font-size: 0.8rem;
+    font-weight: 800;
+    text-transform: uppercase;
+    color: #475569;
+}
+
+.receipt-table td {
+    padding: 12px 15px;
+    border-bottom: 1px solid #e2e8f0;
+    font-size: 0.9rem;
+    font-weight: 600;
+}
+
+.receipt-table tfoot th {
+    background: #2563eb; /* Professional Blue */
+    color: white;
+    padding: 12px 15px;
+    font-size: 0.95rem;
+}
+
+.total-amt {
+    font-size: 1.2rem !important;
+    font-weight: 900 !important;
+    color: white !important;
+}
+
+/* Transaction History in Receipt */
+.receipt-transactions-history {
+    margin-top: 3rem;
+    background: #fafafa;
+    padding: 1.5rem;
+    border-radius: 12px;
+    border: 1px solid #eee;
+}
+
+.history-label {
+    display: block;
+    font-size: 0.7rem;
+    font-weight: 900;
+    color: #1e293b;
+    margin-bottom: 1rem;
+    letter-spacing: 1px;
+    border-bottom: 2px solid #6366f1;
+    width: fit-content;
+    padding-bottom: 4px;
+}
+
+.history-table {
+    width: 100%;
+    border-collapse: collapse;
+}
+
+.history-table th {
+    text-align: left;
+    font-size: 0.65rem;
+    color: #64748b;
+    padding: 8px;
+    border-bottom: 1px solid #e2e8f0;
+}
+
+.history-table td {
+    padding: 10px 8px;
+    font-size: 0.85rem;
+    border-bottom: 1px solid #f1f5f9;
+}
+
+.t-date-stack {
+    display: flex;
+    flex-direction: column;
+}
+
+.t-date-stack span {
+    font-weight: 700;
+    color: #1a1a1a;
+}
+
+.t-date-stack small {
+    font-size: 0.7rem;
+    color: #64748b;
+    font-weight: 600;
+}
+
+.history-table tfoot th {
+    padding: 10px 8px;
+    font-size: 0.8rem;
+    font-weight: 800;
+    color: #1a1a1a;
+}
+
+.receipt-footer {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-end;
+    margin-top: 4rem;
+}
+
+.payment-meta p {
+    margin: 4px 0;
+    font-size: 0.8rem;
+}
+
+.tx-id {
+    background: #f1f5f9;
+    padding: 2px 6px;
+    border-radius: 4px;
+    font-family: monospace;
+    font-weight: 700;
+}
+
+.footer-note {
+    text-align: right;
+}
+
+.footer-note p:first-child {
+    font-size: 0.7rem;
+    font-weight: 600;
+    color: #94a3b8;
+    margin-bottom: 10px;
+}
+
+.footer-note p:last-child {
+    font-size: 1rem;
+    font-weight: 800;
+    color: #1a1a1a;
+    font-style: italic;
+}

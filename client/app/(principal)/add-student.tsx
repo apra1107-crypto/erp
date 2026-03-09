@@ -11,18 +11,53 @@ import { Ionicons } from '@expo/vector-icons';
 import { useTheme } from '../../context/ThemeContext';
 import { API_ENDPOINTS } from '../../constants/Config';
 
+const ModernToggle = ({ active, onToggle, theme }: { active: boolean, onToggle: () => void, theme: any }) => {
+    return (
+        <TouchableOpacity 
+            activeOpacity={0.8}
+            onPress={onToggle}
+            style={{
+                width: 44,
+                height: 24,
+                borderRadius: 12,
+                backgroundColor: active ? '#27AE60' : (theme.isDark ? '#333' : '#fff'),
+                borderWidth: active ? 0 : 1.5,
+                borderColor: active ? 'transparent' : '#E0E0E0',
+                padding: 2,
+                flexDirection: 'row',
+                alignItems: 'center',
+                justifyContent: active ? 'flex-end' : 'flex-start',
+            }}
+        >
+            <View style={{
+                width: 18,
+                height: 18,
+                borderRadius: 9,
+                backgroundColor: active ? '#fff' : (theme.isDark ? '#bbb' : '#E0E0E0'),
+                elevation: 2,
+                shadowColor: '#000',
+                shadowOffset: { width: 0, height: 1 },
+                shadowOpacity: 0.2,
+                shadowRadius: 1.5,
+            }} />
+        </TouchableOpacity>
+    );
+};
+
 export default function AddStudent() {
   const router = useRouter();
   const insets = useSafeAreaInsets();
   const { theme, isDark } = useTheme();
   const [loading, setLoading] = useState(false);
   const [showDatePicker, setShowDatePicker] = useState(false);
+  const [showAdmissionDatePicker, setShowAdmissionDatePicker] = useState(false);
   const [formData, setFormData] = useState({
     name: '',
     class: '',
     section: '',
     roll_no: '',
     dob: new Date(),
+    admission_date: new Date(),
     gender: '',
     father_name: '',
     mother_name: '',
@@ -30,6 +65,8 @@ export default function AddStudent() {
     email: '',
     address: '',
     transport_facility: false,
+    monthly_fees: '',
+    transport_fees: '',
   });
   const [photo, setPhoto] = useState<any>(null);
 
@@ -84,6 +121,7 @@ export default function AddStudent() {
     try {
       setLoading(true);
       const token = await AsyncStorage.getItem('token');
+      const sessionId = await AsyncStorage.getItem('selectedSessionId');
 
       const formDataToSend = new FormData();
       formDataToSend.append('name', formData.name);
@@ -91,6 +129,7 @@ export default function AddStudent() {
       formDataToSend.append('section', formData.section);
       formDataToSend.append('roll_no', formData.roll_no);
       formDataToSend.append('dob', formatDateForBackend(formData.dob));
+      formDataToSend.append('admission_date', formatDateForBackend(formData.admission_date));
       formDataToSend.append('gender', formData.gender);
       formDataToSend.append('father_name', formData.father_name);
       formDataToSend.append('mother_name', formData.mother_name);
@@ -98,6 +137,8 @@ export default function AddStudent() {
       formDataToSend.append('email', formData.email);
       formDataToSend.append('address', formData.address);
       formDataToSend.append('transport_facility', String(formData.transport_facility));
+      formDataToSend.append('monthly_fees', formData.monthly_fees);
+      formDataToSend.append('transport_fees', formData.transport_fees);
 
       if (photo) {
         const photoFile: any = {
@@ -108,15 +149,19 @@ export default function AddStudent() {
         formDataToSend.append('photo', photoFile);
       }
 
+      const headers: any = {
+        'Authorization': `Bearer ${token}`,
+        'Content-Type': 'multipart/form-data',
+      };
+
+      if (sessionId) {
+        headers['x-academic-session-id'] = sessionId;
+      }
+
       const response = await axios.post(
         `${API_ENDPOINTS.PRINCIPAL}/student/add`,
         formDataToSend,
-        {
-          headers: {
-            'Authorization': `Bearer ${token}`,
-            'Content-Type': 'multipart/form-data',
-          },
-        }
+        { headers }
       );
 
       Toast.show({
@@ -146,48 +191,45 @@ export default function AddStudent() {
       backgroundColor: theme.background,
     },
     header: {
-      backgroundColor: theme.card,
-      paddingTop: insets.top + 10,
-      paddingBottom: 15,
-      paddingHorizontal: 20,
       flexDirection: 'row',
       alignItems: 'center',
       justifyContent: 'space-between',
-      borderBottomWidth: 1,
-      borderBottomColor: theme.border,
-      zIndex: 10,
-      shadowColor: '#000',
-      shadowOffset: { width: 0, height: 2 },
-      shadowOpacity: isDark ? 0.2 : 0.05,
-      shadowRadius: 10,
-      elevation: 5,
+      marginBottom: 20,
+      paddingHorizontal: 5,
     },
     backButtonHeader: {
       padding: 8,
       borderRadius: 12,
-      backgroundColor: theme.background,
+      backgroundColor: theme.card,
+      borderWidth: 1,
+      borderColor: theme.border,
     },
     headerTitle: {
-      fontSize: 20,
+      fontSize: 22,
       fontWeight: '900',
       color: theme.text,
     },
     saveButtonHeader: {
-      paddingHorizontal: 16,
-      paddingVertical: 8,
-      borderRadius: 12,
+      paddingHorizontal: 20,
+      paddingVertical: 10,
+      borderRadius: 15,
       backgroundColor: theme.primary,
+      shadowColor: theme.primary,
+      shadowOffset: { width: 0, height: 4 },
+      shadowOpacity: 0.3,
+      shadowRadius: 8,
+      elevation: 4,
     },
     saveButtonText: {
       color: '#fff',
-      fontWeight: '800',
-      fontSize: 14,
+      fontWeight: '900',
+      fontSize: 15,
     },
     content: {
       flex: 1,
-      padding: 20,
     },
     section: {
+      paddingHorizontal: 20,
       marginBottom: 25,
     },
     sectionTitle: {
@@ -304,7 +346,8 @@ export default function AddStudent() {
       borderRadius: 20,
       borderWidth: 1,
       borderColor: theme.border,
-      marginTop: 10,
+      marginHorizontal: 20,
+      marginBottom: 30,
     },
     switchLabel: {
       fontSize: 15,
@@ -314,6 +357,7 @@ export default function AddStudent() {
     photoContainer: {
       alignItems: 'center',
       marginVertical: 20,
+      paddingHorizontal: 20,
     },
     photoButton: {
       width: 120,
@@ -345,28 +389,31 @@ export default function AddStudent() {
   return (
     <>
       <View style={styles.container}>
-        <StatusBar barStyle={theme.statusBarStyle} backgroundColor={theme.card} translucent={true} />
+        <StatusBar barStyle={theme.statusBarStyle} backgroundColor="transparent" translucent={true} />
 
-        {/* Premium Header */}
-        <View style={styles.header}>
-          <TouchableOpacity style={styles.backButtonHeader} onPress={() => router.back()}>
-            <Ionicons name="chevron-back" size={24} color={theme.text} />
-          </TouchableOpacity>
-          <Text style={styles.headerTitle}>Add Student</Text>
-          <TouchableOpacity
-            style={[styles.saveButtonHeader, loading && { opacity: 0.7 }]}
-            onPress={handleSubmit}
-            disabled={loading}
-          >
-            {loading ? (
-              <ActivityIndicator size="small" color="#fff" />
-            ) : (
-              <Text style={styles.saveButtonText}>Save</Text>
-            )}
-          </TouchableOpacity>
-        </View>
-
-        <ScrollView style={styles.content} showsVerticalScrollIndicator={false} contentContainerStyle={{ paddingBottom: 40 }}>
+        <ScrollView 
+          style={styles.content} 
+          showsVerticalScrollIndicator={false} 
+          contentContainerStyle={{ paddingBottom: Math.max(40, insets.top + insets.bottom + 20), paddingTop: insets.top + 10 }}
+        >
+          {/* Free Flow Header */}
+          <View style={styles.header}>
+            <TouchableOpacity style={styles.backButtonHeader} onPress={() => router.back()}>
+              <Ionicons name="chevron-back" size={24} color={theme.text} />
+            </TouchableOpacity>
+            <Text style={styles.headerTitle}>Add Student</Text>
+            <TouchableOpacity
+              style={[styles.saveButtonHeader, loading && { opacity: 0.7 }]}
+              onPress={handleSubmit}
+              disabled={loading}
+            >
+              {loading ? (
+                <ActivityIndicator size="small" color="#fff" />
+              ) : (
+                <Text style={styles.saveButtonText}>Save</Text>
+              )}
+            </TouchableOpacity>
+          </View>
 
           <View style={styles.photoContainer}>
             <TouchableOpacity style={styles.photoButton} onPress={pickImage}>
@@ -473,8 +520,30 @@ export default function AddStudent() {
                   />
                 </View>
               </View>
+
+              <View style={styles.inputGroup}>
+                <Text style={styles.label}>Admission Date *</Text>
+                <TouchableOpacity style={styles.dateButton} onPress={() => setShowAdmissionDatePicker(true)}>
+                  <Ionicons name="calendar-outline" size={20} color={theme.primary} style={styles.inputIcon} />
+                  <Text style={styles.dateText}>{formatDate(formData.admission_date)}</Text>
+                </TouchableOpacity>
+              </View>
             </View>
           </View>
+
+          {showAdmissionDatePicker && (
+            <DateTimePicker
+              value={formData.admission_date}
+              mode="date"
+              display="default"
+              onChange={(event, selectedDate) => {
+                setShowAdmissionDatePicker(false);
+                if (selectedDate) {
+                  setFormData({ ...formData, admission_date: selectedDate });
+                }
+              }}
+            />
+          )}
 
           <View style={styles.section}>
             <Text style={styles.sectionTitle}>Parents & Contact</Text>
@@ -556,13 +625,54 @@ export default function AddStudent() {
             </View>
           </View>
 
+          <View style={styles.section}>
+            <Text style={styles.sectionTitle}>Financial Details</Text>
+            <View style={styles.inputCard}>
+              <View style={styles.inputGroup}>
+                <Text style={styles.label}>Monthly Tuition Fee *</Text>
+                <View style={styles.inputWrapper}>
+                  <Text style={{ fontSize: 16, color: theme.textLight, marginRight: 5 }}>₹</Text>
+                  <TextInput
+                    style={styles.input}
+                    placeholder="e.g. 1500"
+                    placeholderTextColor={theme.textLight}
+                    keyboardType="numeric"
+                    value={formData.monthly_fees}
+                    onChangeText={(text) => setFormData({ ...formData, monthly_fees: text })}
+                  />
+                </View>
+              </View>
+
+              {formData.transport_facility && (
+                <View style={styles.inputGroup}>
+                  <Text style={styles.label}>Monthly Transport Fee *</Text>
+                  <View style={styles.inputWrapper}>
+                    <Text style={{ fontSize: 16, color: theme.textLight, marginRight: 5 }}>₹</Text>
+                    <TextInput
+                      style={styles.input}
+                      placeholder="e.g. 500"
+                      placeholderTextColor={theme.textLight}
+                      keyboardType="numeric"
+                      value={formData.transport_fees}
+                      onChangeText={(text) => setFormData({ ...formData, transport_fees: text })}
+                    />
+                  </View>
+                </View>
+              )}
+            </View>
+          </View>
+
           <View style={styles.switchContainer}>
-            <Text style={styles.switchLabel}>Transport Facility</Text>
-            <Switch
-              value={formData.transport_facility}
-              onValueChange={(value) => setFormData({ ...formData, transport_facility: value })}
-              trackColor={{ false: '#ddd', true: theme.primary }}
-              thumbColor={Platform.OS === 'ios' ? undefined : '#fff'}
+            <View>
+              <Text style={styles.switchLabel}>Transport Facility</Text>
+              <Text style={{ fontSize: 10, fontWeight: '800', color: formData.transport_facility ? '#27AE60' : theme.textLight, marginTop: 4 }}>
+                  {formData.transport_facility ? 'YES, ENABLED' : 'NO, DISABLED'}
+              </Text>
+            </View>
+            <ModernToggle 
+              active={formData.transport_facility}
+              onToggle={() => setFormData({ ...formData, transport_facility: !formData.transport_facility })}
+              theme={{ isDark }}
             />
           </View>
 

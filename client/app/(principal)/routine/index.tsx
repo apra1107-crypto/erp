@@ -58,7 +58,8 @@ export default function RoutineManager() {
             const userDataStr = await AsyncStorage.getItem('userData');
             const userData = userDataStr ? JSON.parse(userDataStr) : null;
             const userType = await AsyncStorage.getItem('userType');
-            const sessionId = userData ? JSON.parse(userDataStr || '{}').current_session_id : null;
+            const storedSessionId = await AsyncStorage.getItem('selectedSessionId');
+            const sessionId = storedSessionId || (userData ? userData.current_session_id : null);
 
             if (!userData) return;
 
@@ -124,8 +125,9 @@ export default function RoutineManager() {
         try {
             setLoading(true);
             const token = await AsyncStorage.getItem('token');
+            const storedSessionId = await AsyncStorage.getItem('selectedSessionId');
             const userDataStr = await AsyncStorage.getItem('userData');
-            const sessionId = userDataStr ? JSON.parse(userDataStr).current_session_id : null;
+            const sessionId = storedSessionId || (userDataStr ? JSON.parse(userDataStr).current_session_id : null);
 
             const res = await axios.get(`${API_ENDPOINTS.ROUTINE}/${instituteId}/${r.class_name}/${r.section}`, {
                 headers: { 
@@ -162,8 +164,9 @@ export default function RoutineManager() {
                     onPress: async () => {
                         try {
                             const token = await AsyncStorage.getItem('token');
+                            const storedSessionId = await AsyncStorage.getItem('selectedSessionId');
                             const userDataStr = await AsyncStorage.getItem('userData');
-                            const sessionId = userDataStr ? JSON.parse(userDataStr).current_session_id : null;
+                            const sessionId = storedSessionId || (userDataStr ? JSON.parse(userDataStr).current_session_id : null);
 
                             await axios.delete(`${API_ENDPOINTS.ROUTINE}/${instituteId}/${r.class_name}/${r.section}`, {
                                 headers: { 
@@ -189,8 +192,9 @@ export default function RoutineManager() {
         }
         try {
             const token = await AsyncStorage.getItem('token');
+            const storedSessionId = await AsyncStorage.getItem('selectedSessionId');
             const userDataStr = await AsyncStorage.getItem('userData');
-            const sessionId = userDataStr ? JSON.parse(userDataStr).current_session_id : null;
+            const sessionId = storedSessionId || (userDataStr ? JSON.parse(userDataStr).current_session_id : null);
 
             await axios.post(`${API_ENDPOINTS.ROUTINE}/save`, {
                 instituteId,
@@ -281,15 +285,27 @@ export default function RoutineManager() {
         header: {
             flexDirection: 'row',
             alignItems: 'center',
-            paddingTop: insets.top + 10,
-            paddingBottom: 15,
+            paddingTop: insets.top + 15,
+            paddingBottom: 10,
             paddingHorizontal: 20,
-            backgroundColor: theme.card,
-            borderBottomWidth: 1,
-            borderBottomColor: theme.border,
+            zIndex: 10,
         },
-        headerTitle: { fontSize: 20, fontWeight: 'bold', color: theme.text, marginLeft: 15 },
-        scrollView: { padding: 20 },
+        headerTitle: { fontSize: 24, fontWeight: '900', color: theme.text, marginLeft: 0, letterSpacing: -0.5 },
+        backBtn: { 
+            width: 40, 
+            height: 40, 
+            borderRadius: 20, 
+            backgroundColor: theme.card, 
+            justifyContent: 'center', 
+            alignItems: 'center', 
+            marginRight: 15,
+            elevation: 2,
+            shadowColor: '#000',
+            shadowOffset: { width: 0, height: 2 },
+            shadowOpacity: 0.1,
+            shadowRadius: 4,
+        },
+        scrollView: { padding: 20, paddingBottom: insets.bottom + 100 },
         card: {
             backgroundColor: theme.card,
             borderRadius: 20,
@@ -317,11 +333,11 @@ export default function RoutineManager() {
         deleteBtn: { position: 'absolute', top: 15, right: 15, padding: 8 },
         fab: {
             position: 'absolute',
-            bottom: 30,
-            right: 30,
-            width: 60,
-            height: 60,
-            borderRadius: 30,
+            bottom: Math.max(30, insets.bottom + 15),
+            right: 25,
+            width: 65,
+            height: 65,
+            borderRadius: 32.5,
             backgroundColor: theme.primary,
             justifyContent: 'center',
             alignItems: 'center',
@@ -340,7 +356,9 @@ export default function RoutineManager() {
             backgroundColor: theme.card,
             borderTopLeftRadius: 35,
             borderTopRightRadius: 35,
-            padding: 20,
+            paddingHorizontal: 20,
+            paddingTop: 20,
+            paddingBottom: insets.bottom > 0 ? insets.bottom : 20,
             height: '95%',
         },
         modalHeader: {
@@ -465,7 +483,7 @@ export default function RoutineManager() {
             flexDirection: 'row',
             justifyContent: 'space-between',
             marginTop: 15,
-            paddingBottom: Platform.OS === 'ios' ? 20 : 10,
+            paddingBottom: 10,
             gap: 12
         },
         button: {
@@ -687,10 +705,10 @@ export default function RoutineManager() {
 
     return (
         <View style={styles.container}>
-            <StatusBar barStyle={isDark ? 'light-content' : 'dark-content'} backgroundColor={theme.card} />
+            <StatusBar barStyle={isDark ? 'light-content' : 'dark-content'} backgroundColor="transparent" translucent={true} />
             <View style={styles.header}>
-                <TouchableOpacity onPress={() => router.back()}>
-                    <Ionicons name="chevron-back" size={28} color={theme.text} />
+                <TouchableOpacity style={styles.backBtn} onPress={() => router.back()}>
+                    <Ionicons name="chevron-back" size={22} color={theme.text} />
                 </TouchableOpacity>
                 <Text style={styles.headerTitle}>Routine Manager</Text>
             </View>
@@ -734,7 +752,12 @@ export default function RoutineManager() {
                 <Ionicons name="add" size={32} color="#fff" />
             </TouchableOpacity>
 
-            <Modal visible={isBuilderOpen} animationType="slide" transparent={true}>
+            <Modal 
+                visible={isBuilderOpen} 
+                animationType="slide" 
+                transparent={true}
+                onRequestClose={() => setIsBuilderOpen(false)}
+            >
                 <View style={styles.modalOverlay}>
                     <KeyboardAvoidingView 
                         behavior={Platform.OS === 'ios' ? 'padding' : undefined}
@@ -802,7 +825,12 @@ export default function RoutineManager() {
                 </View>
 
                 {/* Assignment Sub-Modal */}
-                <Modal visible={activeSlot !== null} transparent={true} animationType="fade">
+                <Modal 
+                    visible={activeSlot !== null} 
+                    transparent={true} 
+                    animationType="fade"
+                    onRequestClose={() => setActiveSlot(null)}
+                >
                     <View style={[styles.modalOverlay, { justifyContent: 'center', padding: 20, backgroundColor: 'rgba(0,0,0,0.8)' }]}>
                         <KeyboardAvoidingView 
                             behavior={Platform.OS === 'ios' ? 'padding' : 'height'}

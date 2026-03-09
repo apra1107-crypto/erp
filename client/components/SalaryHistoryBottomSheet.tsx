@@ -34,12 +34,16 @@ const SalaryHistoryBottomSheet = ({ visible, onClose, teacher, role = 'principal
         setLoading(true);
         try {
             const token = await AsyncStorage.getItem(role === 'teacher' ? 'teacherToken' : 'token');
+            const storedSessionId = await AsyncStorage.getItem('selectedSessionId');
             const url = role === 'teacher' 
                 ? `${API_ENDPOINTS.SALARY}/my-history`
                 : `${API_ENDPOINTS.SALARY}/teacher/${teacher?.id}/history`;
 
             const res = await axios.get(url, {
-                headers: { Authorization: `Bearer ${token}` }
+                headers: { 
+                    Authorization: `Bearer ${token}`,
+                    'x-academic-session-id': storedSessionId?.toString()
+                }
             });
             setHistory(res.data);
         } catch (error) {

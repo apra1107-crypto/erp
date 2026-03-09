@@ -251,6 +251,17 @@ const AttendanceHistoryBottomSheet = ({ visible, onClose, student }: AttendanceH
                                         </View>
                                     </View>
                                     <Text style={styles.noteReason}>{req.reason}</Text>
+                                    {(req.status === 'approved' || req.status === 'rejected') && (
+                                        <Text style={{ 
+                                            fontSize: 11, 
+                                            fontWeight: '700', 
+                                            color: req.status === 'approved' ? theme.success : theme.danger,
+                                            marginTop: 8,
+                                            fontStyle: 'italic'
+                                        }}>
+                                            {req.status === 'approved' ? 'Approved' : 'Rejected'} by {req.approved_by_teacher_name || req.approved_by_principal_name || 'Principal'}
+                                        </Text>
+                                    )}
                                 </View>
                             ))
                         )}

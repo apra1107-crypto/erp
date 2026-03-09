@@ -1,445 +1,326 @@
-import React, { useState, useEffect } from 'react';
-import { View, Text, StyleSheet, ScrollView, TouchableOpacity, ActivityIndicator, Image, Alert, StatusBar, Platform } from 'react-native';
+import React, { useState, useEffect, useMemo } from 'react';
+import { View, Text, StyleSheet, ScrollView, TouchableOpacity, ActivityIndicator, Image, StatusBar, Platform, Dimensions } from 'react-native';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import axios from 'axios';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useTheme } from '../../../context/ThemeContext';
-import { API_ENDPOINTS } from '../../../constants/Config';
+import { API_ENDPOINTS, BASE_URL } from '../../../constants/Config';
 
-export default function MarksheetPreview() {
-  const { examId, studentId } = useLocalSearchParams();
-  const router = useRouter();
-  const { theme, isDark } = useTheme();
-  
-  const [loading, setLoading] = useState(true);
-  const [data, setData] = useState<any>(null);
+const { width } = Dimensions.get('window');
 
-  useEffect(() => {
-    fetchMarksheet();
-  }, [examId, studentId]);
+export default function ReportCardPreview() {
+    const { examId, studentId } = useLocalSearchParams();
+    const router = useRouter();
+    const insets = useSafeAreaInsets();
+    const { theme, isDark } = useTheme();
+    
+    const [loading, setLoading] = useState(true);
+    const [data, setData] = useState<any>(null);
 
-  const fetchMarksheet = async () => {
-    try {
-      const token = await AsyncStorage.getItem('token');
-      const response = await axios.get(`${API_ENDPOINTS.EXAM}/${examId}/marksheet/${studentId}`, {
-        headers: { Authorization: `Bearer ${token}` }
-      });
-      setData(response.data);
-    } catch (error) {
-      console.error(error);
-      Alert.alert('Error', 'Failed to load report card');
-    } finally {
-      setLoading(false);
-    }
-  };
+    useEffect(() => {
+        fetchMarksheet();
+    }, [examId, studentId]);
 
-  if (loading) {
+    const fetchMarksheet = async () => {
+        try {
+            const token = await AsyncStorage.getItem('token');
+            const response = await axios.get(`${API_ENDPOINTS.EXAM}/${examId}/marksheet/${studentId}`, {
+                headers: { Authorization: `Bearer ${token}` }
+            });
+            setData(response.data);
+        } catch (error) {
+            console.error(error);
+        } finally {
+            setLoading(false);
+        }
+    };
+
+    const styles = useMemo(() => StyleSheet.create({
+        container: { flex: 1, backgroundColor: isDark ? '#000' : '#f0f2f5' },
+        backBtn: {
+            position: 'absolute',
+            top: insets.top + 15,
+            left: 20,
+            zIndex: 100,
+            width: 45,
+            height: 45,
+            borderRadius: 22.5,
+            backgroundColor: theme.card,
+            justifyContent: 'center', 
+            alignItems: 'center',
+            elevation: 4,
+            shadowColor: '#000',
+            shadowOffset: { width: 0, height: 2 },
+            shadowOpacity: 0.2,
+            shadowRadius: 4,
+        },
+        scroll: { flex: 1 },
+        content: { padding: 10, paddingTop: insets.top + 80, alignItems: 'center' },
+        paper: {
+            width: width - 20,
+            backgroundColor: '#fff',
+            padding: 15,
+            paddingTop: 25,
+            borderWidth: 2.5,
+            borderColor: '#000',
+            borderRadius: 2,
+            elevation: 15,
+            shadowColor: '#000',
+            shadowOffset: { width: 0, height: 12 },
+            shadowOpacity: 0.4,
+            shadowRadius: 20,
+            position: 'relative',
+        },
+        paperInnerBorder: {
+            position: 'absolute',
+            top: 4, left: 4, right: 4, bottom: 4,
+            borderWidth: 0.8,
+            borderColor: '#333',
+            zIndex: 0
+        },
+        // Header
+        header: { alignItems: 'center', marginBottom: 20, zIndex: 10 },
+        instRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 12, marginBottom: 5 },
+        logo: { width: 60, height: 60, resizeMode: 'contain' },
+        instName: { fontSize: 26, fontWeight: '900', color: '#1e1b4b', textAlign: 'center', textTransform: 'uppercase', flexShrink: 1, lineHeight: 28 },
+        instAffiliation: { fontSize: 14, color: '#4f46e5', fontWeight: '700', marginTop: -8, marginBottom: 2 },
+        instSub: { fontSize: 10.5, color: '#444', textAlign: 'center', fontWeight: '700', marginTop: 0 },
+        examTitleContainer: { 
+            marginTop: 15, 
+            paddingVertical: 6, 
+            paddingHorizontal: 35, 
+            backgroundColor: '#1e1b4b', 
+            borderRadius: 4,
+            transform: [{ skewX: '-10deg' }]
+        },
+        examTitle: { fontSize: 15, fontWeight: '900', color: '#fff', textAlign: 'center', textTransform: 'uppercase' },
+        
+        // Student Info
+        studentSection: { 
+            flexDirection: 'row', 
+            justifyContent: 'space-between', 
+            marginBottom: 20, 
+            padding: 12, 
+            backgroundColor: '#f8fafc',
+            borderRadius: 12,
+            borderWidth: 1.5,
+            borderColor: '#e2e8f0'
+        },
+        infoGrid: { flex: 1, marginRight: 10 },
+        infoRow: { flexDirection: 'row', borderBottomWidth: 1, borderBottomColor: '#cbd5e1', paddingVertical: 5 },
+        infoLabel: { width: 90, fontSize: 9, fontWeight: '800', color: '#64748b' },
+        infoValue: { flex: 1, fontSize: 12, fontWeight: '900', color: '#0f172a' },
+        photoBox: { 
+            width: 85, height: 105, 
+            borderWidth: 3, borderColor: '#fff', 
+            backgroundColor: '#fff', 
+            elevation: 5, shadowColor: '#000', shadowOpacity: 0.2, shadowRadius: 5,
+            justifyContent: 'center', alignItems: 'center',
+            overflow: 'hidden',
+            borderRadius: 4
+        },
+        photo: { width: '100%', height: '100%' },
+
+        // Marks Table
+        table: { marginBottom: 20, borderRadius: 12, overflow: 'hidden', borderWidth: 2, borderColor: '#1e1b4b' },
+        tableHeader: { flexDirection: 'row', backgroundColor: '#1e1b4b', paddingVertical: 10 },
+        tableRow: { flexDirection: 'row', borderBottomWidth: 1, borderBottomColor: '#e2e8f0', paddingVertical: 10 },
+        cell: { paddingHorizontal: 6, justifyContent: 'center' },
+        cellText: { fontSize: 10, fontWeight: '800', color: '#000', textAlign: 'center' },
+        headerCellText: { fontSize: 10, fontWeight: '900', color: '#fff', textAlign: 'center' },
+        
+        // Summary
+        summaryBox: { 
+            flexDirection: 'row', 
+            justifyContent: 'space-between', 
+            backgroundColor: '#1e1b4b', 
+            padding: 15, 
+            borderRadius: 12,
+            marginBottom: 15,
+            elevation: 5
+        },
+        summaryItem: { alignItems: 'center' },
+        summaryLabel: { fontSize: 9, fontWeight: '800', color: '#94a3b8', marginBottom: 2 },
+        summaryValue: { fontSize: 18, fontWeight: '900', color: '#fff' },
+
+        // Medals
+        medalRow: { flexDirection: 'row', gap: 10, marginTop: 5, marginBottom: 15 },
+        medal: { 
+            flex: 1,
+            flexDirection: 'row', 
+            alignItems: 'center', 
+            backgroundColor: '#f5f3ff', 
+            borderWidth: 1.5, 
+            borderColor: '#4f46e5', 
+            paddingHorizontal: 10, 
+            paddingVertical: 8, 
+            borderRadius: 12, 
+            gap: 10 
+        },
+        medalText: { fontSize: 10, fontWeight: '900', color: '#1e1b4b' },
+
+        // Footer
+        remarks: { 
+            padding: 12, 
+            backgroundColor: '#fffbeb', 
+            borderRadius: 10, 
+            borderLeftWidth: 5, 
+            borderLeftColor: '#f59e0b',
+            marginBottom: 20
+        },
+        remarkTitle: { fontSize: 10, fontWeight: '900', color: '#92400e', marginBottom: 3 },
+        remarkText: { fontSize: 11, fontStyle: 'italic', color: '#451a03', fontWeight: '600' },
+        signatures: { flexDirection: 'row', justifyContent: 'space-between', marginTop: 30, paddingHorizontal: 5 },
+        sigLine: { borderTopWidth: 2, borderTopColor: '#1e1b4b', width: 85, alignItems: 'center', paddingTop: 8 },
+        sigText: { fontSize: 9, fontWeight: '900', color: '#1e1b4b' },
+    }), [theme, insets, isDark]);
+
+    if (loading) return <View style={{ flex: 1, backgroundColor: theme.background, justifyContent: 'center' }}><ActivityIndicator size="large" color={theme.primary} /></View>;
+    if (!data) return null;
+
+    const { exam, student, institute, result } = data;
+    const marks = result?.marks_data || [];
+    const stats = result?.calculated_stats || {};
+    const manualStats = exam?.manual_stats || {};
+
+    const totalMax = (exam.subjects_blueprint || []).reduce((sum: number, sub: any) => sum + (parseFloat(sub.max_theory) || 0) + (parseFloat(sub.max_practical) || 0), 0);
+
     return (
-      <View style={[styles.container, { backgroundColor: theme.background, justifyContent: 'center', alignItems: 'center' }]}>
-        <ActivityIndicator size="large" color={theme.primary} />
-      </View>
-    );
-  }
-
-  if (!data) return null;
-
-  const { exam, student, institute, result } = data;
-  const marks = result?.marks_data || [];
-  const stats = result?.calculated_stats || {};
-
-  return (
-    <View style={[styles.container, { backgroundColor: theme.background }]}>
-      <StatusBar barStyle={isDark ? "light-content" : "dark-content"} backgroundColor="transparent" translucent />
-      <View style={[styles.header, { paddingTop: Platform.OS === 'android' ? (StatusBar.currentHeight || 0) + 10 : 10 }]}>
-        <TouchableOpacity onPress={() => router.back()} style={styles.backBtnFree}>
-          <Ionicons name="arrow-back" size={24} color={theme.text} />
-        </TouchableOpacity>
-        <Text style={[styles.headerTitle, { color: theme.text }]}>Report Card Preview</Text>
-        <View style={{ width: 40 }} />
-      </View>
-
-      <ScrollView contentContainerStyle={styles.content}>
-        <View style={[styles.reportCard, { backgroundColor: '#fff' }]}>
-          
-          <View style={styles.rcHeader}>
-            <View style={styles.logoContainer}>
-              {!!institute.logo_url ? (
-                <Image source={{ uri: institute.logo_url }} style={styles.logo} resizeMode="contain" />
-              ) : (
-                <View style={[styles.placeholderLogo, { backgroundColor: theme.primary }]}>
-                   <Text style={{ color: '#fff', fontWeight: 'bold', fontSize: 20 }}>{(institute.institute_name || '?').charAt(0)}</Text>
-                </View>
-              )}
-            </View>
-            <View style={styles.instInfo}>
-              <Text style={styles.instName}>{(institute.institute_name || '').toUpperCase()}</Text>
-              {!!institute.affiliation && (
-                <Text style={styles.instAffiliation} numberOfLines={1}>{institute.affiliation}</Text>
-              )}
-              <Text style={styles.instAddress}>{institute.address} {institute.landmark}</Text>
-              <Text style={[styles.instAddress, { marginLeft: 10 }]}>{institute.district} {institute.state} {institute.pincode}</Text>
-            </View>
-          </View>
-
-          <View style={styles.divider} />
-          
-          <Text style={styles.examTitle}>{exam.name}</Text>
-
-          {/* Student Details Section */}
-          <View style={styles.studentSection}>
-            <View style={styles.studentInfoContainer}>
-              <View style={styles.detailItem}>
-                <Text style={styles.infoLabel}>NAME</Text>
-                <Text style={styles.infoValue}>{student.name || '-'}</Text>
-              </View>
-              <View style={styles.detailItem}>
-                <Text style={styles.infoLabel}>ROLL NO</Text>
-                <Text style={styles.infoValue}>{student.roll_no || '-'}</Text>
-              </View>
-              <View style={styles.detailItem}>
-                <Text style={styles.infoLabel}>CLASS</Text>
-                <Text style={styles.infoValue}>{student.class} - {student.section}</Text>
-              </View>
-              <View style={styles.detailItem}>
-                <Text style={styles.infoLabel}>FATHER'S NAME</Text>
-                <Text style={styles.infoValue}>{student.father_name || '-'}</Text>
-              </View>
-              <View style={styles.detailItem}>
-                <Text style={styles.infoLabel}>MOTHER'S NAME</Text>
-                <Text style={styles.infoValue}>{student.mother_name || '-'}</Text>
-              </View>
-              <View style={styles.detailItem}>
-                <Text style={styles.infoLabel}>DOB</Text>
-                <Text style={styles.infoValue}>
-                  {student.dob 
-                    ? new Date(student.dob).toLocaleDateString('en-IN', { day: '2-digit', month: '2-digit', year: 'numeric' }) 
-                    : '-'}
-                </Text>
-              </View>
-            </View>
-
-            <View style={[styles.studentImageContainer, { marginRight: 0, marginLeft: 15 }]}>
-              {!!student.photo_url || !!student.profile_image ? (
-                <Image 
-                  source={{ uri: student.photo_url || student.profile_image }} 
-                  style={styles.studentPhoto} 
-                />
-              ) : (
-                <View style={styles.studentPhotoPlaceholder}>
-                  <Ionicons name="person" size={40} color="#ccc" />
-                </View>
-              )}
-            </View>
-          </View>
-
-          {/* Marks Table */}
-          <View style={styles.table}>
-            <View style={styles.tableHeader}>
-              <Text style={[styles.th, { flex: 2, textAlign: 'left' }]}>Subject</Text>
-              <Text style={styles.th}>Max</Text>
-              <Text style={styles.th}>Obt</Text>
-              {!!exam.include_grade && <Text style={styles.th}>Grade</Text>}
-            </View>
+        <View style={styles.container}>
+            <StatusBar barStyle={isDark ? "light-content" : "dark-content"} />
             
-            {exam.subjects_blueprint.map((sub: any, index: number) => {
-              const mark = marks.find((m: any) => m.subject === sub.name);
-              const score = mark ? (mark.theory || '-') : '-';
-              const grade = mark ? (mark.grade || '-') : '-';
-              
-              return (
-                <View key={index} style={styles.tr}>
-                  <Text style={[styles.td, { flex: 2, textAlign: 'left' }]}>{sub.name}</Text>
-                  <Text style={styles.td}>{sub.max_theory}</Text>
-                  <Text style={[styles.td, { fontWeight: 'bold' }]}>{score}</Text>
-                  {!!exam.include_grade && <Text style={styles.td}>{grade}</Text>}
+            <TouchableOpacity onPress={() => router.back()} style={styles.backBtn}>
+                <Ionicons name="arrow-back" size={24} color={theme.text} />
+            </TouchableOpacity>
+
+            <ScrollView style={styles.scroll} showsVerticalScrollIndicator={false}>
+                <View style={styles.content}>
+                    <View style={styles.paper}>
+                        <View style={styles.paperInnerBorder} />
+                        {/* Header */}
+                        <View style={styles.header}>
+                            <View style={styles.instRow}>
+                                {institute.logo_url && <Image source={{ uri: institute.logo_url }} style={styles.logo} />}
+                                <Text style={styles.instName}>{institute.institute_name}</Text>
+                            </View>
+                            {institute.affiliation && <Text style={styles.instAffiliation}>{institute.affiliation}</Text>}
+                            <Text style={styles.instSub}>{institute.address} {institute.landmark} {institute.district} {institute.state} {institute.pincode}</Text>
+                            
+                            <View style={styles.examTitleContainer}>
+                                <Text style={styles.examTitle}>{exam.name}</Text>
+                            </View>
+                        </View>
+
+                        {/* Student Details */}
+                        <View style={styles.studentSection}>
+                            <View style={styles.infoGrid}>
+                                <View style={styles.infoRow}><Text style={styles.infoLabel}>STUDENT NAME</Text><Text style={styles.infoValue}>{student.name}</Text></View>
+                                <View style={styles.infoRow}><Text style={styles.infoLabel}>CLASS & SECTION</Text><Text style={styles.infoValue}>{student.class} - {student.section}</Text></View>
+                                <View style={styles.infoRow}><Text style={styles.infoLabel}>ROLL NUMBER</Text><Text style={styles.infoValue}>{student.roll_no}</Text></View>
+                                <View style={styles.infoRow}><Text style={styles.infoLabel}>FATHER'S NAME</Text><Text style={styles.infoValue}>{student.father_name}</Text></View>
+                                <View style={styles.infoRow}><Text style={styles.infoLabel}>DATE OF BIRTH</Text><Text style={styles.infoValue}>{student.dob ? new Date(student.dob).toLocaleDateString('en-IN') : '-'}</Text></View>
+                            </View>
+                            <View style={styles.photoBox}>
+                                {(student.photo_url || student.profile_image) ? (
+                                    <Image source={{ uri: student.photo_url || student.profile_image }} style={styles.photo} />
+                                ) : (
+                                    <Ionicons name="person" size={40} color="#e2e8f0" />
+                                )}
+                            </View>
+                        </View>
+
+                        {/* Marks Table */}
+                        <View style={styles.table}>
+                            <View style={styles.tableHeader}>
+                                <View style={[styles.cell, { flex: 2.5, alignItems: 'flex-start' }]}><Text style={styles.headerCellText}>SUBJECT</Text></View>
+                                <View style={[styles.cell, { flex: 1 }]}><Text style={styles.headerCellText}>MAX</Text></View>
+                                <View style={[styles.cell, { flex: 1 }]}><Text style={styles.headerCellText}>PASS</Text></View>
+                                <View style={[styles.cell, { flex: 1 }]}><Text style={styles.headerCellText}>OBT</Text></View>
+                                {!!exam.show_highest_marks && (
+                                    <View style={[styles.cell, { flex: 1 }]}><Text style={styles.headerCellText}>HIGH</Text></View>
+                                )}
+                                <View style={[styles.cell, { flex: 1, borderRightWidth: 0 }]}><Text style={styles.headerCellText}>GRADE</Text></View>
+                            </View>
+                            {(exam.subjects_blueprint || []).map((sub: any, idx: number) => {
+                                const m = marks.find((m: any) => m.subject === sub.name) || {};
+                                const highest = manualStats[`highest_${sub.name}`] || '-';
+                                return (
+                                    <View key={idx} style={[styles.tableRow, idx % 2 === 1 && { backgroundColor: '#f8fafc' }]}>
+                                        <View style={[styles.cell, { flex: 2.5, alignItems: 'flex-start' }]}><Text style={[styles.cellText, { fontWeight: '900', color: '#1e293b', textAlign: 'left' }]}>{sub.name}</Text></View>
+                                        <View style={[styles.cell, { flex: 1 }]}><Text style={styles.cellText}>{(parseFloat(sub.max_theory) || 0) + (parseFloat(sub.max_practical) || 0)}</Text></View>
+                                        <View style={[styles.cell, { flex: 1 }]}><Text style={styles.cellText}>{sub.passing_marks || '-'}</Text></View>
+                                        <View style={[styles.cell, { flex: 1 }]}><Text style={[styles.cellText, { color: '#4f46e5', fontSize: 12, fontWeight: '900' }]}>{m.theory || '-'}</Text></View>
+                                        {!!exam.show_highest_marks && (
+                                            <View style={[styles.cell, { flex: 1 }]}><Text style={[styles.cellText, { color: '#6366f1' }]}>{highest}</Text></View>
+                                        )}
+                                        <View style={[styles.cell, { flex: 1, borderRightWidth: 0 }]}><Text style={[styles.cellText, { fontWeight: '900' }]}>{m.grade || '-'}</Text></View>
+                                    </View>
+                                );
+                            })}
+                        </View>
+
+                        {/* Summary Footer */}
+                        <View style={styles.summaryBox}>
+                            <View style={styles.summaryItem}>
+                                <Text style={styles.summaryLabel}>GRAND TOTAL</Text>
+                                <Text style={styles.summaryValue}>{stats.total} / {totalMax}</Text>
+                            </View>
+                            <View style={styles.summaryItem}>
+                                <Text style={styles.summaryLabel}>PERCENTAGE</Text>
+                                <Text style={styles.summaryValue}>{stats.percentage}%</Text>
+                            </View>
+                            <View style={styles.summaryItem}>
+                                <Text style={styles.summaryLabel}>FINAL GRADE</Text>
+                                <Text style={[styles.summaryValue, { color: '#fbbf24' }]}>{stats.grade}</Text>
+                            </View>
+                        </View>
+
+                        {/* Achievement Medals */}
+                        {(manualStats.section_topper_name || manualStats.class_topper_name) && (
+                            <View style={styles.medalRow}>
+                                {manualStats.section_topper_name && (
+                                    <View style={styles.medal}>
+                                        <Ionicons name="trophy" size={18} color="#4f46e5" />
+                                        <View style={{ flex: 1 }}>
+                                            <Text style={styles.medalText} numberOfLines={1}>Section Topper: {manualStats.section_topper_name}</Text>
+                                            <Text style={{ fontSize: 8, fontWeight: '800', color: '#4338ca' }}>
+                                                Score: {manualStats.section_topper_total} / {totalMax}
+                                            </Text>
+                                        </View>
+                                    </View>
+                                )}
+                                {manualStats.class_topper_name && (
+                                    <View style={styles.medal}>
+                                        <Ionicons name="ribbon" size={18} color="#4f46e5" />
+                                        <View style={{ flex: 1 }}>
+                                            <Text style={styles.medalText} numberOfLines={1}>Class Topper: {manualStats.class_topper_name}</Text>
+                                            <Text style={{ fontSize: 8, fontWeight: '800', color: '#4338ca' }}>
+                                                Score: {manualStats.class_topper_total} / {totalMax}
+                                            </Text>
+                                        </View>
+                                    </View>
+                                )}
+                            </View>
+                        )}
+
+                        {/* Remarks */}
+                        <View style={styles.remarks}>
+                            <Text style={styles.remarkTitle}>OFFICIAL REMARKS</Text>
+                            <Text style={styles.remarkText}>"{result.overall_remark || 'Satisfactory performance. Aim for higher goals in the next academic term.'}"</Text>
+                        </View>
+
+                        {/* Signatures */}
+                        <View style={styles.signatures}>
+                            <View style={styles.sigLine}><Text style={styles.sigText}>TEACHER</Text></View>
+                            <View style={styles.sigLine}><Text style={styles.sigText}>PRINCIPAL</Text></View>
+                            <View style={styles.sigLine}><Text style={styles.sigText}>PARENT</Text></View>
+                        </View>
+                    </View>
                 </View>
-              );
-            })}
-          </View>
-
-          {/* Footer Stats */}
-          <View style={styles.statsBox}>
-            <View style={styles.statItem}>
-              <Text style={styles.statLabel}>Total</Text>
-              <Text style={styles.statValue}>{stats.total || 0}</Text>
-            </View>
-            {!!exam.include_percentage ? (
-              <View style={styles.statItem}>
-                <Text style={styles.statLabel}>Percentage</Text>
-                <Text style={styles.statValue}>{stats.percentage || 0}%</Text>
-              </View>
-            ) : null}
-            {!!exam.include_grade ? (
-              <View style={styles.statItem}>
-                <Text style={styles.statLabel}>Grade</Text>
-                <Text style={styles.statValue}>{stats.grade || '-'}</Text>
-              </View>
-            ) : null}
-          </View>
-
-          {result.overall_remark ? (
-            <View style={styles.remarkBox}>
-              <Text style={styles.remarkLabel}>Remarks:</Text>
-              <Text style={styles.remarkText}>{result.overall_remark}</Text>
-            </View>
-          ) : null}
-
-          <View style={styles.signatures}>
-            <View style={styles.sigBox}>
-              <Text style={styles.sigLine}>Class Teacher</Text>
-            </View>
-            <View style={styles.sigBox}>
-              <Text style={styles.sigLine}>Principal</Text>
-            </View>
-          </View>
-
+                <View style={{ height: 100 }} />
+            </ScrollView>
         </View>
-      </ScrollView>
-    </View>
-  );
+    );
 }
-
-const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-  },
-  header: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    paddingHorizontal: 16,
-    paddingVertical: 12,
-  },
-  backBtnFree: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    padding: 4,
-  },
-  backText: {
-    fontSize: 16,
-    fontWeight: '500',
-    marginLeft: 4,
-  },
-  headerTitle: {
-    fontSize: 18,
-    fontWeight: '600',
-  },
-  content: {
-    padding: 16,
-    paddingBottom: 40,
-  },
-  reportCard: {
-    borderRadius: 8,
-    padding: 20,
-    elevation: 4,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 8,
-    minHeight: 500,
-  },
-  rcHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginBottom: 16,
-  },
-  logoContainer: {
-    width: 60,
-    height: 60,
-    marginRight: 8,
-  },
-  logo: {
-    width: '100%',
-    height: '100%',
-  },
-  placeholderLogo: {
-    width: '100%',
-    height: '100%',
-    borderRadius: 30,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  instInfo: {
-    flex: 1,
-    marginLeft: 0,
-    alignItems: 'flex-start',
-  },
-  instName: {
-    fontSize: 15,
-    fontWeight: 'bold',
-    color: '#000',
-    marginBottom: 2,
-    textAlign: 'left',
-  },
-  instAffiliation: {
-    fontSize: 9,
-    fontWeight: '600',
-    color: '#444',
-    marginBottom: 2,
-    textAlign: 'left',
-  },
-  instAddress: {
-    fontSize: 10,
-    color: '#666',
-    textAlign: 'left',
-  },
-  divider: {
-    height: 2,
-    backgroundColor: '#000',
-    marginVertical: 10,
-  },
-  examTitle: {
-    fontSize: 20,
-    fontWeight: 'bold',
-    textAlign: 'center',
-    color: '#000',
-    marginTop: 8,
-  },
-  session: {
-    fontSize: 14,
-    textAlign: 'center',
-    color: '#666',
-    marginBottom: 20,
-  },
-  studentSection: {
-    flexDirection: 'row',
-    marginBottom: 20,
-    padding: 10,
-    borderWidth: 1,
-    borderColor: '#eee',
-    borderRadius: 8,
-  },
-  studentImageContainer: {
-    width: 80,
-    height: 100,
-    borderWidth: 1,
-    borderColor: '#ddd',
-    justifyContent: 'center',
-    alignItems: 'center',
-    marginRight: 15,
-  },
-  studentPhoto: {
-    width: '100%',
-    height: '100%',
-  },
-  studentPhotoPlaceholder: {
-    width: '100%',
-    height: '100%',
-    backgroundColor: '#f5f5f5',
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  studentInfoContainer: {
-    flex: 1,
-    justifyContent: 'center',
-  },
-  detailItem: {
-    flexDirection: 'row',
-    marginBottom: 2,
-  },
-  infoLabel: {
-    fontSize: 9,
-    fontWeight: 'bold',
-    color: '#666',
-    width: 80,
-  },
-  infoValue: {
-    fontSize: 10,
-    fontWeight: '700',
-    color: '#000',
-    flex: 1,
-  },
-  table: {
-    borderWidth: 1,
-    borderColor: '#000',
-    marginBottom: 20,
-  },
-  tableHeader: {
-    flexDirection: 'row',
-    backgroundColor: '#f0f0f0',
-    borderBottomWidth: 1,
-    borderBottomColor: '#000',
-  },
-  th: {
-    flex: 1,
-    padding: 8,
-    fontWeight: 'bold',
-    textAlign: 'center',
-    fontSize: 12,
-    color: '#000',
-    borderRightWidth: 1,
-    borderRightColor: '#ddd',
-  },
-  tr: {
-    flexDirection: 'row',
-    borderBottomWidth: 1,
-    borderBottomColor: '#ddd',
-  },
-  td: {
-    flex: 1,
-    padding: 8,
-    textAlign: 'center',
-    fontSize: 12,
-    color: '#000',
-    borderRightWidth: 1,
-    borderRightColor: '#ddd',
-  },
-  statsBox: {
-    flexDirection: 'row',
-    justifyContent: 'space-around',
-    backgroundColor: '#f9f9f9',
-    padding: 12,
-    borderRadius: 8,
-    marginBottom: 20,
-    borderWidth: 1,
-    borderColor: '#eee',
-  },
-  statItem: {
-    alignItems: 'center',
-  },
-  statLabel: {
-    fontSize: 12,
-    color: '#666',
-    marginBottom: 4,
-  },
-  statValue: {
-    fontSize: 18,
-    fontWeight: 'bold',
-    color: '#000',
-  },
-  remarkBox: {
-    marginBottom: 30,
-    padding: 10,
-    backgroundColor: '#fdfdfd',
-    borderWidth: 1,
-    borderColor: '#eee',
-  },
-  remarkLabel: {
-    fontWeight: 'bold',
-    marginBottom: 4,
-    color: '#000',
-  },
-  remarkText: {
-    color: '#444',
-    fontStyle: 'italic',
-  },
-  signatures: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    marginTop: 40,
-    paddingHorizontal: 20,
-  },
-  sigBox: {
-    borderTopWidth: 1,
-    borderTopColor: '#000',
-    width: 100,
-    alignItems: 'center',
-    paddingTop: 8,
-  },
-  sigLine: {
-    fontSize: 12,
-    fontWeight: 'bold',
-    color: '#000',
-  },
-});

@@ -1,8 +1,8 @@
-import React, { useState, useEffect } from 'react';
-import { useNavigate } from 'react-router-dom';
+import React, { useState, useEffect, useMemo } from 'react';
+import { useNavigate, useLocation } from 'react-router-dom';
 import axios from 'axios';
 import { toast } from 'react-toastify';
-import { API_ENDPOINTS } from '../../config';
+import { API_ENDPOINTS, BASE_URL } from '../../config';
 import { useTheme } from '../../context/ThemeContext';
 import './ResultDashboard.css';
 
@@ -10,9 +10,22 @@ const ResultDashboard = () => {
     const [exams, setExams] = useState([]);
     const [loading, setLoading] = useState(true);
     const [showModal, setShowModal] = useState(false);
+    const [showFilters, setShowFilters] = useState(false);
+    const [filterValues, setFilterValues] = useState({
+        name: '',
+        class_name: '',
+        section: ''
+    });
     const [step, setStep] = useState(1); // Step 1: Info, Step 2: Blueprint
     const [classes, setClasses] = useState([]);
     const [sections, setSections] = useState({});
+
+    const navigate = useNavigate();
+    const location = useLocation();
+    const isTeacher = location.pathname.startsWith('/teacher-dashboard');
+    const basePath = isTeacher ? '/teacher-dashboard' : '/dashboard';
+    // Always use Principal endpoint for student list as it's staff-enabled
+    const profileEndpoint = API_ENDPOINTS.PRINCIPAL;
 
     // Form State
     const [formData, setFormData] = useState({
@@ -39,8 +52,6 @@ const ResultDashboard = () => {
         { grade: 'F', min: 0, max: 40 }
     ]);
 
-    const navigate = useNavigate();
-
     useEffect(() => {
         fetchExams();
         fetchClassSections();
@@ -58,7 +69,7 @@ const ResultDashboard = () => {
     const fetchExams = async () => {
         try {
             const token = localStorage.getItem('token');
-            const response = await axios.get('http://localhost:5000/api/exam/list', {
+            const response = await axios.get(`${BASE_URL}/api/exam/list`, {
                 headers: { Authorization: `Bearer ${token}` }
             });
             setExams(response.data);
@@ -69,13 +80,22 @@ const ResultDashboard = () => {
         }
     };
 
+    const filteredExams = useMemo(() => {
+        return exams.filter(exam => {
+            const matchesName = !filterValues.name || exam.name.toLowerCase().includes(filterValues.name.toLowerCase());
+            const matchesClass = !filterValues.class_name || String(exam.class_name) === String(filterValues.class_name);
+            const matchesSection = !filterValues.section || exam.section.toLowerCase().includes(filterValues.section.toLowerCase());
+            return matchesName && matchesClass && matchesSection;
+        });
+    }, [exams, filterValues]);
+
     const deleteExam = async (e, id) => {
         e.stopPropagation();
         if (!window.confirm("Are you sure you want to delete this Marksheet? All data will be lost.")) return;
 
         try {
             const token = localStorage.getItem('token');
-            await axios.delete(`http://localhost:5000/api/exam/${id}`, {
+            await axios.delete(`${BASE_URL}/api/exam/${id}`, {
                 headers: { Authorization: `Bearer ${token}` }
             });
             toast.success("Marksheet deleted");
@@ -86,10 +106,27 @@ const ResultDashboard = () => {
         }
     }
 
+    const handleTogglePublish = async (e, examId, currentStatus) => {
+        e.stopPropagation();
+        try {
+            const token = localStorage.getItem('token');
+            await axios.patch(`${BASE_URL}/api/exam/${examId}/toggle-publish`, {
+                is_published: !currentStatus
+            }, {
+                headers: { Authorization: `Bearer ${token}` }
+            });
+            toast.success(!currentStatus ? "Results Published to Students!" : "Results Hidden from Students");
+            fetchExams();
+        } catch (error) {
+            console.error(error);
+            toast.error("Failed to update status");
+        }
+    };
+
     const fetchClassSections = async () => {
         try {
             const token = localStorage.getItem('token');
-            const response = await axios.get(`${API_ENDPOINTS.PRINCIPAL}/student/list`, {
+            const response = await axios.get(`${profileEndpoint}/student/list`, {
                 headers: { Authorization: `Bearer ${token}` }
             });
 
@@ -175,7 +212,7 @@ const ResultDashboard = () => {
                 manual_stats: {}
             };
 
-            await axios.post('http://localhost:5000/api/exam/create', payload, {
+            await axios.post(`${BASE_URL}/api/exam/create`, payload, {
                 headers: { Authorization: `Bearer ${token}` }
             });
 
@@ -196,7 +233,28 @@ const ResultDashboard = () => {
     return (
         <div className={`result-dashboard theme-${theme}`}>
             <div className="rd-header">
-                <h2>Result Management</h2>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '20px' }}>
+                    <button 
+                        className="btn-back-main" 
+                        onClick={() => navigate(basePath)}
+                        title="Back to Dashboard"
+                    >
+                        <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                            <line x1="19" y1="12" x2="5" y2="12" />
+                            <polyline points="12 19 5 12 12 5" />
+                        </svg>
+                    </button>
+                    <h2>Result Management</h2>
+                    <button 
+                        className={`btn-filter-toggle ${showFilters ? 'active' : ''}`}
+                        onClick={() => setShowFilters(!showFilters)}
+                        title="Filter Exams"
+                    >
+                        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                            <polygon points="22 3 2 3 10 12.46 10 19 14 21 14 12.46 22 3"></polygon>
+                        </svg>
+                    </button>
+                </div>
                 <button
                     className="btn-create-exam"
                     onClick={() => { setShowModal(true); setStep(1); }}
@@ -205,21 +263,68 @@ const ResultDashboard = () => {
                 </button>
             </div>
 
+            {showFilters && (
+                <div className="rd-filter-bar animate-slide-down">
+                    <div className="filter-group">
+                        <label>Exam Name</label>
+                        <input 
+                            type="text" 
+                            placeholder="Search exam..." 
+                            value={filterValues.name}
+                            onChange={(e) => setFilterValues({...filterValues, name: e.target.value})}
+                        />
+                    </div>
+                    <div className="filter-group">
+                        <label>Class</label>
+                        <select 
+                            value={filterValues.class_name}
+                            onChange={(e) => setFilterValues({...filterValues, class_name: e.target.value})}
+                        >
+                            <option value="">All Classes</option>
+                            {classes.map(c => <option key={c} value={c}>Class {c}</option>)}
+                        </select>
+                    </div>
+                    <div className="filter-group">
+                        <label>Section</label>
+                        <input 
+                            type="text" 
+                            placeholder="e.g. A" 
+                            value={filterValues.section}
+                            onChange={(e) => setFilterValues({...filterValues, section: e.target.value})}
+                        />
+                    </div>
+                    <button className="btn-clear-filters" onClick={() => setFilterValues({name: '', class_name: '', section: ''})}>
+                        Clear
+                    </button>
+                </div>
+            )}
+
             {loading ? (
                 <div className="loading-spinner">Loading Exams...</div>
             ) : (
                 <div className="exams-grid">
-                    {exams.length === 0 ? (
+                    {filteredExams.length === 0 ? (
                         <div className="no-exams">
-                            <p>No Marksheets created yet.</p>
-                            <p>Click "Create Marksheet Blueprint" to start.</p>
+                            <p>{exams.length === 0 ? 'No Marksheets created yet.' : 'No exams match your filters.'}</p>
+                            {exams.length === 0 && <p>Click "Create Marksheet Blueprint" to start.</p>}
                         </div>
                     ) : (
-                        exams.map(exam => (
-                            <div key={exam.id} className="exam-card" onClick={() => navigate(`/dashboard/results/${exam.id}`)}>
+                        filteredExams.map(exam => (
+                            <div key={exam.id} className="exam-card" onClick={() => navigate(`${basePath}/results/${exam.id}`)}>
                                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
                                     <div className="exam-card-icon">📄</div>
                                     <div className="card-top-actions">
+                                        <div className="publish-toggle-wrap" onClick={e => e.stopPropagation()}>
+                                            <span className="publish-status-label">{exam.is_published ? 'Visible' : 'Hidden'}</span>
+                                            <label className="premium-switch">
+                                                <input 
+                                                    type="checkbox" 
+                                                    checked={exam.is_published} 
+                                                    onChange={(e) => handleTogglePublish(e, exam.id, exam.is_published)}
+                                                />
+                                                <span className="slider round"></span>
+                                            </label>
+                                        </div>
                                         <button
                                             onClick={(e) => deleteExam(e, exam.id)}
                                             className="btn-delete-card"

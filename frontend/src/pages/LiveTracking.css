@@ -1,0 +1,436 @@
+.live-tracking-page {
+    padding: 24px;
+    height: 100%;
+    max-width: 900px;
+    margin: 0 auto;
+}
+
+.tracking-top-nav {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 24px;
+}
+
+.top-nav-left {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+}
+
+.top-nav-title {
+    margin: 0;
+    font-size: 20px;
+    font-weight: 800;
+    color: #111827;
+    letter-spacing: -0.5px;
+}
+
+.back-btn-minimal {
+    background: none;
+    border: none;
+    padding: 8px;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: transform 0.2s ease;
+    color: #000000;
+}
+
+.back-btn-minimal:hover {
+    transform: translateX(-3px);
+}
+
+.date-picker-premium {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    background-color: white;
+    border: 2px solid #e5e7eb;
+    padding: 8px 16px;
+    border-radius: 10px;
+    color: #374151;
+}
+
+.date-picker-premium input {
+    border: none;
+    font-size: 14px;
+    font-weight: 700;
+    color: #111827;
+    outline: none;
+    cursor: pointer;
+    background: transparent;
+}
+
+/* Unified Control Panel */
+.tracking-control-panel {
+    background-color: #ffffff;
+    border-radius: 16px;
+    border: 2px solid #e5e7eb;
+    margin-bottom: 32px;
+    overflow: hidden;
+    box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.05);
+}
+
+.route-info-bar {
+    padding: 20px 24px;
+    background-color: #f9fafb;
+    border-bottom: 1px solid #e5e7eb;
+    display: flex;
+    align-items: center;
+    gap: 16px;
+}
+
+.status-badge-chip {
+    font-size: 10px;
+    font-weight: 900;
+    padding: 4px 10px;
+    border-radius: 6px;
+    letter-spacing: 1px;
+}
+
+.status-badge-chip.pending {
+    background-color: #f1f5f9;
+    color: #64748b;
+}
+
+.status-badge-chip.started {
+    background-color: #ecfdf5;
+    color: #10b981;
+    border: 1px solid #10b981;
+    animation: pulse 2s infinite;
+}
+
+.status-badge-chip.completed {
+    background-color: #f8fafc;
+    color: #0891b2;
+    border: 1px solid #0891b2;
+}
+
+.bus-info-inline {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+}
+
+.bus-info-inline h1 {
+    margin: 0;
+    font-size: 20px;
+    font-weight: 800;
+    color: #111827;
+}
+
+.route-separator {
+    color: #cbd5e1;
+    font-weight: 800;
+}
+
+.bus-info-inline p {
+    margin: 0;
+    font-size: 14px;
+    font-weight: 600;
+    color: #6b7280;
+}
+
+.share-manifest-btn {
+    margin-left: auto;
+    background-color: white;
+    border: 1px solid #e2e8f0;
+    padding: 8px;
+    border-radius: 10px;
+    color: #0891b2;
+    cursor: pointer;
+    display: flex;
+    transition: all 0.2s;
+}
+
+.share-manifest-btn:hover {
+    background-color: #ecfeff;
+    border-color: #0891b2;
+    transform: translateY(-2px);
+}
+
+/* Modern Tabs */
+.tracking-tabs-container {
+    display: flex;
+    padding: 12px;
+    gap: 12px;
+    border-bottom: 1px solid #f1f5f9;
+}
+
+.modern-tab {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    padding: 16px;
+    border: 2px solid #f1f5f9;
+    background-color: #f8fafc;
+    border-radius: 12px;
+    cursor: pointer;
+    transition: all 0.2s;
+    text-align: left;
+}
+
+.modern-tab.active {
+    background-color: #ecfeff;
+    border-color: #0891b2;
+}
+
+.tab-main {
+    font-size: 16px;
+    font-weight: 800;
+    color: #1e293b;
+    margin-bottom: 2px;
+}
+
+.tab-desc {
+    font-size: 12px;
+    font-weight: 600;
+    color: #64748b;
+}
+
+.modern-tab.active .tab-main {
+    color: #0891b2;
+}
+
+/* Stops List - Unified */
+.stops-live-list {
+    display: flex;
+    flex-direction: column;
+    padding: 12px;
+    gap: 8px;
+}
+
+.live-stop-card {
+    background-color: white;
+    border: 1px solid #f1f5f9;
+    border-radius: 10px;
+    overflow: hidden;
+    transition: all 0.2s;
+}
+
+.live-stop-card.active-stop {
+    border-color: #0891b2;
+    border-left: 4px solid #0891b2;
+    background-color: #ecfeff30;
+}
+
+.stop-card-header {
+    padding: 12px 16px;
+    display: flex;
+    align-items: center;
+    gap: 16px;
+    cursor: pointer;
+}
+
+.stop-number-badge {
+    width: 28px;
+    height: 28px;
+    background-color: #f1f5f9;
+    color: #64748b;
+    border-radius: 6px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-weight: 800;
+}
+
+.expanded .stop-number-badge {
+    background-color: #0891b2;
+    color: white;
+}
+
+.stop-name-group h3 {
+    margin: 0;
+    font-size: 15px;
+    font-weight: 800;
+    color: #1e293b;
+}
+
+.stop-name-group p {
+    margin: 0;
+    font-size: 11px;
+    font-weight: 600;
+    color: #94a3b8;
+}
+
+.stop-meta-line {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin-top: 2px;
+}
+
+.student-count-pill {
+    font-size: 10px;
+    font-weight: 800;
+    color: #64748b;
+    background-color: #f1f5f9;
+    padding: 2px 8px;
+    border-radius: 100px;
+}
+
+.stop-time-tag {
+    font-size: 10px;
+    font-weight: 800;
+    color: #10b981;
+    background-color: #ecfdf5;
+    padding: 2px 8px;
+    border-radius: 100px;
+}
+
+.live-marker-dot {
+    background-color: #ef4444;
+    color: white;
+    font-size: 9px;
+    font-weight: 900;
+    padding: 2px 8px;
+    border-radius: 100px;
+    animation: blink 1.5s infinite;
+}
+
+@keyframes blink {
+    0% { opacity: 1; }
+    50% { opacity: 0.5; }
+    100% { opacity: 1; }
+}
+
+.expand-chevron {
+    margin-left: auto;
+    color: #cbd5e1;
+}
+
+/* Students Grid */
+.stop-students-grid {
+    padding: 4px 16px 16px 60px;
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(250px, 1fr));
+    gap: 10px;
+}
+
+.live-student-pill {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 8px;
+    background-color: white;
+    border: 1px solid #f1f5f9;
+    border-radius: 8px;
+}
+
+.live-student-pill.boarded {
+    background-color: #f0fdf4;
+    border-color: #bbf7d0;
+}
+
+.live-student-pill img {
+    width: 32px;
+    height: 32px;
+    border-radius: 50%;
+    object-fit: cover;
+}
+
+.pill-meta {
+    flex: 1;
+}
+
+.pill-meta .s-name {
+    margin: 0;
+    font-size: 12px;
+    font-weight: 700;
+    color: #1e293b;
+}
+
+.pill-meta .s-info {
+    margin: 0;
+    font-size: 10px;
+    color: #64748b;
+}
+
+.status-indicator-group {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-end;
+    gap: 2px;
+}
+
+.status-text {
+    font-size: 9px;
+    font-weight: 800;
+    text-transform: uppercase;
+    padding: 3px 6px;
+    border-radius: 4px;
+}
+
+.status-indicator-group.pending .status-text {
+    color: #94a3b8;
+    background-color: #f8fafc;
+}
+
+.status-indicator-group.success .status-text {
+    color: #10b981;
+    background-color: #ecfdf5;
+}
+
+.marked-time {
+    font-size: 9px;
+    font-weight: 700;
+    color: #0891b2;
+}
+
+/* Dark Mode Overrides */
+.theme-dark .status-indicator-group.pending .status-text {
+    background-color: #1f2937;
+    color: #64748b;
+}
+
+.theme-dark .status-indicator-group.success .status-text {
+    background-color: #064e3b30;
+    color: #10b981;
+}
+
+.theme-dark .marked-time {
+    color: #22d3ee;
+}
+
+
+.live-loading {
+    padding: 100px;
+    text-align: center;
+    color: #64748b;
+    font-weight: 700;
+}
+
+.animate-in {
+    animation: fadeIn 0.3s ease-out;
+}
+
+@keyframes fadeIn {
+    from { opacity: 0; transform: translateY(10px); }
+    to { opacity: 1; transform: translateY(0); }
+}
+
+/* Dark Mode Support */
+.theme-dark .live-tracking-page { background-color: #030712; }
+.theme-dark .top-nav-title { color: #ffffff; }
+.theme-dark .back-btn-minimal { color: #ffffff; }
+.theme-dark .date-picker-premium { background-color: #111827; border-color: #374151; color: #9ca3af; }
+.theme-dark .date-picker-premium input { color: #ffffff; }
+.theme-dark .tracking-control-panel { background-color: #111827; border-color: #374151; }
+.theme-dark .route-info-bar { background-color: #1f2937; border-bottom-color: #374151; }
+.theme-dark .bus-info-inline h1 { color: #ffffff; }
+.theme-dark .share-manifest-btn { background-color: #1f2937; border-color: #374151; }
+.theme-dark .modern-tab { background-color: #1f2937; border-color: #374151; }
+.theme-dark .modern-tab.active { background-color: #0891b220; border-color: #0891b2; }
+.theme-dark .tab-main { color: #f1f5f9; }
+.theme-dark .tab-desc { color: #94a3b8; }
+.theme-dark .tracking-tabs-container { border-bottom-color: #1f2937; }
+.theme-dark .live-stop-card { background-color: #030712; border-color: #1f2937; }
+.theme-dark .live-stop-card.active-stop { background-color: #0891b210; border-color: #0891b2; }
+.theme-dark .stop-name-group h3 { color: #f1f5f9; }
+.theme-dark .stop-number-badge { background-color: #1f2937; color: #94a3b8; }
+.theme-dark .live-student-pill { background-color: #111827; border-color: #1f2937; }
+.theme-dark .live-student-pill.boarded { background-color: #064e3b30; border-color: #059669; }
+.theme-dark .pill-meta .s-name { color: #f1f5f9; }
+.theme-dark .status-indicator.pending { background-color: #1f2937; color: #64748b; }

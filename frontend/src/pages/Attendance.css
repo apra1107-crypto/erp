@@ -20,7 +20,9 @@
 
     /* Light Mode */
     --att-card-bg: #ffffff;
-    --att-page-bg: #f5f7fa;
+    --att-page-bg: #fdfdfd; /* Clean white base */
+    --att-nebula-bg: radial-gradient(at 0% 0%, rgba(99, 102, 241, 0.03) 0px, transparent 50%),
+                     radial-gradient(at 100% 100%, rgba(139, 92, 246, 0.03) 0px, transparent 50%);
     --att-border: #e2e8f0;
     --att-text: #0f172a;
     --att-text-muted: #64748b;
@@ -32,7 +34,9 @@
 /* Dark Mode Theme */
 .theme-dark {
     --att-card-bg: #151b2b;
-    --att-page-bg: #0a0e18;
+    --att-page-bg: #020617; /* Much deeper, professional black */
+    --att-nebula-bg: radial-gradient(at 0% 0%, rgba(99, 102, 241, 0.05) 0px, transparent 50%),
+                     radial-gradient(at 100% 100%, rgba(139, 92, 246, 0.05) 0px, transparent 50%);
     --att-border: rgba(255, 255, 255, 0.08);
     --att-text: #f8fafc;
     --att-text-muted: #94a3b8;
@@ -65,22 +69,164 @@
 
 /* Main Layout - Completely Free (No Container) */
 
-/* Header Toolbar - Minimal, Clean - No Container */
-.header-toolbar {
+/* Header Toolbar - Minimal, Clean - Container Free */
+.header-toolbar-free {
     display: flex;
     align-items: center;
-    gap: 1.5rem;
-    margin-bottom: 3rem;
-    padding: 1.5rem;
-    padding-bottom: 0;
+    justify-content: space-between;
+    gap: 2rem;
+    margin-bottom: 2rem;
+    padding: 1rem 1.5rem;
     animation: slideUpFade 0.6s cubic-bezier(0.16, 1, 0.3, 1);
 }
 
-.header-toolbar h1 {
-    font-size: 2rem;
-    font-weight: 700;
+.header-left-side {
+    display: flex;
+    align-items: center;
+    gap: 1rem;
+}
+
+.header-left-side h1 {
+    font-size: 1.8rem;
+    font-weight: 800;
     color: var(--att-text);
     margin: 0;
+    letter-spacing: -0.02em;
+}
+
+.back-btn-minimal {
+    background: transparent;
+    border: none;
+    color: var(--att-text);
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 4px;
+    transition: all 0.2s ease;
+    border-radius: 8px;
+}
+
+.back-btn-minimal:hover {
+    background: var(--att-primary-soft);
+    color: var(--att-primary);
+    transform: translateX(-3px);
+}
+
+.back-btn-minimal svg {
+    width: 24px;
+    height: 24px;
+}
+
+.ist-timer-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.6rem;
+    background: var(--att-primary-soft);
+    padding: 0.4rem 1rem;
+    border-radius: 100px;
+    margin-top: 0.75rem;
+    border: 1.5px solid rgba(59, 130, 246, 0.1);
+}
+
+.ist-timer-badge span {
+    font-size: 0.8rem;
+    font-weight: 600;
+    color: var(--att-primary);
+}
+
+.pulse-dot {
+    width: 8px;
+    height: 8px;
+    background: var(--att-primary);
+    border-radius: 50%;
+    animation: pulse-ring 2s infinite;
+}
+
+@keyframes pulse-ring {
+    0% { transform: scale(0.8); opacity: 0.5; }
+    50% { transform: scale(1.2); opacity: 1; }
+    100% { transform: scale(0.8); opacity: 0.5; }
+}
+
+.premium-date-picker {
+    display: flex;
+    align-items: center;
+    gap: 1.5rem;
+    background: var(--att-page-bg);
+    padding: 0.75rem 1.5rem;
+    border-radius: 18px;
+    border: 1.5px solid var(--att-border);
+    transition: all 0.3s ease;
+}
+
+.premium-date-picker:hover {
+    border-color: var(--att-primary);
+    box-shadow: 0 8px 20px rgba(59, 130, 246, 0.08);
+}
+
+.premium-date-picker-mini {
+    display: flex;
+    align-items: center;
+    background: var(--att-border);
+    padding: 0.5rem 1rem;
+    border-radius: 12px;
+    border: 1px solid var(--att-border);
+    transition: all 0.3s ease;
+}
+
+.premium-date-picker-mini:hover {
+    border-color: var(--att-primary);
+    background: var(--att-card-bg);
+}
+
+.date-labels {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-end;
+    text-align: right;
+}
+
+.current-date-label {
+    font-size: 1rem;
+    font-weight: 800;
+    color: var(--att-text);
+}
+
+.timezone-info {
+    font-size: 0.7rem;
+    font-weight: 700;
+    color: var(--att-text-muted);
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+}
+
+.date-input-wrapper {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+    padding-left: 1.25rem;
+    border-left: 2px solid var(--att-border);
+}
+
+.calendar-icon-vibe {
+    color: var(--att-primary);
+}
+
+.ist-date-input {
+    background: transparent;
+    border: none;
+    font-size: 1.1rem;
+    font-weight: 700;
+    color: var(--att-primary);
+    cursor: pointer;
+    outline: none;
+    font-family: 'Inter', sans-serif;
+}
+
+.ist-date-input::-webkit-calendar-picker-indicator {
+    cursor: pointer;
+    filter: invert(0.5) sepia(1) saturate(5) hue-rotate(200deg);
 }
 
 /* Class Cards Grid - Free Floating, No Container */
@@ -129,7 +275,8 @@
     transition: all 0.35s cubic-bezier(0.175, 0.885, 0.32, 1.275);
     position: relative;
     overflow: hidden;
-    border: none;
+    border: 1.5px solid var(--att-border);
+    background: var(--att-card-bg) !important;
 }
 
 .class-card::before {
@@ -139,107 +286,26 @@
     right: -20%;
     width: 250px;
     height: 250px;
-    background: radial-gradient(circle, rgba(255, 255, 255, 0.15) 0%, transparent 70%);
-    opacity: 0;
+    background: radial-gradient(circle, var(--att-primary) 0%, transparent 70%);
+    opacity: 0.05;
     z-index: 0;
-    transition: opacity 0.4s ease;
 }
 
 .class-card:hover {
-    transform: translateY(-12px);
-    box-shadow: 0 20px 40px rgba(0, 0, 0, 0.15);
+    transform: translateY(-8px);
+    box-shadow: 0 20px 40px rgba(0, 0, 0, 0.1);
+    border-color: var(--att-primary);
 }
 
-.class-card:hover::before {
-    opacity: 1;
-}
+/* Color accents on top border */
+.class-card.color-0 { border-top: 5px solid #3b82f6 !important; }
+.class-card.color-1 { border-top: 5px solid #e91e63 !important; }
+.class-card.color-2 { border-top: 5px solid #1976d2 !important; }
+.class-card.color-3 { border-top: 5px solid #00897b !important; }
+.class-card.color-4 { border-top: 5px solid #ff6f00 !important; }
+.class-card.color-5 { border-top: 5px solid #7e57c2 !important; }
 
-/* Vibrant Dark Color Schemes for Each Card */
-.class-card.color-0 {
-    background: linear-gradient(135deg, #1e3c72 0%, #2a5298 100%);
-}
-
-.class-card.color-0 .class-header h2,
-.class-card.color-0 .section-name {
-    color: white;
-}
-
-.class-card.color-0 .student-count {
-    background: rgba(255, 255, 255, 0.25);
-    color: white;
-}
-
-.class-card.color-1 {
-    background: linear-gradient(135deg, #8B0043 0%, #E91E63 100%);
-}
-
-.class-card.color-1 .class-header h2,
-.class-card.color-1 .section-name {
-    color: white;
-}
-
-.class-card.color-1 .student-count {
-    background: rgba(255, 255, 255, 0.25);
-    color: white;
-}
-
-.class-card.color-2 {
-    background: linear-gradient(135deg, #0D47A1 0%, #1976D2 100%);
-}
-
-.class-card.color-2 .class-header h2,
-.class-card.color-2 .section-name {
-    color: white;
-}
-
-.class-card.color-2 .student-count {
-    background: rgba(255, 255, 255, 0.25);
-    color: white;
-}
-
-.class-card.color-3 {
-    background: linear-gradient(135deg, #00695C 0%, #00897B 100%);
-}
-
-.class-card.color-3 .class-header h2,
-.class-card.color-3 .section-name {
-    color: white;
-}
-
-.class-card.color-3 .student-count {
-    background: rgba(255, 255, 255, 0.25);
-    color: white;
-}
-
-.class-card.color-4 {
-    background: linear-gradient(135deg, #E65100 0%, #FF6F00 100%);
-}
-
-.class-card.color-4 .class-header h2,
-.class-card.color-4 .section-name {
-    color: white;
-}
-
-.class-card.color-4 .student-count {
-    background: rgba(255, 255, 255, 0.25);
-    color: white;
-}
-
-.class-card.color-5 {
-    background: linear-gradient(135deg, #512DA8 0%, #7E57C2 100%);
-}
-
-.class-card.color-5 .class-header h2,
-.class-card.color-5 .section-name {
-    color: white;
-}
-
-.class-card.color-5 .student-count {
-    background: rgba(255, 255, 255, 0.25);
-    color: white;
-}
-
-
+/* Force visible text colors */
 .class-header {
     position: relative;
     z-index: 2;
@@ -249,39 +315,26 @@
     margin-bottom: 1.2rem;
 }
 
-.class-icon {
-    width: 40px;
-    height: 40px;
-    background: rgba(255, 255, 255, 0.25);
-    border-radius: 10px;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    color: white;
-    font-size: 1.2rem;
-    font-weight: 700;
-    flex-shrink: 0;
-    transition: transform 0.3s ease;
-    backdrop-filter: blur(10px);
-}
-
-.class-card:hover .class-icon {
-    transform: scale(1.1);
-}
-
 .class-header h2 {
     font-size: 1.4rem;
-    font-weight: 700;
+    font-weight: 800;
     margin: 0;
+    color: var(--att-text) !important;
 }
 
-/* Sections List - Free Floating Text */
-.sections-list {
-    display: flex;
-    flex-direction: column;
-    gap: 0.7rem;
-    position: relative;
-    z-index: 2;
+.sec-name {
+    font-size: 1rem;
+    font-weight: 700;
+    color: var(--att-text) !important;
+}
+
+.sec-count {
+    font-size: 0.85rem;
+    font-weight: 700;
+    padding: 0.4rem 0.8rem;
+    background: var(--att-primary-soft) !important;
+    color: var(--att-primary) !important;
+    border-radius: 8px;
 }
 
 .section-item {
@@ -289,12 +342,69 @@
     justify-content: space-between;
     align-items: center;
     padding: 0.8rem 1rem;
+    background: var(--att-page-bg) !important;
+    border: 1px solid var(--att-border) !important;
+    border-radius: 12px;
+}
+
+.theme-dark .section-item {
+    background: rgba(255, 255, 255, 0.03) !important;
+}
+
+.section-item:hover {
+    background: var(--att-card-bg) !important;
+    border-color: var(--att-primary) !important;
+    transform: translateX(6px);
+    box-shadow: 0 8px 20px rgba(59, 130, 246, 0.1);
+}
+
+.section-item.marked {
+    border-color: var(--att-success) !important;
+    background: var(--att-success-soft) !important;
+}
+
+.marked-check {
+    width: 20px;
+    height: 20px;
+    background: var(--att-success);
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: white !important;
+    box-shadow: 0 2px 6px rgba(16, 185, 129, 0.3);
+}
+
+.class-icon {
+    width: 40px;
+    height: 40px;
+    background: var(--att-primary-soft);
+    color: var(--att-primary);
+    border-radius: 10px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 1.2rem;
+    font-weight: 800;
+}
+
+.theme-dark .class-icon {
+    background: rgba(255, 255, 255, 0.05);
+    color: white;
+}
+    align-items: center;
+    padding: 0.8rem 1rem;
     background: rgba(255, 255, 255, 0.12);
+    border: 1px solid rgba(255, 255, 255, 0.15);
     border-radius: 10px;
     cursor: pointer;
     transition: all 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275);
-    border: 1px solid rgba(255, 255, 255, 0.15);
     backdrop-filter: blur(10px);
+}
+
+.theme-dark .section-item {
+    background: rgba(255, 255, 255, 0.05);
+    border-color: rgba(255, 255, 255, 0.1);
 }
 
 .section-item:hover {
@@ -304,12 +414,44 @@
     box-shadow: 0 8px 20px rgba(0, 0, 0, 0.1);
 }
 
+.theme-dark .section-item:hover {
+    background: rgba(255, 255, 255, 0.08);
+}
+
+.section-item.marked {
+    border-color: var(--att-success) !important;
+    background: rgba(16, 185, 129, 0.1) !important;
+}
+
+.theme-dark .section-item.marked {
+    background: rgba(16, 185, 129, 0.15) !important;
+}
+
+.marked-check {
+    width: 20px;
+    height: 20px;
+    background: var(--att-success);
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: white;
+    box-shadow: 0 2px 6px rgba(16, 185, 129, 0.3);
+    animation: slideUpFade 0.3s ease;
+}
+
+.marked-check svg {
+    width: 12px;
+    height: 12px;
+}
+
 .sec-name {
     font-size: 1rem;
-    font-weight: 600;
+    font-weight: 700;
     position: relative;
     z-index: 1;
     letter-spacing: 0.3px;
+    color: inherit;
 }
 
 .sec-count {
@@ -2238,4 +2380,202 @@
     .student-count {
         font-size: 1rem;
     }
+}
+/* Free Flow Stats Cards - Vibrant Aesthetic Mesh Edition */
+.att-stat-card {
+    border-radius: 24px;
+    padding: 1.4rem 1.6rem;
+    display: flex;
+    align-items: center;
+    gap: 1.25rem;
+    transition: all 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+    color: white;
+    cursor: pointer;
+    position: relative;
+    overflow: hidden;
+    border: 1px solid rgba(255, 255, 255, 0.2);
+}
+
+.att-stat-card:hover {
+    transform: translateY(-8px) scale(1.03);
+    box-shadow: 0 25px 50px rgba(0, 0, 0, 0.15);
+}
+
+/* Stunning 3-Color Candy Mesh Blends - No Black Edition */
+.att-stat-card.enrollment { 
+    background: radial-gradient(at 0% 0%, #ff0080 0px, transparent 50%), /* Hot Pink */
+                radial-gradient(at 100% 0%, #7928ca 0px, transparent 50%), /* Purple */
+                radial-gradient(at 100% 100%, #0070f3 0px, transparent 50%), /* Electric Blue */
+                #2d3436; /* Midnight Blue Base instead of black */
+}
+
+.att-stat-card.present { 
+    background: radial-gradient(at 0% 0%, #00dfd8 0px, transparent 50%), /* Cyan */
+                radial-gradient(at 100% 0%, #007cf0 0px, transparent 50%), /* Blue */
+                radial-gradient(at 100% 100%, #ffffff 0px, transparent 50%), /* Pure White Glow */
+                #0052d4;
+}
+
+.att-stat-card.absent { 
+    background: radial-gradient(at 0% 0%, #ff4d4d 0px, transparent 50%), /* Red */
+                radial-gradient(at 100% 0%, #f9cb28 0px, transparent 50%), /* Yellow */
+                radial-gradient(at 100% 100%, #ff0080 0px, transparent 50%), /* Pink */
+                #c0392b; /* Dark Crimson Base instead of black */
+}
+
+.att-stat-card.unmarked { 
+    background: radial-gradient(at 0% 0%, #ffffff 0px, transparent 50%), /* White */
+                radial-gradient(at 100% 0%, #00dfd8 0px, transparent 50%), /* Cyan */
+                radial-gradient(at 100% 100%, #7928ca 0px, transparent 50%), /* Purple */
+                #6c5ce7; /* Royal Purple Base instead of black */
+}
+
+.stat-icon-bg {
+    width: 46px;
+    height: 46px;
+    background: rgba(255, 255, 255, 0.25);
+    backdrop-filter: blur(12px);
+    -webkit-backdrop-filter: blur(12px);
+    border-radius: 14px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+    border: 1px solid rgba(255, 255, 255, 0.3);
+    box-shadow: 0 4px 15px rgba(0, 0, 0, 0.1);
+}
+
+.att-stat-card .stat-label {
+    font-size: 0.75rem;
+    font-weight: 900;
+    text-transform: uppercase;
+    letter-spacing: 0.12em;
+    color: #ffffff !important; /* Forced pure white */
+    text-shadow: 0 2px 4px rgba(0, 0, 0, 0.4);
+    margin-bottom: 2px;
+}
+
+.stat-value {
+    font-size: 1.8rem;
+    font-weight: 900;
+    margin: 0;
+    line-height: 1;
+    letter-spacing: -0.02em;
+    color: #ffffff;
+    text-shadow: 0 4px 8px rgba(0, 0, 0, 0.3);
+}
+
+/* Global Attendance Page Background Fix */
+.attendance-content-area, .attendance-main-content, .take-attendance-header-flow, .attendance-top-header {
+    background-color: var(--att-page-bg) !important;
+    background-image: var(--att-nebula-bg) !important;
+    background-attachment: fixed !important;
+}
+
+/* Attendance Page Structural Modernization */
+.attendance-page-wrapper {
+    min-height: 100vh;
+    width: 100%;
+    background-color: var(--att-page-bg);
+    background-image: var(--att-nebula-bg);
+    background-attachment: fixed;
+    padding: 0 2rem 2rem 1.5rem; /* Reduced left padding from 2.5rem to 1.5rem */
+}
+
+.take-attendance-header-modern {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 1rem 0 2.5rem 0;
+    background: transparent !important;
+}
+
+.attendance-stats-shelf {
+    padding: 2rem 5%; /* Fluid padding */
+    background: rgba(255, 255, 255, 0.03);
+    backdrop-filter: blur(10px);
+    border-radius: 24px;
+    border: 1.5px solid rgba(255, 255, 255, 0.1);
+    margin-bottom: 3rem;
+    display: flex;
+    justify-content: center;
+    box-shadow: 0 15px 35px rgba(0, 0, 0, 0.03);
+    width: 100%;
+}
+
+.theme-dark .attendance-stats-shelf {
+    background: rgba(0, 0, 0, 0.2);
+    border-color: rgba(255, 255, 255, 0.05);
+}
+
+.attendance-stats-shelf > div {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)) !important; /* Fully responsive columns */
+    gap: 1.25rem;
+    width: 100%;
+    max-width: 1400px;
+}
+
+/* Responsive Split Layout */
+.attendance-main-split {
+    display: flex;
+    gap: 2rem;
+    padding: 2rem 0;
+    align-items: flex-start;
+    flex-wrap: wrap; /* Wraps on smaller screens */
+}
+
+.attendance-table-side {
+    flex: 1.5;
+    min-width: 350px;
+}
+
+.attendance-logs-side {
+    flex: 1;
+    min-width: 300px;
+}
+
+@media (max-width: 1100px) {
+    .attendance-main-split {
+        flex-direction: column;
+    }
+    .attendance-table-side, .attendance-logs-side {
+        width: 100%;
+    }
+}
+
+/* High-Visibility Aesthetic Background Overrides */
+.principal-dashboard:has(.attendance-page-wrapper) {
+    background-color: var(--att-page-bg) !important;
+    background-image: var(--att-nebula-bg) !important;
+    background-attachment: fixed !important;
+}
+
+.dashboard-view-content:has(.attendance-page-wrapper) {
+    background: transparent !important;
+}
+
+/* Intensified Nebula Colors for immediate visibility */
+:root {
+    --att-nebula-bg: 
+        radial-gradient(at 0% 0%, rgba(99, 102, 241, 0.3) 0px, transparent 50%), 
+        radial-gradient(at 100% 100%, rgba(236, 72, 153, 0.3) 0px, transparent 50%),
+        radial-gradient(at 100% 0%, rgba(139, 92, 246, 0.2) 0px, transparent 50%);
+}
+
+.theme-dark {
+    --att-nebula-bg: 
+        radial-gradient(at 0% 0%, rgba(99, 102, 241, 0.25) 0px, transparent 50%), 
+        radial-gradient(at 100% 100%, rgba(236, 72, 153, 0.25) 0px, transparent 50%);
+}
+
+/* Aesthetic Master Overrides */
+#root, .app-container {
+    background: transparent !important;
+}
+
+body:has(.attendance-page-wrapper) {
+    background-color: var(--att-page-bg) !important;
+    background-image: var(--att-nebula-bg) !important;
+    background-attachment: fixed !important;
 }

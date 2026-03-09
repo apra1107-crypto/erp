@@ -5,7 +5,7 @@ import { toast } from 'react-toastify';
 import { API_ENDPOINTS } from '../config';
 import './AuthForms.css';
 
-const InstituteLogin = ({ onBack, onClose }) => {
+const InstituteLogin = ({ onBack, onClose, isSplitView }) => {
     const navigate = useNavigate();
     const [loading, setLoading] = useState(false);
     const [formData, setFormData] = useState({
@@ -58,22 +58,36 @@ const InstituteLogin = ({ onBack, onClose }) => {
 
     return (
         <div className="auth-step-container">
-            <button className="step-back-btn" onClick={onBack}>
-                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
-                    <path d="M19 12H5M12 19l-7-7 7-7" />
-                </svg>
-                Back to roles
-            </button>
-
-            <div className="auth-view-header">
-                <div className="auth-view-icon blue">
-                    <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
-                        <path d="M3 21h18M3 7l9-4 9 4M5 21V10M19 21V10M9 21v-6h6v6" />
-                    </svg>
+            {isSplitView && (
+                <div className="split-view-header">
+                    <div className="auth-view-icon blue">
+                        <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
+                            <path d="M3 21h18M3 7l9-4 9 4M5 21V10M19 21V10M9 21v-6h6v6" />
+                        </svg>
+                    </div>
+                    <h2 className="auth-view-title">Institute Portal</h2>
+                    <p className="auth-view-subtitle">Management Dashboard Login</p>
                 </div>
-                <h2 className="auth-view-title">Institute Portal</h2>
-                <p className="auth-view-subtitle">Enter your credentials to manage your institute</p>
-            </div>
+            )}
+            {!isSplitView && (
+                <>
+                    <button className="step-back-btn" onClick={onBack}>
+                        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
+                            <path d="M19 12H5M12 19l-7-7 7-7" />
+                        </svg>
+                        Back to roles
+                    </button>
+                    <div className="auth-view-header">
+                        <div className="auth-view-icon blue">
+                            <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
+                                <path d="M3 21h18M3 7l9-4 9 4M5 21V10M19 21V10M9 21v-6h6v6" />
+                            </svg>
+                        </div>
+                        <h2 className="auth-view-title">Institute Portal</h2>
+                        <p className="auth-view-subtitle">Enter your credentials to manage your institute</p>
+                    </div>
+                </>
+            )}
 
             <form className="auth-view-form" onSubmit={handleLogin}>
                 <div className="auth-input-group">

@@ -1,4 +1,6 @@
 import pool from '../config/db.js';
+import { broadcastInstituteNotification } from '../utils/pushNotification.js';
+import { emitToPrincipal, emitToTeacher, emitToAllStudents } from '../utils/socket.js';
 
 // Add Event
 export const addEvent = async (req, res) => {
@@ -18,7 +20,28 @@ export const addEvent = async (req, res) => {
             [instituteId, title, description, event_date, event_type || 'event', sessionId]
         );
 
-        res.status(201).json({ message: 'Event added successfully', event: result.rows[0] });
+        const event = result.rows[0];
+
+        // Immediate Notification for the new event
+        const notificationTitle = 'New Academic Event Added';
+        const notificationBody = `${title} scheduled for ${new Date(event_date).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' })}`;
+        const data = { type: 'calendar_event', eventId: event.id };
+
+        // 1. Send Push Notifications
+        broadcastInstituteNotification(instituteId, notificationTitle, notificationBody, data);
+
+        // 2. Emit Socket Events for real-time banner
+        const socketData = { 
+            topic: `Calendar: ${title}`, 
+            creator_name: req.user.name || 'Staff', 
+            isUpdate: false,
+            type: 'notice'
+        };
+        emitToPrincipal(instituteId, 'new_notice', socketData);
+        emitToTeacher(instituteId, 'new_notice', socketData);
+        emitToAllStudents(instituteId, 'new_notice', socketData);
+
+        res.status(201).json({ message: 'Event added successfully', event: event });
     } catch (error) {
         console.error('Add event error:', error);
         res.status(500).json({ message: 'Server error' });

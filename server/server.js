@@ -2,6 +2,8 @@ import express from 'express';
 import cors from 'cors';
 import dotenv from 'dotenv';
 import axios from 'axios';
+import fs from 'fs';
+import path from 'path';
 import { createServer } from 'http';
 import pool from './config/db.js';
 import { initSocket } from './utils/socket.js';
@@ -18,7 +20,6 @@ import attendanceRoutes from './routes/attendanceRoutes.js';
 import absentRequestRoutes from './routes/absentRequestRoutes.js';
 import adminRoutes from './routes/adminRoutes.js';
 import subscriptionRoutes from './routes/subscription.js';
-import feesRoutes from './routes/feesRoutes.js';
 import routineRoutes from './routes/routineRoutes.js';
 import admitCardRoutes from './routes/admitCardRoutes.js';
 import examRoutes from './routes/examRoutes.js';
@@ -30,6 +31,9 @@ import homeworkRoutes from './routes/homeworkRoutes.js';
 import noticeRoutes from './routes/noticeRoutes.js';
 import calendarRoutes from './routes/calendarRoutes.js';
 import appStatsRoutes from './routes/appStatsRoutes.js';
+import razorpayRoutes from './routes/razorpayRoutes.js';
+import transportRoutes from './routes/transportRoutes.js';
+import oneTimeFeeRoutes from './routes/oneTimeFeeRoutes.js';
 
 // Controller/Middleware Imports
 import { createNotice, getNotices, updateNotice, deleteNotice } from './controllers/noticeController.js';
@@ -47,21 +51,42 @@ app.use(express.urlencoded({ extended: true }));
 
 // Request Logger
 app.use((req, res, next) => {
-  console.log(`[${new Date().toISOString()}] ${req.method} ${req.url}`);
+  const log = `[${new Date().toISOString()}] ${req.method} ${req.url}\n`;
+  console.log(log.trim());
+  try {
+    fs.appendFileSync(path.join(process.cwd(), 'all_requests.log'), log);
+  } catch (err) {
+    // Ignore log errors
+  }
   next();
 });
 
 // Test database connection
-pool.query('SELECT NOW()', (err, res) => {
+pool.query('SELECT NOW()', async (err, res) => {
   if (err) {
     console.error('❌ Database connection failed:', err);
   } else {
     console.log('✅ Database connected at:', res.rows[0].now);
+    
+    // Auto-Migration: Ensure admit_cards has is_published column
+    try {
+        await pool.query(`
+            ALTER TABLE admit_cards 
+            ADD COLUMN IF NOT EXISTS is_published BOOLEAN DEFAULT false;
+        `);
+        console.log('✅ Schema Sync: is_published column verified in admit_cards');
+    } catch (migErr) {
+        console.error('❌ Schema Sync Failed:', migErr.message);
+    }
   }
 });
 
 // Routes
+app.use('/api/auth/student', studentAuthRoutes);
+app.use('/api/auth/teacher', teacherAuthRoutes);
+app.use('/api/auth/admin', adminAuthRoutes);
 app.use('/api/auth', authRoutes);
+
 app.get('/api/debug/dashboard', protect, async (req, res) => {
     try {
         const instituteId = req.user.institute_id || req.user.id;
@@ -91,16 +116,12 @@ app.use('/api/attendance', attendanceRoutes);
 app.use('/api/principal/attendance', attendanceRoutes);
 app.use('/api/teacher/attendance', attendanceRoutes);
 app.use('/api/principal', principalRoutes);
-app.use('/api/auth/student', studentAuthRoutes);
-app.use('/api/auth/teacher', teacherAuthRoutes);
-app.use('/api/auth/admin', adminAuthRoutes);
 app.use('/api/admin', adminRoutes);
 app.use('/api/teacher', teacherRoutes);
 app.use('/api/absent-request', absentRequestRoutes);
 app.use('/api/subscription', subscriptionRoutes);
-app.use('/api/fees', feesRoutes);
 app.use('/api/routine', routineRoutes);
-app.use('/api/admit-cards', admitCardRoutes);
+app.use('/api/manage-admit-cards', admitCardRoutes);
 app.use('/api/exam', examRoutes);
 app.use('/api/academic-sessions', academicSessionRoutes);
 app.use('/api/promotion', promotionRoutes);
@@ -109,6 +130,9 @@ app.use('/api/teacher-attendance', teacherAttendanceRoutes);
 app.use('/api/homework', homeworkRoutes);
 app.use('/api/calendar', calendarRoutes);
 app.use('/api/stats', appStatsRoutes);
+app.use('/api/razorpay', razorpayRoutes);
+app.use('/api/transport', transportRoutes);
+app.use('/api/one-time-fees', oneTimeFeeRoutes);
 
 // Notice Routes (Manual definition to keep specific controllers)
 const noticeRouter = express.Router();
@@ -195,8 +219,14 @@ app.get('/api/proxy-image', async (req, res) => {
 // 404 & Error handlers
 app.use((req, res) => res.status(404).json({ message: 'Route not found' }));
 app.use((err, req, res, next) => {
-  console.error(err.stack);
-  res.status(500).json({ message: 'Something went wrong!' });
+  const errorLog = `!!! GLOBAL ERROR !!!\nMethod: ${req.method} URL: ${req.url}\n${err.stack}\n`;
+  console.error(errorLog);
+  try {
+    fs.appendFileSync(path.join(process.cwd(), 'all_requests.log'), errorLog);
+  } catch (fsErr) {
+    // Ignore
+  }
+  res.status(500).json({ message: 'Something went wrong!', error: err.message });
 });
 
 // Start server

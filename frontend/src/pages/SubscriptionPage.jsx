@@ -5,9 +5,9 @@ import { API_ENDPOINTS } from '../config';
 import socket, { joinInstituteRoom } from '../socket';
 import './SubscriptionPage.css';
 
-const SubscriptionPage = () => {
+const SubscriptionPage = ({ onRefreshStatus }) => {
     const navigate = useNavigate();
-    const [months, setMonths] = useState(1);
+    const [minutes, setMinutes] = useState(1);
     const [planPrice, setPlanPrice] = useState(499);
     const [loading, setLoading] = useState(true);
     const [subscriptionStatus, setSubscriptionStatus] = useState(null);
@@ -96,8 +96,8 @@ const SubscriptionPage = () => {
         }
     };
 
-    const handleIncrement = () => setMonths(prev => prev + 1);
-    const handleDecrement = () => setMonths(prev => Math.max(1, prev - 1));
+    const handleIncrement = () => setMinutes(prev => prev + 1);
+    const handleDecrement = () => setMinutes(prev => Math.max(1, prev - 1));
 
     const loadRazorpayScript = () => {
         return new Promise((resolve) => {
@@ -126,8 +126,8 @@ const SubscriptionPage = () => {
             const orderResponse = await axios.post(
                 `${API_ENDPOINTS.SUBSCRIPTION}/${instituteId}/razorpay/order`,
                 {
-                    months: months,
-                    amount: months * planPrice
+                    months: minutes,
+                    amount: minutes * planPrice
                 },
                 {
                     headers: { Authorization: `Bearer ${token}` }
@@ -147,7 +147,7 @@ const SubscriptionPage = () => {
                 amount: order.amount,
                 currency: order.currency,
                 name: "Klassin ERP",
-                description: `Subscription Renewal for ${months} months`,
+                description: `Subscription Renewal for ${minutes} minutes`,
                 order_id: order.id,
                 handler: async function (response) {
                     try {
@@ -159,7 +159,7 @@ const SubscriptionPage = () => {
                                 razorpay_payment_id: response.razorpay_payment_id,
                                 razorpay_signature: response.razorpay_signature,
                                 instituteId,
-                                months,
+                                months: minutes,
                                 amount: order.amount
                             },
                             {
@@ -169,6 +169,7 @@ const SubscriptionPage = () => {
 
                         if (verifyRes.data.success) {
                             alert("Payment Successful! Subscription renewed.");
+                            if (onRefreshStatus) await onRefreshStatus();
                             navigate('/dashboard');
                         } else {
                             alert("Payment verification failed. Please contact support.");
@@ -231,11 +232,14 @@ const SubscriptionPage = () => {
                                         subscriptionStatus?.status === 'disabled' ? 'Disabled' : 'Expired'}
                             </span>
                         </div>
-                        <h2 className="plan-title">Premium<br />Institute</h2>
+                        <h2 className="plan-title">
+                            {subscriptionStatus?.status === 'active' || subscriptionStatus?.status === 'grant' 
+                                ? 'Premium' : 'Standard'}<br />Institute
+                        </h2>
                         <div className="plan-price-row">
                             <span className="currency">₹</span>
-                            <span className="amount">{parseFloat(planPrice || 499).toLocaleString('en-IN')}</span>
-                            <span className="period">/mo</span>
+                            <span className="amount">{Math.round(parseFloat(planPrice || 0)).toLocaleString('en-IN')}</span>
+                            <span className="period">/min</span>
                         </div>
                         <div className="plan-features-list">
                             <span>Unlimited Students</span>
@@ -243,7 +247,7 @@ const SubscriptionPage = () => {
                             {subscriptionStatus?.status === 'active' && (
                                 <span className="expiry-date-detail" style={{ fontSize: '0.8rem', opacity: 0.8, marginTop: '4px' }}>
                                     Expires: {new Date(subscriptionStatus.subscription_end_date).toLocaleString('en-IN', {
-                                        weekday: 'long', day: 'numeric', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit', hour12: true
+                                        weekday: 'long', day: 'numeric', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: true
                                     })}
                                 </span>
                             )}
@@ -262,14 +266,14 @@ const SubscriptionPage = () => {
                 <div className="bento-item area-action">
                     <div className="action-header">
                         <h3>Extend Subscription</h3>
-                        <p>Select duration to add</p>
+                        <p>Select minutes to add</p>
                     </div>
 
                     <div className="interactive-counter">
-                        <button className="counter-btn" onClick={handleDecrement} disabled={months <= 1}>−</button>
+                        <button className="counter-btn" onClick={handleDecrement} disabled={minutes <= 1}>−</button>
                         <div className="counter-display">
-                            <span className="count">{months}</span>
-                            <span className="label text-xs uppercase tracking-wider text-gray-400">Month{months > 1 ? 's' : ''}</span>
+                            <span className="count">{minutes}</span>
+                            <span className="label text-xs uppercase tracking-wider text-gray-400">Minute{minutes > 1 ? 's' : ''}</span>
                         </div>
                         <button className="counter-btn" onClick={handleIncrement}>+</button>
                     </div>
@@ -277,12 +281,12 @@ const SubscriptionPage = () => {
                     <div className="bill-preview">
                         <div className="bill-row">
                             <span>Subtotal</span>
-                            <span>₹{months * planPrice}</span>
+                            <span>₹{Math.round(minutes * planPrice)}</span>
                         </div>
                         <div className="bill-divider"></div>
                         <div className="bill-row total">
                             <span>Total</span>
-                            <span>₹{months * planPrice}</span>
+                            <span>₹{Math.round(minutes * planPrice)}</span>
                         </div>
                     </div>
 
@@ -311,7 +315,7 @@ const SubscriptionPage = () => {
                                         <span className="row-date">{new Date(item.created_at).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' })}</span>
                                         <span className="row-id">TXN-{item.id}</span>
                                     </div>
-                                    <span className="row-amount">₹{item.amount}</span>
+                                    <span className="row-amount">₹{Math.round(item.amount)}</span>
                                 </div>
                             ))
                         )}

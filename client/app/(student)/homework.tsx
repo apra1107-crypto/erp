@@ -3,7 +3,7 @@ import {
     View, Text, StyleSheet, TouchableOpacity, ScrollView, ActivityIndicator,
     StatusBar, RefreshControl, Dimensions
 } from 'react-native';
-import { useRouter } from 'expo-router';
+import { useRouter, useFocusEffect } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import axios from 'axios';
@@ -11,16 +11,18 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import Toast from 'react-native-toast-message';
 import { useTheme } from '../../context/ThemeContext';
 import { API_ENDPOINTS } from '../../constants/Config';
+import DateTimePicker from '@react-native-community/datetimepicker';
 
 export default function StudentHomework() {
     const router = useRouter();
-    const { theme } = useTheme();
+    const { theme, isDark } = useTheme();
     const insets = useSafeAreaInsets();
 
     const [loading, setLoading] = useState(true);
     const [refreshing, setRefreshing] = useState(false);
     const [homeworkList, setHomeworkList] = useState<any[]>([]);
     const [selectedDate, setSelectedDate] = useState(new Date());
+    const [showDatePicker, setShowDatePicker] = useState(false);
 
     const fetchHomework = useCallback(async () => {
         try {
@@ -32,8 +34,8 @@ export default function StudentHomework() {
             if (!student) return;
 
             const dateStr = selectedDate.toISOString().split('T')[0];
-            const selectedSessionId = await AsyncStorage.getItem('selectedSessionId');
-            const sessionId = selectedSessionId || student.current_session_id;
+            const storedSessionId = await AsyncStorage.getItem('selectedSessionId');
+            const sessionId = storedSessionId || student.current_session_id;
 
             const response = await axios.get(
                 `${API_ENDPOINTS.HOMEWORK}/list?class_name=${student.class}&section=${student.section}&date=${dateStr}`,
@@ -55,9 +57,11 @@ export default function StudentHomework() {
         }
     }, [selectedDate]);
 
-    useEffect(() => {
-        fetchHomework();
-    }, [fetchHomework]);
+    useFocusEffect(
+        useCallback(() => {
+            fetchHomework();
+        }, [fetchHomework])
+    );
 
     const handleMarkDone = async (homeworkId: number) => {
         try {
@@ -81,31 +85,39 @@ export default function StudentHomework() {
     const styles = useMemo(() => StyleSheet.create({
         container: { flex: 1, backgroundColor: theme.background },
         header: {
-            backgroundColor: theme.card,
-            paddingTop: insets.top + 10,
-            paddingBottom: 15,
-            paddingHorizontal: 20,
             flexDirection: 'row',
             alignItems: 'center',
-            borderBottomWidth: 1,
-            borderBottomColor: theme.border,
+            paddingHorizontal: 24,
+            paddingTop: insets.top + 10,
+            paddingBottom: 15,
+            backgroundColor: 'transparent',
         },
-        backBtn: { padding: 5, marginRight: 15 },
-        headerTitle: { fontSize: 20, fontWeight: '900', color: theme.text },
+        backBtn: { 
+            width: 40, 
+            height: 40, 
+            borderRadius: 12, 
+            backgroundColor: isDark ? '#333' : '#f4f4f5', 
+            justifyContent: 'center', 
+            alignItems: 'center' 
+        },
+        headerTitle: { fontSize: 24, fontWeight: '900', color: theme.text, letterSpacing: -0.5, marginLeft: 16 },
         
         dateSelector: {
             flexDirection: 'row',
-            justifyContent: 'space-between',
             alignItems: 'center',
-            padding: 15,
-            backgroundColor: theme.card,
-            margin: 20,
-            borderRadius: 20,
-            borderWidth: 1,
-            borderColor: theme.border,
+            paddingHorizontal: 24,
+            paddingVertical: 12,
+            backgroundColor: 'transparent',
         },
-        dateText: { fontSize: 16, fontWeight: '800', color: theme.text },
-        navBtn: { padding: 8, borderRadius: 10, backgroundColor: theme.background, borderWidth: 1, borderColor: theme.border },
+        dateText: { fontSize: 18, fontWeight: '800', color: theme.text, marginLeft: 10, flex: 1 },
+        calendarBtn: {
+            width: 44,
+            height: 44,
+            borderRadius: 12,
+            backgroundColor: isDark ? '#333' : '#f4f4f5',
+            justifyContent: 'center',
+            alignItems: 'center',
+        },
 
         content: { flex: 1, paddingHorizontal: 20 },
         homeworkCard: {
@@ -167,7 +179,7 @@ export default function StudentHomework() {
 
     return (
         <View style={styles.container}>
-            <StatusBar barStyle={theme.statusBarStyle} backgroundColor={theme.card} />
+            <StatusBar barStyle={theme.statusBarStyle} backgroundColor="transparent" translucent />
             <View style={styles.header}>
                 <TouchableOpacity style={styles.backBtn} onPress={() => router.back()}>
                     <Ionicons name="arrow-back" size={24} color={theme.text} />
@@ -176,16 +188,29 @@ export default function StudentHomework() {
             </View>
 
             <View style={styles.dateSelector}>
-                <TouchableOpacity style={styles.navBtn} onPress={() => changeDate(-1)}>
-                    <Ionicons name="chevron-back" size={20} color={theme.text} />
-                </TouchableOpacity>
+                <Ionicons name="calendar-outline" size={22} color={theme.primary} />
                 <Text style={styles.dateText}>
-                    {selectedDate.toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' })}
+                    {selectedDate.toLocaleDateString('en-IN', { day: '2-digit', month: 'long', year: 'numeric' })}
                 </Text>
-                <TouchableOpacity style={styles.navBtn} onPress={() => changeDate(1)}>
-                    <Ionicons name="chevron-forward" size={20} color={theme.text} />
+                <TouchableOpacity 
+                    style={styles.calendarBtn} 
+                    onPress={() => setShowDatePicker(true)}
+                >
+                    <Ionicons name="calendar" size={22} color={theme.primary} />
                 </TouchableOpacity>
             </View>
+
+            {showDatePicker && (
+                <DateTimePicker
+                    value={selectedDate}
+                    mode="date"
+                    display="default"
+                    onChange={(event, date) => {
+                        setShowDatePicker(false);
+                        if (date) setSelectedDate(date);
+                    }}
+                />
+            )}
 
             <ScrollView 
                 style={styles.content}

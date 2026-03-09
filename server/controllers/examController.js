@@ -1,4 +1,76 @@
 import pool from '../config/db.js';
+import { sendPushNotification } from '../utils/pushNotification.js';
+
+export const togglePublishExam = async (req, res) => {
+    try {
+        const { id } = req.params;
+        const { is_published } = req.body;
+        const institute_id = req.user?.institute_id || req.user?.id;
+
+        const result = await pool.query(
+            `UPDATE exams SET is_published = $1, updated_at = NOW() 
+             WHERE id = $2 AND institute_id = $3 RETURNING *`,
+            [is_published, id, institute_id]
+        );
+
+        if (result.rows.length === 0) {
+            return res.status(404).json({ message: 'Exam not found or unauthorized' });
+        }
+
+        const exam = result.rows[0];
+
+        // If published, notify students
+        if (is_published) {
+            const students = await pool.query(
+                `SELECT push_token FROM students 
+                 WHERE institute_id = $1 AND "class" = $2 AND "section" = $3 AND push_token IS NOT NULL AND is_active = true`,
+                [institute_id, exam.class_name, exam.section]
+            );
+
+            const tokens = students.rows.map(s => s.push_token);
+            if (tokens.length > 0) {
+                await sendPushNotification(
+                    tokens,
+                    'Result Published! 📊',
+                    `The results for ${exam.name} have been published. Check your marksheet now!`,
+                    { type: 'RESULT_PUBLISHED', examId: exam.id }
+                );
+            }
+        }
+
+        res.json(exam);
+    } catch (err) {
+        console.error('Error toggling publish:', err);
+        res.status(500).json({ message: 'Server error toggling publish' });
+    }
+};
+
+export const getPublishedExams = async (req, res) => {
+    try {
+        const studentId = req.user.id;
+        const institute_id = req.user.institute_id;
+        const sessionId = req.user.current_session_id;
+
+        // Get student's class and section
+        const studentRes = await pool.query(`SELECT class, section FROM students WHERE id = $1`, [studentId]);
+        if (studentRes.rows.length === 0) return res.status(404).json({ message: 'Student not found' });
+        const { class: className, section } = studentRes.rows[0];
+
+        // Find published exams for this class/section/session
+        const exams = await pool.query(
+            `SELECT * FROM exams 
+             WHERE institute_id = $1 AND class_name = $2 AND section = $3 
+             AND session_id = $4 AND is_published = true 
+             ORDER BY created_at DESC`,
+            [institute_id, className, section, sessionId]
+        );
+
+        res.json(exams.rows);
+    } catch (err) {
+        console.error('Error fetching published exams:', err);
+        res.status(500).json({ message: 'Server error fetching exams' });
+    }
+};
 
 export const createExam = async (req, res) => {
     try {

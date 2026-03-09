@@ -1,5 +1,5 @@
 import { useState, useEffect, useMemo, useRef, useCallback } from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, ActivityIndicator, Image, ScrollView, Modal, TextInput, Dimensions, KeyboardAvoidingView, Platform, StatusBar, RefreshControl, FlatList, LayoutAnimation, UIManager, Alert } from 'react-native';
+import { View, Text, StyleSheet, TouchableOpacity, ActivityIndicator, Image, ScrollView, Modal, TextInput, Dimensions, KeyboardAvoidingView, Platform, StatusBar, RefreshControl, FlatList, LayoutAnimation, UIManager, Alert, TouchableWithoutFeedback, Keyboard } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useRouter, useFocusEffect } from 'expo-router';
 import axios from 'axios';
@@ -8,7 +8,7 @@ import Toast from 'react-native-toast-message';
 import { Ionicons } from '@expo/vector-icons';
 import { BlurView } from 'expo-blur';
 import { LinearGradient } from 'expo-linear-gradient';
-import Animated, { useSharedValue, useAnimatedStyle, withTiming, withSpring } from 'react-native-reanimated';
+import Animated, { useSharedValue, useAnimatedStyle, withTiming, withSpring, withRepeat, withSequence } from 'react-native-reanimated';
 import { useTheme } from '../../context/ThemeContext';
 import { useSocket } from '../../context/SocketContext';
 import { API_ENDPOINTS } from '../../constants/Config';
@@ -23,11 +23,60 @@ const GRADIENTS = {
     student: ['#FF2D55', '#5856D6'],
     teacher: ['#AF52DE', '#007AFF'],
     homework: ['#00d2ff', '#3a7bd5'],
-    revenue: ['#FF0080', '#1D2B64'],
     morning: ['#FF9500', '#FFCC00'],
     afternoon: ['#007AFF', '#4CD964'],
     evening: ['#5856D6', '#000000'],
     event: ['#FF2D55', '#AF52DE'],
+    revenue: ['#10b981', '#059669'],
+};
+
+const LiveBadge = () => {
+    const opacity = useSharedValue(1);
+    const scale = useSharedValue(1);
+
+    useEffect(() => {
+        opacity.value = withRepeat(
+            withSequence(
+                withTiming(0.4, { duration: 800 }),
+                withTiming(1, { duration: 800 })
+            ),
+            -1,
+            true
+        );
+        scale.value = withRepeat(
+            withSequence(
+                withTiming(1.1, { duration: 800 }),
+                withTiming(1, { duration: 800 })
+            ),
+            -1,
+            true
+        );
+    }, []);
+
+    const animatedStyle = useAnimatedStyle(() => ({
+        opacity: opacity.value,
+        transform: [{ scale: scale.value }],
+        borderColor: '#FF3B30',
+        borderWidth: 2,
+    }));
+
+    return (
+        <Animated.View style={[{ 
+            backgroundColor: '#fff', 
+            paddingHorizontal: 10, 
+            paddingVertical: 4, 
+            borderRadius: 10,
+            flexDirection: 'row',
+            alignItems: 'center',
+            elevation: 5,
+            shadowColor: '#FF3B30',
+            shadowOpacity: 0.5,
+            shadowRadius: 5
+        }, animatedStyle]}>
+            <View style={{ width: 7, height: 7, borderRadius: 3.5, backgroundColor: '#FF3B30', marginRight: 5 }} />
+            <Text style={{ fontSize: 9, fontWeight: '900', color: '#FF3B30', letterSpacing: 0.5 }}>LIVE</Text>
+        </Animated.View>
+    );
 };
 
 const getGreetingAndQuote = () => {
@@ -39,20 +88,22 @@ const getGreetingAndQuote = () => {
     if (hour >= 6 && hour < 12) {
         return {
             greeting: "Good Morning",
-            quote: "Start your day with a smile and a grateful heart.",
             type: 'morning'
         };
-    } else if (currentTime >= 12 * 60 && currentTime < 16 * 60 + 55) {
+    } else if (hour >= 12 && hour < 16) {
         return {
             greeting: "Good Afternoon",
-            quote: "Your hard work is the bridge between goals and accomplishment.",
             type: 'afternoon'
+        };
+    } else if (hour >= 16 && hour < 22) {
+        return {
+            greeting: "Good Evening",
+            type: 'evening'
         };
     } else {
         return {
-            greeting: "Good Evening",
-            quote: "You've done great work today. Rest well and recharge for tomorrow.",
-            type: 'evening'
+            greeting: "Good Night",
+            type: 'evening' // Using evening gradient for night
         };
     }
 };
@@ -67,182 +118,245 @@ export default function TeacherDashboard() {
     const [loading, setLoading] = useState(true);
     const [refreshing, setRefreshing] = useState(false);
 
-    // Subscription States (Moved to Top for immediate availability)
+    // Subscription States
     const [subStatus, setSubStatus] = useState('loading');
     const [subData, setSubData] = useState<any>(null);
     const isLocked = subStatus === 'expired' || subStatus === 'disabled';
 
-    // AUTO-EXPIRY WATCHER: Locks dashboard the exact second time runs out
+    // AUTO-EXPIRY WATCHER
     useEffect(() => {
         if (subStatus !== 'active' || !subData?.subscription_end_date) return;
-
         const checkExpiry = () => {
             const now = new Date();
             const expiry = new Date(subData.subscription_end_date);
-            
             if (now >= expiry) {
-                console.log('⏰ [Watcher] Subscription time ran out. Locking dashboard.');
                 LayoutAnimation.configureNext(LayoutAnimation.Presets.spring);
                 setSubStatus('expired');
-                Toast.show({ 
-                    type: 'error', 
-                    text1: 'Subscription Expired', 
-                    text2: 'Institute subscription reached its time limit.', 
-                    position: 'bottom', 
-                    bottomOffset: 40 
-                });
+                Toast.show({ type: 'error', text1: 'Subscription Expired', text2: 'Institute subscription reached its time limit.', position: 'bottom', bottomOffset: 40 });
             }
         };
-
         const timer = setInterval(checkExpiry, 1000);
         return () => clearInterval(timer);
     }, [subStatus, subData?.subscription_end_date]);
 
-    // Flashcards State
     const [flashcards, setFlashcards] = useState<any>(null);
     const [activeSlide, setActiveSlide] = useState(0);
     const flatListRef = useRef<FlatList>(null);
     const isInteracting = useRef(false);
     const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
-    // Attendance State
     const [todayAttendance, setTodayAttendance] = useState<any>(null);
     const [markingAttendance, setMarkingAttendance] = useState(false);
     const [absentReasonModalVisible, setAbsentReasonModalVisible] = useState(false);
     const [absentReason, setAbsentReason] = useState('');
-
-    // Real-time Clock
     const [currentTime, setCurrentTime] = useState(new Date());
 
-    useEffect(() => {
-        const timer = setInterval(() => setCurrentTime(new Date()), 1000);
-        return () => clearInterval(timer);
-    }, []);
-
-    // UI States
     const [showProfileMenu, setShowProfileMenu] = useState(false);
     const [showAccountModal, setShowAccountModal] = useState(false);
     const [notifications, setNotifications] = useState<any[]>([]);
     const [showNotifList, setShowNotifList] = useState(false);
-    const [isActionsExpanded, setIsActionsExpanded] = useState(false);
+    const [isActionsExpanded, setIsActionsExpanded] = useState(true);
     const [schedule, setSchedule] = useState<any[]>([]);
     const [isWeeklyModalOpen, setIsWeeklyModalOpen] = useState(false);
+    const [activeWeeklyDay, setActiveWeeklyDay] = useState(new Date().toLocaleDateString('en-US', { weekday: 'long' }));
+    const weekPagerRef = useRef<FlatList>(null);
+    const DAYS = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'];
 
-    // DEDICATED WATCHER: Join Room & Sync Status Instantly
+    const [allAccounts, setAllAccounts] = useState<any[]>([]);
+    const [fetchingAccounts, setFetchingAccounts] = useState(false);
+    const [switchCode, setSwitchCode] = useState('');
+    const [selectedSwitchAccount, setSelectedSwitchAccount] = useState<any>(null);
+
+    // Auto-scroll Weekly Flow to Today
+    useEffect(() => {
+        if (isWeeklyModalOpen) {
+            const today = new Date().toLocaleDateString('en-US', { weekday: 'long' });
+            const index = DAYS.indexOf(today);
+            if (index !== -1) {
+                setActiveWeeklyDay(today);
+                setTimeout(() => {
+                    weekPagerRef.current?.scrollToIndex({ index, animated: false });
+                }, 100);
+            }
+        }
+    }, [isWeeklyModalOpen]);
+
     useEffect(() => {
         if (!socket || !teacherData?.institute_id) return;
-
         const handleSubUpdate = (data: any) => {
-            console.log('📡 [Real-time] Teacher sub update:', data);
             LayoutAnimation.configureNext(LayoutAnimation.Presets.spring);
             if (data.status) setSubStatus(data.status);
             if (data.settings) setSubData(data.settings);
-            
-            if (data.status === 'disabled') {
-                Toast.show({ type: 'error', text1: 'Access Revoked', text2: 'Institute account disabled by admin.', position: 'bottom', bottomOffset: 40 });
-            } else if (data.status === 'expired') {
-                Toast.show({ type: 'error', text1: 'Subscription Expired', text2: 'Please contact principal for renewal.', position: 'bottom', bottomOffset: 40 });
-            } else if (data.status === 'active' || data.status === 'grant') {
-                Toast.show({ type: 'success', text1: 'Dashboard Unlocked', text2: 'Subscription is active.', position: 'bottom', bottomOffset: 40 });
-            }
         };
-
         const joinRooms = () => {
-            const id = teacherData.institute_id;
-            socket.emit('join_room', `teacher-${id}`);
-            // Also join principal room as a backup to catch all subscription emissions
-            socket.emit('join_room', `principal-${id}`);
-            console.log(`📡 [Watcher] Teacher joined rooms for institute: ${id}`);
-            checkSubscription(id);
+            socket.emit('join_room', `teacher-${teacherData.institute_id}`);
+            socket.emit('join_room', `teacher-${teacherData.id}`);
+            socket.emit('join_room', `principal-${teacherData.institute_id}`);
+            checkSubscription(teacherData.institute_id);
         };
-
-        // Join immediately
         joinRooms();
-
-        // Re-join on every reconnect
         socket.on('connect', joinRooms);
         socket.on('subscription_update', handleSubUpdate);
-
         return () => {
             socket.off('connect', joinRooms);
             socket.off('subscription_update', handleSubUpdate);
         };
-    }, [socket, teacherData?.institute_id]);
+    }, [socket, teacherData?.institute_id, teacherData?.id]);
 
-    // Socket Listener for Attendance Updates
     useEffect(() => {
-        if (teacherData?.institute_id && socket) {
-            const handleAttendanceUpdate = (data: any) => {
-                if (flashcards?.student_attendance) {
-                    setFlashcards((prev: any) => ({
-                        ...prev,
-                        student_attendance: {
-                            ...prev.student_attendance,
-                            total_present: data.total_present
-                        }
-                    }));
-                }
-            };
-
-            socket.on('attendance_stats_update', handleAttendanceUpdate);
-            
-            return () => {
-                socket.off('attendance_stats_update', handleAttendanceUpdate);
-            };
-        }
-    }, [teacherData?.institute_id, socket, !!flashcards]);
+        if (!socket || !teacherData?.id) return;
+        const addNotif = (notif: any) => {
+            LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
+            setNotifications(prev => [{ id: Math.random().toString(36).substr(2, 9), time: new Date().toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit' }), ...notif }, ...prev]);
+        };
+        socket.on('absent_request', (data) => addNotif({ title: 'Absent Request', message: `New request from Roll ${data.roll_no}`, type: 'request' }));
+        socket.on('new_notice', (data) => addNotif({ title: data.isUpdate ? `Notice Updated: ${data.topic}` : `Notice: ${data.topic}`, message: `By ${data.creator_name}`, type: 'notice' }));
+        socket.on('fee_payment_received', (data) => {
+            if (teacherData?.special_permission) {
+                addNotif({ title: data.title || 'Fee Payment', message: data.message || `₹${data.amount} received from ${data.studentName}`, type: 'fees' });
+            }
+        });
+        return () => {
+            socket.off('absent_request');
+            socket.off('new_notice');
+            socket.off('fee_payment_received');
+        };
+    }, [socket, teacherData?.id, teacherData?.special_permission]);
 
     const checkSubscription = async (id: any) => {
         try {
             const token = await AsyncStorage.getItem('teacherToken');
-            const res = await axios.get(`${API_ENDPOINTS.SUBSCRIPTION}/${id}/status`, { 
-                headers: { Authorization: `Bearer ${token}` } 
-            });
+            const res = await axios.get(`${API_ENDPOINTS.SUBSCRIPTION}/${id}/status`, { headers: { Authorization: `Bearer ${token}` } });
             setSubStatus(res.data.status);
             setSubData(res.data);
         } catch (e) {}
     };
     
-    // Search State
     const [isSearchActive, setIsSearchActive] = useState(false);
     const searchBarWidth = useSharedValue(0);
     const searchBarOpacity = useSharedValue(0);
     const [searchQuery, setSearchQuery] = useState('');
-    const [searchResults, setSearchResults] = useState<any[]>([]);
-
-    // Session States
     const [sessions, setSessions] = useState<any[]>([]);
     const [selectedSessionId, setSelectedSessionId] = useState<number | null>(null);
     const [showSessionPicker, setShowSessionPicker] = useState(false);
 
-    // Multi-Account
-    const [allAccounts, setAllAccounts] = useState<any[]>([]);
-    const [savedAccounts, setSavedAccounts] = useState<any[]>([]);
-    const [fetchingAccounts, setFetchingAccounts] = useState(false);
+    const [isSearching, setIsSearching] = useState(false);
+    const [searchResults, setSearchResults] = useState<any[]>([]);
+    const [showResults, setShowResults] = useState(false);
+
+    const handleSearch = async (t: string) => {
+        setSearchQuery(t);
+        if (t.length < 2) { setSearchResults([]); setShowResults(false); return; }
+        setIsSearching(true); setShowResults(true);
+        try {
+            const token = await AsyncStorage.getItem('teacherToken');
+            const storedSessionId = await AsyncStorage.getItem('selectedSessionId');
+            const userData = await AsyncStorage.getItem('teacherData');
+            const sessionId = storedSessionId || (userData ? JSON.parse(userData).current_session_id : null);
+
+            // Teachers can only search for students, so we use the search endpoint and filter for students
+            const res = await axios.get(`${API_ENDPOINTS.PRINCIPAL}/search?query=${t}`, { 
+                headers: { 
+                    Authorization: `Bearer ${token}`,
+                    'x-academic-session-id': sessionId?.toString()
+                } 
+            });
+            // Filter results to only show students
+            const studentResults = (res.data.results || []).filter((item: any) => item.type === 'student');
+            setSearchResults(studentResults);
+        } catch (e) {} finally { setIsSearching(false); }
+    };
+
+    const handleCreateResult = (item: any) => { 
+        dismissSearch();
+        router.push(`/(teacher)/students/details/${item.id}`); 
+    };
+
+    const dismissSearch = () => {
+        if (isSearchActive) {
+            searchBarWidth.value = withTiming(0, { duration: 300 });
+            searchBarOpacity.value = withTiming(0, { duration: 200 });
+            setSearchQuery('');
+            setShowResults(false);
+            setIsSearching(false);
+            setTimeout(() => setIsSearchActive(false), 300);
+        }
+    };
+
+    const toggleSearch = () => {
+        if (isSearchActive) {
+            dismissSearch();
+        } else {
+            setIsSearchActive(true);
+            searchBarWidth.value = withSpring(SCREEN_WIDTH - 40, { damping: 15 });
+            searchBarOpacity.value = withTiming(1, { duration: 300 });
+        }
+    };
+
+    const animatedSearchStyle = useAnimatedStyle(() => ({
+        width: searchBarWidth.value,
+        opacity: searchBarOpacity.value,
+    }));
 
     const loadInitialData = async () => {
         try {
             const data = await AsyncStorage.getItem('teacherData');
-            if (data) setTeacherData(JSON.parse(data));
+            if (data) {
+                const parsed = JSON.parse(data);
+                setTeacherData(parsed);
+                fetchAllAccounts(parsed.mobile);
+            }
             const storedSession = await AsyncStorage.getItem('selectedSessionId');
             if (storedSession) setSelectedSessionId(Number(storedSession));
         } catch (e) {}
     };
 
-    const fetchProfile = async (forcedSessionId?: number) => {
+    const fetchAllAccounts = async (mobile: string) => {
+        if (!mobile) return;
+        setFetchingAccounts(true);
         try {
-            const token = await AsyncStorage.getItem('teacherToken');
-            const data = await AsyncStorage.getItem('teacherData');
-            const parsedData = data ? JSON.parse(data) : null;
-            const sessionId = forcedSessionId || selectedSessionId || parsedData?.current_session_id;
+            const response = await axios.post(`${API_ENDPOINTS.AUTH.TEACHER}/get-all-accounts`, { mobile });
+            setAllAccounts(response.data.accounts || []);
+        } catch (error) {
+            console.error('Error fetching accounts:', error);
+        } finally {
+            setFetchingAccounts(false);
+        }
+    };
 
-            const response = await axios.get(`${API_ENDPOINTS.AUTH.TEACHER}/profile`, {
-                headers: { Authorization: `Bearer ${token}`, 'x-academic-session-id': sessionId?.toString() }
+    const handleSwitchAccount = async () => {
+        if (!selectedSwitchAccount || !switchCode) {
+            Toast.show({ type: 'error', text1: 'Required', text2: 'Please enter access code' });
+            return;
+        }
+
+        setFetchingAccounts(true);
+        try {
+            const response = await axios.post(`${API_ENDPOINTS.AUTH.TEACHER}/verify-code`, {
+                teacher_id: selectedSwitchAccount.id,
+                access_code: switchCode
             });
-            const updated = { ...parsedData, ...response.data.teacher };
-            setTeacherData(updated);
-            await AsyncStorage.setItem('teacherData', JSON.stringify(updated));
-        } catch (error) {}
+
+            const { token, teacher } = response.data;
+            await AsyncStorage.setItem('teacherToken', token);
+            await AsyncStorage.setItem('teacherData', JSON.stringify(teacher));
+            
+            Toast.show({ type: 'success', text1: 'Switched!', text2: `Logged into ${teacher.institute_name}` });
+            setShowAccountModal(false);
+            setSelectedSwitchAccount(null);
+            setSwitchCode('');
+            
+            // Refresh Dashboard
+            onRefresh();
+        } catch (error: any) {
+            Toast.show({ 
+                type: 'error', 
+                text1: 'Error', 
+                text2: error.response?.data?.message || 'Invalid access code' 
+            });
+        } finally {
+            setFetchingAccounts(false);
+        }
     };
 
     const fetchTodayAttendance = async (forcedSessionId?: number) => {
@@ -252,10 +366,7 @@ export default function TeacherDashboard() {
             const parsedData = data ? JSON.parse(data) : null;
             const sessionId = forcedSessionId || selectedSessionId || parsedData?.current_session_id;
             if (!sessionId) return;
-
-            const response = await axios.get(`${API_ENDPOINTS.TEACHER_ATTENDANCE}/today`, {
-                headers: { Authorization: `Bearer ${token}`, 'x-academic-session-id': sessionId?.toString() }
-            });
+            const response = await axios.get(`${API_ENDPOINTS.TEACHER_ATTENDANCE}/today`, { headers: { Authorization: `Bearer ${token}`, 'x-academic-session-id': sessionId?.toString() } });
             setTodayAttendance(response.data);
         } catch (error) {}
     };
@@ -267,12 +378,8 @@ export default function TeacherDashboard() {
             const parsedData = data ? JSON.parse(data) : null;
             const sessionId = forcedSessionId || selectedSessionId || parsedData?.current_session_id;
             if (!sessionId) return;
-
             const today = new Date().toISOString().split('T')[0];
-            const response = await axios.get(`${API_ENDPOINTS.TEACHER_DASHBOARD}?date=${today}`, {
-                headers: { Authorization: `Bearer ${token}`, 'x-academic-session-id': sessionId?.toString() },
-                timeout: 10000
-            });
+            const response = await axios.get(`${API_ENDPOINTS.TEACHER_DASHBOARD}?date=${today}`, { headers: { Authorization: `Bearer ${token}`, 'x-academic-session-id': sessionId?.toString() } });
             if (response.data.flashcards) setFlashcards(response.data.flashcards);
         } catch (error) {}
     };
@@ -284,10 +391,7 @@ export default function TeacherDashboard() {
             const parsedData = data ? JSON.parse(data) : null;
             const sessionId = forcedSessionId || selectedSessionId || parsedData?.current_session_id;
             if (!sessionId || !parsedData?.id) return;
-
-            const response = await axios.get(`${API_ENDPOINTS.ROUTINE}/teacher-schedule`, {
-                headers: { Authorization: `Bearer ${token}`, 'x-academic-session-id': sessionId?.toString() }
-            });
+            const response = await axios.get(`${API_ENDPOINTS.ROUTINE}/teacher-schedule`, { headers: { Authorization: `Bearer ${token}`, 'x-academic-session-id': sessionId?.toString() } });
             if (response.data && Array.isArray(response.data)) setSchedule(response.data);
         } catch (error) {}
     };
@@ -295,9 +399,7 @@ export default function TeacherDashboard() {
     const fetchSessions = async () => {
         try {
             const token = await AsyncStorage.getItem('teacherToken');
-            const response = await axios.get(API_ENDPOINTS.ACADEMIC_SESSIONS, {
-                headers: { Authorization: `Bearer ${token}` }
-            });
+            const response = await axios.get(API_ENDPOINTS.ACADEMIC_SESSIONS, { headers: { Authorization: `Bearer ${token}` } });
             setSessions(response.data);
             if (!selectedSessionId) {
                 const active = response.data.find((s: any) => s.is_active);
@@ -306,104 +408,145 @@ export default function TeacherDashboard() {
         } catch (error) {}
     };
 
+    const [routine, setRoutine] = useState<any>(null);
+    const [teachers, setTeachers] = useState<any[]>([]);
+    const studentScrollRef = useRef<ScrollView>(null);
+
+    const fetchMyRoutine = async (forcedSessionId?: number) => {
+        try {
+            const token = await AsyncStorage.getItem('teacherToken');
+            const data = await AsyncStorage.getItem('teacherData');
+            const parsedData = data ? JSON.parse(data) : null;
+            const sessionId = forcedSessionId || selectedSessionId || parsedData?.current_session_id;
+            if (!sessionId || !parsedData?.id) return;
+
+            const response = await axios.get(`${API_ENDPOINTS.ROUTINE}/teacher-schedule`, { 
+                headers: { 
+                    Authorization: `Bearer ${token}`,
+                    'x-academic-session-id': sessionId?.toString()
+                } 
+            });
+            setRoutine(response.data);
+        } catch (error) {}
+    };
+
+    const fetchTeachers = async (forcedSessionId?: number) => {
+        try {
+            const token = await AsyncStorage.getItem('teacherToken');
+            const data = await AsyncStorage.getItem('teacherData');
+            const parsedData = data ? JSON.parse(data) : null;
+            const sessionId = forcedSessionId || selectedSessionId || parsedData?.current_session_id;
+            if (!sessionId) return;
+
+            const response = await axios.get(`${API_ENDPOINTS.PRINCIPAL}/teacher/list`, {
+                headers: { 
+                    Authorization: `Bearer ${token}`,
+                    'x-academic-session-id': sessionId?.toString()
+                }
+            });
+            setTeachers(response.data.teachers || []);
+        } catch (error) {}
+    };
+
     const onRefresh = async (forcedSessionId?: number) => {
         setRefreshing(true);
         try {
             const token = await AsyncStorage.getItem('teacherToken');
-            const profileRes = await axios.get(`${API_ENDPOINTS.AUTH.TEACHER}/profile`, {
-                headers: { Authorization: `Bearer ${token}` }
-            });
+            const profileRes = await axios.get(`${API_ENDPOINTS.AUTH.TEACHER}/profile`, { headers: { Authorization: `Bearer ${token}` } });
             const profile = profileRes.data.teacher;
             setTeacherData(profile);
-
-            const checks = [
-                fetchSessions(),
-                fetchTodayAttendance(forcedSessionId),
-                fetchDashboardData(forcedSessionId),
-                fetchSchedule(forcedSessionId),
+            await Promise.all([
+                fetchSessions(), 
+                fetchTodayAttendance(forcedSessionId), 
+                fetchDashboardData(forcedSessionId), 
+                fetchMyRoutine(forcedSessionId),
+                fetchTeachers(forcedSessionId),
                 checkSubscription(profile.institute_id)
-            ];
-
-            await Promise.all(checks);
-        } catch (error) {
-            console.error('Refresh error:', error);
-        } finally {
+            ]);
+        } catch (error) {} finally {
             setRefreshing(false);
             setLoading(false);
         }
     };
 
-    useFocusEffect(
-        useCallback(() => {
-            onRefresh();
-        }, [selectedSessionId])
-    );
-
+    // Auto-scroll to live slot
     useEffect(() => {
-        loadInitialData();
-    }, []);
+        if (routine && routine.config?.slots) {
+            const slots = routine.config.slots || [];
+            const now = new Date();
+            const currentTime = now.getHours() * 60 + now.getMinutes();
+
+            const parseTime = (t: string) => {
+                if (!t) return 0;
+                const [time, modifier] = t.split(' ');
+                let [hours, minutes] = time.split(':').map(Number);
+                if (modifier === 'PM' && hours < 12) hours += 12;
+                if (modifier === 'AM' && hours === 12) hours = 0;
+                return hours * 60 + minutes;
+            };
+
+            const liveIndex = slots.findIndex((slot: any) => {
+                const start = parseTime(slot.startTime);
+                const end = parseTime(slot.endTime);
+                return currentTime >= start && currentTime <= end;
+            });
+
+            if (liveIndex !== -1) {
+                setTimeout(() => {
+                    studentScrollRef.current?.scrollTo({
+                        x: liveIndex * (140 + 12), 
+                        animated: true
+                    });
+                }, 1000);
+            }
+        }
+    }, [routine]);
+
+    useFocusEffect(useCallback(() => { onRefresh(); }, [selectedSessionId]));
+    useEffect(() => { loadInitialData(); }, []);
+
+    const onMomentumScrollEnd = (e: any) => {
+        const index = Math.round(e.nativeEvent.contentOffset.x / SCREEN_WIDTH);
+        setActiveSlide(index);
+    };
 
     const flashcardData = useMemo(() => {
-        let data: any[] = [];
+        const baseGreeting = { type: 'greeting', data: getGreetingAndQuote() };
         
-        // 1st Card: Event or Greeting (Priority)
-        if (flashcards?.today_events && flashcards.today_events.length > 0) {
-            data.push({ type: 'event', data: flashcards.today_events[0] });
-        } else {
-            data.push({ type: 'greeting', data: getGreetingAndQuote() });
-        }
-
         if (teacherData?.special_permission) {
-            data.push(
-                { type: 'student', data: flashcards?.student_attendance },
-                { type: 'teacher', data: flashcards?.teacher_attendance },
-                { type: 'revenue', data: flashcards?.revenue },
-            );
-        } else {
-            data.push(
+            return [
+                baseGreeting,
                 { type: 'student', data: flashcards?.student_attendance },
                 { type: 'attendance_merged', data: { self: todayAttendance, stats: flashcards?.teacher_attendance } },
-                { type: 'homework', data: flashcards?.my_homework || { todayClassCount: 0 } }
-            );
+                { type: 'revenue', data: flashcards?.revenue }
+            ];
         }
-
+        
+        let data: any[] = [];
+        if (flashcards?.today_events && flashcards.today_events.length > 0) data.push({ type: 'event', data: flashcards.today_events[0] });
+        if (data.length === 0) data.push(baseGreeting);
+        
+        data.push(
+            { type: 'student', data: flashcards?.student_attendance }, 
+            { type: 'attendance_merged', data: { self: todayAttendance, stats: flashcards?.teacher_attendance } }, 
+            { type: 'homework', data: flashcards?.my_homework || { todayClassCount: 0 } }
+        );
         return data;
     }, [flashcards, todayAttendance, teacherData?.special_permission]);
 
     const startTimer = () => {
         if (timerRef.current) clearInterval(timerRef.current);
         if (flashcardData.length <= 1) return;
-
-        const currentCard = flashcardData[activeSlide];
-        let delay = 3000; // Default 3s
-
-        if (currentCard?.type === 'greeting') delay = 30000; // 30s
-        if (currentCard?.type === 'event') delay = 60000; // 60s
-
         timerRef.current = setInterval(() => {
             if (!isInteracting.current && flashcardData.length > 1) {
                 const next = (activeSlide + 1) % flashcardData.length;
                 flatListRef.current?.scrollToIndex({ index: next, animated: true });
                 setActiveSlide(next);
             }
-        }, delay);
+        }, 5000);
     };
 
-    const stopTimer = () => {
-        if (timerRef.current) clearInterval(timerRef.current);
-    };
-
-    useEffect(() => {
-        if (flashcardData.length > 1) startTimer();
-        return () => stopTimer();
-    }, [flashcardData, activeSlide]);
-
-    const onMomentumScrollEnd = (event: any) => {
-        let index = Math.round(event.nativeEvent.contentOffset.x / SCREEN_WIDTH);
-        setActiveSlide(index);
-        isInteracting.current = false;
-        startTimer();
-    };
+    useEffect(() => { if (flashcardData.length > 1) startTimer(); return () => { if (timerRef.current) clearInterval(timerRef.current); }; }, [flashcardData, activeSlide]);
 
     const handleMarkSelfAttendance = async (status: 'present' | 'absent', reason?: string) => {
         try {
@@ -415,229 +558,85 @@ export default function TeacherDashboard() {
             setAbsentReasonModalVisible(false);
             setAbsentReason('');
             fetchDashboardData();
-        } catch (error) {
-            Toast.show({ type: 'error', text1: 'Error', text2: 'Failed to mark attendance' });
-        } finally {
-            setMarkingAttendance(false);
-        }
+        } catch (error) {} finally { setMarkingAttendance(false); }
     };
 
     const renderFlashcardItem = ({ item }: any) => {
         let gradientColors = GRADIENTS.student;
         let iconName: any = 'people';
-        let isRevenue = item.type === 'revenue';
         let title = 'Student Attendance';
-        // Date Day Time (Real-time)
-        let subTitle = currentTime.toLocaleDateString('en-IN', {
-            weekday: 'short', day: '2-digit', month: 'short',
-            hour: '2-digit', minute: '2-digit', hour12: true
-        });
-        let mainText = '';
-        let bottomText = '';
-        let extraContent = null;
-        let isInteractive = false;
+        let mainText = ''; let bottomText = ''; let extraContent = null; let isInteractive = false;
+        
+        const timeStr = new Date().toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit', hour12: true });
+        const dateDayStr = new Date().toLocaleDateString('en-IN', { weekday: 'short', day: '2-digit', month: 'short' });
+        const fullDateTimeStr = `${dateDayStr} | ${timeStr}`;
 
-        if (item.type === 'student') {
-            mainText = `${item.data?.total_present || 0} / ${item.data?.total_students || 0}`;
-            bottomText = item.data?.status === 'complete' ? 'Present Today' : `In Progress (${item.data?.pending_count || 0} left)`;
-        } else if (item.type === 'teacher') {
-            gradientColors = GRADIENTS.teacher;
-            iconName = 'school';
-            title = 'Teacher Attendance';
-            subTitle = "Today's Status";
-            mainText = `${item.data?.present || 0} / ${item.data?.total || 0}`;
-            bottomText = 'Teachers Present';
-
-            if (teacherData?.special_permission) {
-                const marked = !!todayAttendance;
-                const selfStatus = todayAttendance?.status;
-
-                if (marked) {
-                    extraContent = (
-                        <View style={styles.cardActionOverlay}>
-                            <Text style={styles.cardStatusText}>MY STATUS: {selfStatus?.toUpperCase()}</Text>
-                            <TouchableOpacity onPress={() => handleMarkSelfAttendance(selfStatus === 'present' ? 'absent' : 'present')} style={styles.cardUpdateBtn}>
-                                <Text style={styles.cardUpdateBtnText}>CHANGE</Text>
-                            </TouchableOpacity>
-                        </View>
-                    );
-                } else {
-                    extraContent = (
-                        <View style={styles.markingButtons}>
-                            <TouchableOpacity style={styles.mBtnPresent} onPress={() => handleMarkSelfAttendance('present')}>
-                                <Text style={styles.mBtnTextPresent}>PRESENT</Text>
-                            </TouchableOpacity>
-                            <TouchableOpacity style={styles.mBtnAbsent} onPress={() => setAbsentReasonModalVisible(true)}>
-                                <Text style={styles.mBtnTextAbsent}>ABSENT</Text>
-                            </TouchableOpacity>
-                        </View>
-                    );
-                }
-            }
-        } else if (item.type === 'revenue') {
-            gradientColors = ['#FF0080', '#1D2B64']; // Using Principal dashboard gradient
-            title = 'Revenue';
-            subTitle = 'Collection Overview';
-            
-            const monthTotal = (Number(item.data?.monthly_month) || 0) + (Number(item.data?.occasional_month) || 0);
-            const dayTotal = (Number(item.data?.monthly_day) || 0) + (Number(item.data?.occasional_day) || 0);
-            
-            mainText = `₹${monthTotal.toLocaleString('en-IN')}`;
-            bottomText = `${item.data?.month_name || 'Month'} Total`;
-            
-            extraContent = (
-                <View style={{ marginTop: 8, paddingTop: 8, borderTopWidth: 1, borderTopColor: 'rgba(255,255,255,0.3)', flexDirection: 'row', justifyContent: 'space-between' }}>
-                    <Text style={{ color: 'rgba(255,255,255,0.9)', fontSize: 12, fontWeight: '700' }}>Today's Collection</Text>
-                    <Text style={{ color: '#fff', fontSize: 14, fontWeight: '800' }}>₹{dayTotal.toLocaleString('en-IN')}</Text>
-                </View>
-            );
-        } else if (item.type === 'attendance_merged') {
-            const marked = !!item.data.self;
-            const selfStatus = item.data.self?.status;
-            const staffStats = item.data.stats;
-
-            if (marked) {
-                gradientColors = GRADIENTS.teacher;
-                iconName = 'school';
-                
-                if (teacherData?.special_permission) {
-                    title = 'Staff Attendance';
-                    mainText = `${staffStats?.present || 0} / ${staffStats?.total || 0}`;
-                    bottomText = 'Teachers Present Today';
-                    extraContent = (
-                        <View style={styles.cardActionOverlay}>
-                            <Text style={styles.cardStatusText}>MY STATUS: {selfStatus?.toUpperCase()}</Text>
-                            <TouchableOpacity onPress={() => handleMarkSelfAttendance(selfStatus === 'present' ? 'absent' : 'present')} style={styles.cardUpdateBtn}>
-                                <Text style={styles.cardUpdateBtnText}>CHANGE</Text>
-                            </TouchableOpacity>
-                        </View>
-                    );
-                } else {
-                    title = 'My Attendance';
-                    mainText = selfStatus?.toUpperCase();
-                    bottomText = 'You have marked attendance';
-
-                    extraContent = (
-                        <View style={styles.cardActionOverlay}>
-                            <Text style={styles.cardStatusText}>MY STATUS: {selfStatus?.toUpperCase()}</Text>
-                            <TouchableOpacity onPress={() => handleMarkSelfAttendance(selfStatus === 'present' ? 'absent' : 'present')} style={styles.cardUpdateBtn}>
-                                <Text style={styles.cardUpdateBtnText}>CHANGE</Text>
-                            </TouchableOpacity>
-                        </View>
-                    );
-                }
-            } else {
-                gradientColors = ['#00b09b', '#96c93d'];
-                iconName = 'checkmark-circle';
-                title = 'My Attendance';
-                isInteractive = true;
-                mainText = 'NOT MARKED';
-                bottomText = 'Tap to record status';
-                extraContent = (
-                    <View style={styles.markingButtons}>
-                        <TouchableOpacity style={styles.mBtnPresent} onPress={() => handleMarkSelfAttendance('present')}>
-                            <Text style={styles.mBtnTextPresent}>PRESENT</Text>
-                        </TouchableOpacity>
-                        <TouchableOpacity style={styles.mBtnAbsent} onPress={() => setAbsentReasonModalVisible(true)}>
-                            <Text style={styles.mBtnTextAbsent}>ABSENT</Text>
-                        </TouchableOpacity>
-                    </View>
-                );
-            }
-        } else if (item.type === 'homework') {
-            gradientColors = GRADIENTS.homework;
-            iconName = 'book';
-            title = 'Homework Stats';
-            
-            const classCount = item.data?.todayClassCount || 0;
-            mainText = `${classCount} Class${classCount === 1 ? '' : 'es'}`;
-            bottomText = classCount > 0 
-                ? `Added homework in ${classCount} class${classCount === 1 ? '' : 'es'} today`
-                : 'No homework assigned today';
-            extraContent = null; 
-        } else if (item.type === 'greeting') {
-            title = item.data.greeting;
-            subTitle = "Thought for you";
-            mainText = item.data.quote;
-            bottomText = "Have a great day!";
-            gradientColors = (GRADIENTS as any)[item.data.type];
-            iconName = item.data.type === 'morning' ? 'sunny' : item.data.type === 'afternoon' ? 'partly-sunny' : 'moon';
-        } else if (item.type === 'event') {
-            title = "Institute Event";
-            subTitle = "Today's Special";
-            mainText = item.data.title;
-            bottomText = item.data.description || "Check calendar for details";
-            gradientColors = GRADIENTS.event;
-            iconName = 'star';
+        if (item.type === 'student') { 
+            mainText = `${item.data?.total_present || 0} / ${item.data?.total_students || 0}`; 
+            bottomText = teacherData?.special_permission ? fullDateTimeStr : (item.data?.pending_count === 0 ? 'Present Today' : `In Progress (${item.data?.pending_count || 0} left)`); 
         }
+        else if (item.type === 'attendance_merged') {
+            const marked = !!item.data.self; const selfStatus = item.data.self?.status;
+            const markedTime = item.data.self?.marked_at ? new Date(item.data.self.marked_at).toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit', hour12: true }) : '';
+            
+            if (marked) {
+                gradientColors = GRADIENTS.teacher; iconName = 'school';
+                if (teacherData?.special_permission) { 
+                    title = 'Staff Attendance'; 
+                    mainText = `${item.data.stats?.present || 0} / ${item.data.stats?.total || 0}`; 
+                    bottomText = fullDateTimeStr; 
+                }
+                else { 
+                    title = 'My Attendance'; 
+                    mainText = `${selfStatus?.toUpperCase()}${markedTime ? ' at ' + markedTime : ''}`; 
+                    bottomText = `Marked on ${dateDayStr}`; 
+                }
+                extraContent = (<View style={styles.cardActionOverlay}><Text style={styles.cardStatusText}>MY STATUS: {selfStatus?.toUpperCase()} {markedTime && '@ ' + markedTime}</Text><TouchableOpacity onPress={() => handleMarkSelfAttendance(selfStatus === 'present' ? 'absent' : 'present')} style={styles.cardUpdateBtn}><Text style={styles.cardUpdateBtnText}>CHANGE</Text></TouchableOpacity></View>);
+            } else {
+                gradientColors = ['#00b09b', '#96c93d']; iconName = 'checkmark-circle'; title = 'My Attendance'; isInteractive = true; mainText = 'NOT MARKED'; bottomText = fullDateTimeStr;
+                extraContent = (<View style={styles.markingButtons}><TouchableOpacity style={styles.mBtnPresent} onPress={() => handleMarkSelfAttendance('present')}><Text style={styles.mBtnTextPresent}>PRESENT</Text></TouchableOpacity><TouchableOpacity style={styles.mBtnAbsent} onPress={() => setAbsentReasonModalVisible(true)}><Text style={styles.mBtnTextAbsent}>ABSENT</Text></TouchableOpacity></View>);
+            }
+        }
+        else if (item.type === 'homework') { gradientColors = GRADIENTS.homework; iconName = 'book'; title = 'Homework Stats'; const classCount = item.data?.todayClassCount || 0; mainText = `${classCount} Class${classCount === 1 ? '' : 'es'}`; bottomText = classCount > 0 ? `Added homework in ${classCount} classes today` : 'No homework assigned'; }
+        else if (item.type === 'greeting') { 
+            title = item.data.greeting; 
+            mainText = timeStr; 
+            bottomText = dateDayStr; 
+            gradientColors = (GRADIENTS as any)[item.data.type]; 
+            iconName = item.data.greeting === 'Good Night' ? 'moon' : (item.data.type === 'morning' ? 'sunny' : item.data.type === 'afternoon' ? 'partly-sunny' : 'moon'); 
+        }
+        else if (item.type === 'revenue') {
+            title = 'Daily Revenue';
+            iconName = 'cash';
+            gradientColors = GRADIENTS.revenue;
+            mainText = `₹${(item.data?.daily_total || 0).toLocaleString('en-IN')}`;
+            bottomText = fullDateTimeStr;
+        }
+        else if (item.type === 'event') { title = "Institute Event"; mainText = item.data.title; bottomText = item.data.description || "Check calendar"; gradientColors = GRADIENTS.event; iconName = 'star'; }
 
         return (
             <TouchableOpacity 
-                activeOpacity={isInteractive ? 1 : 0.95}
-                onPress={() => {
-                    if (isLocked && item.type !== 'greeting' && item.type !== 'event') {
-                        Toast.show({ 
-                            type: 'error', 
-                            text1: 'Locked', 
-                            text2: 'Institute subscription expired',
-                            position: 'bottom',
-                            bottomOffset: 40
-                        });
-                        return;
+                activeOpacity={isInteractive ? 1 : 0.95} 
+                onPress={() => { 
+                    if (isLocked && item.type !== 'greeting' && item.type !== 'event') return; 
+                    if (item.type === 'student') {
+                        router.push({ pathname: '/(teacher)/stats', params: { initialTab: 'students' } });
+                    } else if (item.type === 'attendance_merged') {
+                        router.push({ pathname: '/(teacher)/stats', params: { initialTab: 'teachers' } });
+                    } else if (item.type === 'revenue') {
+                        router.push({ pathname: '/(teacher)/stats', params: { initialTab: 'revenue' } });
+                    } else if (item.type === 'homework') {
+                        router.push('/(teacher)/homework');
+                    } else if (item.type === 'event') {
+                        router.push('/(teacher)/academic-calendar');
                     }
-                    if (item.type === 'student') router.push({ pathname: '/(teacher)/stats', params: { initialTab: 'students' } });
-                    else if (item.type === 'teacher') router.push({ pathname: '/(teacher)/stats', params: { initialTab: 'teachers' } });
-                    else if (item.type === 'revenue') router.push({ pathname: '/(teacher)/stats', params: { initialTab: 'revenue' } });
-                    else if (item.type === 'attendance_merged' && !!item.data.self) router.push({ pathname: '/(teacher)/stats', params: { initialTab: 'teachers' } }); // Keep regular teacher nav same if they click stats (but permissions handle access)
-                    else if (item.type === 'homework') router.push('/(teacher)/homework');
-                    else if (item.type === 'event') router.push('/(teacher)/academic-calendar');
-                }}
-                onPressIn={() => { isInteracting.current = true; stopTimer(); }}
-                onPressOut={() => { isInteracting.current = false; startTimer(); }}
+                }} 
                 style={[styles.cardContainer, isLocked && item.type !== 'greeting' && item.type !== 'event' && { opacity: 0.6 }]}
             >
-                <LinearGradient colors={gradientColors as any} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={styles.cardGradient}>
-                    <View style={styles.cardHeader}>
-                        <View>
-                            <Text style={styles.cardTitle}>{title}</Text>
-                            <Text style={styles.cardSub}>{subTitle}</Text>
-                        </View>
-                        <View style={styles.cardIconBg}>
-                            {isLocked && item.type !== 'greeting' && item.type !== 'event' ? (
-                                <Ionicons name="lock-closed" size={22} color="#fff" />
-                            ) : (
-                                item.type === 'revenue' ? (
-                                    <Text style={{ fontSize: 24, color: '#fff', fontWeight: '900' }}>₹</Text>
-                                ) : (
-                                    <Ionicons name={iconName} size={22} color="#fff" />
-                                )
-                            )}
-                        </View>
-                    </View>
-                    <View>
-                        <Text style={{ fontSize: item.type === 'greeting' ? 20 : 28, fontWeight: '900', color: '#fff', letterSpacing: 0.5 }} numberOfLines={2}>{mainText}</Text>
-                        <Text style={styles.cardBottomText}>{bottomText}</Text>
-                        {extraContent}
-                    </View>
-                </LinearGradient>
+                <LinearGradient colors={gradientColors as any} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={styles.cardGradient}><View style={styles.cardHeader}><View><Text style={styles.cardTitle}>{title}</Text><Text style={styles.cardSub}>{item.type === 'greeting' ? 'Institute Connect' : (teacherData?.special_permission ? 'Live Updates' : dateDayStr)}</Text></View><View style={styles.cardIconBg}><Ionicons name={isLocked && item.type !== 'greeting' && item.type !== 'event' ? "lock-closed" : iconName} size={22} color="#fff" /></View></View><View><Text style={{ fontSize: item.type === 'greeting' || item.type === 'revenue' ? 36 : 28, fontWeight: '900', color: '#fff' }} numberOfLines={2}>{mainText}</Text><Text style={styles.cardBottomText}>{bottomText}</Text>{extraContent}</View></LinearGradient>
             </TouchableOpacity>
         );
     };
-
-    const toggleSearch = () => {
-        if (isSearchActive) {
-            searchBarWidth.value = withTiming(0, { duration: 300 });
-            searchBarOpacity.value = withTiming(0, { duration: 200 });
-            setSearchQuery('');
-            setTimeout(() => setIsSearchActive(false), 300);
-        } else {
-            setIsSearchActive(true);
-            searchBarWidth.value = withSpring(SCREEN_WIDTH - 40, { damping: 15, stiffness: 100 });
-            searchBarOpacity.value = withTiming(1, { duration: 300 });
-        }
-    };
-
-    const animatedSearchStyle = useAnimatedStyle(() => ({ width: searchBarWidth.value, opacity: searchBarOpacity.value }));
 
     const actions = useMemo(() => {
         const allActions = [
@@ -648,19 +647,17 @@ export default function TeacherDashboard() {
             { title: 'Attendance', icon: 'checkmark-done', color: '#9C27B0', bgDark: '#2E1A47', bgLight: '#F3E5F5', path: '/(teacher)/attendance' },
             { title: 'Students', icon: 'school', color: '#3498DB', bgDark: '#1B263B', bgLight: '#E3F2FD', path: '/(teacher)/students' },
             { title: 'Add Student', icon: 'person-add', color: '#27AE60', bgDark: '#1B2C1B', bgLight: '#E8F5E9', path: '/(teacher)/add-student' },
+            { title: 'Promotion', icon: 'trending-up-outline', color: '#6366f1', bgDark: '#1B1B2C', bgLight: '#EEF2FF', path: '/(teacher)/promotion' },
             { title: 'Homework', icon: 'book', color: '#F39C12', bgDark: '#3D2B1B', bgLight: '#FFF3E0', path: '/(teacher)/homework' },
+            { title: 'Fees', icon: 'cash-outline', color: '#10b981', bgDark: '#1B2C1B', bgLight: '#E8F5E9', path: '/(teacher)/fees', restricted: true },
+            { title: 'Transport', icon: 'bus-outline', color: '#06b6d4', bgDark: '#1B2E33', bgLight: '#E0F7FA', path: '/(teacher)/transport' },
+            { title: 'ID Card', icon: 'person-circle-outline', color: '#009688', bgDark: '#1B2E2A', bgLight: '#E0F2F1', path: '/(teacher)/id-card' },
             { title: 'Admit Card', icon: 'card-outline', color: '#6366f1', bgDark: '#2D1B36', bgLight: '#F3E5F5', path: '/(teacher)/admit-card' },
+            { title: 'Result', icon: 'document-text-outline', color: '#8E44AD', bgDark: '#2D1B36', bgLight: '#F3E5F5', path: '/(teacher)/results' },
             { title: 'Academic Calendar', icon: 'calendar-number-outline', color: '#795548', bgDark: '#3E2723', bgLight: '#FFF3E0', path: '/(teacher)/academic-calendar' },
-            { title: 'Fees Management', icon: 'custom-rupee', color: '#3F51B5', bgDark: '#1A237E', bgLight: '#E8EAF6', path: '/(teacher)/fees', restricted: true },
         ];
-        
         return allActions.filter(a => !a.restricted || teacherData?.special_permission);
     }, [teacherData, isDark]);
-
-    const handleLogout = async () => {
-        await AsyncStorage.clear();
-        router.replace('/(auth)/teacher-login');
-    };
 
     const styles = useMemo(() => StyleSheet.create({
         container: { flex: 1, backgroundColor: theme.background },
@@ -669,21 +666,15 @@ export default function TeacherDashboard() {
         headerRight: { flexDirection: 'row', alignItems: 'center' },
         avatarWrapper: { marginLeft: 12, position: 'relative' },
         headerAvatar: { width: 44, height: 44, borderRadius: 22 },
-        placeholderAvatar: { width: 44, height: 44, borderRadius: 22, justifyContent: 'center', alignItems: 'center' },
+        placeholderAvatar: { width: 44, height: 44, borderRadius: 22, backgroundColor: theme.primary, justifyContent: 'center', alignItems: 'center' },
         avatarText: { color: '#fff', fontSize: 18, fontWeight: 'bold' },
         onlineDot: { position: 'absolute', bottom: 2, right: 2, width: 12, height: 12, borderRadius: 6, backgroundColor: theme.success, borderWidth: 2, borderColor: theme.card },
-        
         notificationBar: { flex: 1, height: 52, backgroundColor: theme.card, borderRadius: 16, marginRight: 12, flexDirection: 'row', alignItems: 'center', paddingHorizontal: 12, borderWidth: 1, borderColor: theme.border, elevation: 4 },
         notifIconCircle: { width: 32, height: 32, borderRadius: 10, backgroundColor: '#f59e0b', justifyContent: 'center', alignItems: 'center' },
         notifTitle: { fontSize: 10, fontWeight: '800', color: '#f59e0b', textTransform: 'uppercase' },
         notifText: { fontSize: 13, fontWeight: '600', color: theme.text, marginTop: 1 },
         notifBadgeRed: { position: 'absolute', top: -2, right: -2, width: 10, height: 10, borderRadius: 5, backgroundColor: '#ef4444', borderWidth: 2, borderColor: '#fff' },
-        
         gradientIconBtn: { width: 48, height: 48, borderRadius: 24, justifyContent: 'center', alignItems: 'center', elevation: 6 },
-        animatedSearchBar: { position: 'absolute', top: insets.top + 62, left: 20, right: 20, height: 52, backgroundColor: theme.card, borderRadius: 25, flexDirection: 'row', alignItems: 'center', paddingHorizontal: 15, zIndex: 100, borderWidth: 1, borderColor: theme.border, elevation: 10 },
-        searchInput: { flex: 1, fontSize: 15, color: theme.text, marginLeft: 10 },
-        resultsContainer: { position: 'absolute', top: 130, left: 20, right: 20, backgroundColor: theme.card, borderRadius: 15, maxHeight: 350, zIndex: 1000, borderWidth: 1, borderColor: theme.border, elevation: 10 },
-        
         content: { flex: 1 },
         cardContainer: { width: SCREEN_WIDTH - 30, height: 170, marginHorizontal: 15, borderRadius: 24, elevation: 8 },
         cardGradient: { flex: 1, borderRadius: 24, padding: 20, justifyContent: 'space-between' },
@@ -691,122 +682,27 @@ export default function TeacherDashboard() {
         cardTitle: { fontSize: 18, fontWeight: '800', color: '#fff' },
         cardSub: { fontSize: 12, color: 'rgba(255,255,255,0.85)', marginTop: 4, fontWeight: '600' },
         cardIconBg: { width: 44, height: 44, borderRadius: 22, backgroundColor: 'rgba(255,255,255,0.2)', justifyContent: 'center', alignItems: 'center' },
-        cardMainText: { fontSize: 28, fontWeight: '900', color: '#fff', letterSpacing: 0.5 },
         cardBottomText: { fontSize: 13, color: 'rgba(255,255,255,0.9)', marginTop: 4, fontWeight: '600' },
-        
         markingButtons: { flexDirection: 'row', gap: 10, marginTop: 10 },
         mBtnPresent: { backgroundColor: '#fff', paddingHorizontal: 15, paddingVertical: 8, borderRadius: 10 },
         mBtnTextPresent: { color: '#00b09b', fontWeight: '900', fontSize: 12 },
         mBtnAbsent: { backgroundColor: 'rgba(255,255,255,0.2)', paddingHorizontal: 15, paddingVertical: 8, borderRadius: 10, borderWidth: 1, borderColor: '#fff' },
         mBtnTextAbsent: { color: '#fff', fontWeight: '900', fontSize: 12 },
-        
         cardActionOverlay: { marginTop: 8, paddingTop: 8, borderTopWidth: 1, borderTopColor: 'rgba(255,255,255,0.3)', flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
         cardStatusText: { color: 'rgba(255,255,255,0.9)', fontSize: 11, fontWeight: '800' },
         cardUpdateBtn: { backgroundColor: 'rgba(255,255,255,0.2)', paddingHorizontal: 10, paddingVertical: 5, borderRadius: 8 },
         cardUpdateBtnText: { color: '#fff', fontSize: 10, fontWeight: '900' },
-        
-        hwMetaBox: { marginTop: 8, paddingTop: 8, borderTopWidth: 1, borderTopColor: 'rgba(255,255,255,0.3)' },
-        hwMetaText: { color: 'rgba(255,255,255,0.9)', fontSize: 12, fontWeight: '700' },
-
-        hwGridContainer: { 
-            flexDirection: 'row', 
-            flexWrap: 'wrap', 
-            marginTop: 5,
-            justifyContent: 'flex-start',
-            gap: 8,
-            height: 120
-        },
-        hwGridItem: { 
-            width: (SCREEN_WIDTH - 100) / 3,
-            backgroundColor: 'rgba(255,255,255,0.15)',
-            padding: 6,
-            borderRadius: 10,
-            alignItems: 'center',
-            borderWidth: 1,
-            borderColor: 'rgba(255,255,255,0.2)'
-        },
-        hwGridClass: { 
-            color: '#fff', 
-            fontSize: 10, 
-            fontWeight: '900',
-            textTransform: 'uppercase'
-        },
-        hwGridStat: { 
-            color: '#fff', 
-            fontSize: 12, 
-            fontWeight: '700',
-            marginTop: 2
-        },
-
         routineSection: { padding: 20, paddingBottom: 10 },
         sectionHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-end', marginBottom: 15 },
         sectionTitle: { fontSize: 20, fontWeight: '900', color: theme.text },
         viewWeeklyBtn: { flexDirection: 'row', alignItems: 'center', backgroundColor: theme.primary + '15', paddingVertical: 6, paddingHorizontal: 12, borderRadius: 10 },
         viewWeeklyText: { fontSize: 12, fontWeight: 'bold', color: theme.primary, marginRight: 4 },
-        todayRoutineCard: { backgroundColor: theme.card, borderRadius: 24, padding: 15, borderWidth: 1, borderColor: theme.border },
-        lecturePill: { width: 160, backgroundColor: theme.background, borderRadius: 18, padding: 12, marginRight: 12, borderWidth: 1, borderColor: theme.border },
-        liveLecturePill: { borderColor: theme.primary, backgroundColor: theme.primary + '10', borderWidth: 2 },
-        liveBadge: { position: 'absolute', top: -10, right: 12, backgroundColor: theme.primary, paddingVertical: 3, paddingHorizontal: 10, borderRadius: 10 },
-        liveBadgeText: { color: '#fff', fontSize: 8, fontWeight: '900' },
-        pillTime: { fontSize: 10, fontWeight: 'bold', color: theme.textLight, marginBottom: 6 },
-        pillSubject: { fontSize: 14, fontWeight: '800', color: theme.text },
-        pillTarget: { fontSize: 11, color: theme.primary, fontWeight: '700' },
-        
         actionsContainer: { padding: 15 },
         actionsBox: { borderWidth: 1, borderColor: theme.border, borderRadius: 22, paddingTop: 20, paddingBottom: 25, backgroundColor: theme.card, position: 'relative', marginBottom: 25, flexDirection: 'row', flexWrap: 'wrap' },
         actionCard: { width: '33.33%', alignItems: 'center', marginBottom: 15 },
         actionIconCircle: { width: 56, height: 56, borderRadius: 18, justifyContent: 'center', alignItems: 'center', marginBottom: 8 },
         actionText: { fontSize: 11, fontWeight: '700', color: theme.text, textAlign: 'center' },
         expandButton: { position: 'absolute', bottom: -15, left: '50%', marginLeft: -15, width: 30, height: 30, borderRadius: 15, backgroundColor: theme.card, borderWidth: 1, borderColor: theme.border, alignItems: 'center', justifyContent: 'center', zIndex: 10, elevation: 3 },
-        
-        reasonModalOverlay: { flex: 1, justifyContent: 'center', alignItems: 'center', padding: 20 },
-        reasonModalContent: { width: '100%', backgroundColor: theme.card, borderRadius: 30, padding: 25, elevation: 10, borderWidth: 1, borderColor: theme.border },
-        reasonModalHeader: { alignItems: 'center', marginBottom: 20 },
-        reasonModalTitle: { fontSize: 20, fontWeight: '900', color: theme.text },
-        reasonModalSubtitle: { fontSize: 13, color: theme.textLight, marginTop: 4 },
-        reasonInput: { backgroundColor: theme.background, borderRadius: 15, padding: 15, color: theme.text, fontSize: 15, borderWidth: 1, borderColor: theme.border, textAlignVertical: 'top', minHeight: 100 },
-        reasonModalFooter: { flexDirection: 'row', gap: 12, marginTop: 20 },
-        reasonBtn: { flex: 1, height: 50, borderRadius: 14, justifyContent: 'center', alignItems: 'center' },
-        skipBtn: { backgroundColor: theme.border },
-        skipBtnText: { color: theme.text, fontWeight: '800' },
-        submitReasonBtn: { backgroundColor: theme.danger },
-        submitReasonText: { color: '#fff', fontWeight: '900' },
-        
-        profileMenuOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.5)', justifyContent: 'flex-start', alignItems: 'flex-end' },
-        profileMenu: { marginTop: 80, marginRight: 20, width: 280, backgroundColor: theme.card, borderRadius: 24, padding: 20, elevation: 10 },
-        profileHeader: { flexDirection: 'row', alignItems: 'center', marginBottom: 20, paddingBottom: 15, borderBottomWidth: 1, borderBottomColor: theme.border },
-        profileInfo: { marginLeft: 12, flex: 1 },
-        profileName: { fontSize: 18, fontWeight: 'bold', color: theme.text },
-        profileSub: { fontSize: 12, color: theme.textLight, marginTop: 2 },
-        menuItem: { flexDirection: 'row', alignItems: 'center', paddingVertical: 12 },
-        menuText: { fontSize: 16, color: theme.text, marginLeft: 12 },
-        toggleBackground: { width: 44, height: 24, borderRadius: 12, backgroundColor: '#ddd', padding: 2 },
-        toggleCircle: { width: 20, height: 20, borderRadius: 10, backgroundColor: '#fff' },
-        toggleCircleActive: { alignSelf: 'flex-end' },
-        
-        sessionMenuPicker: { backgroundColor: isDark ? '#1a1a1a' : '#f9f9f9', marginVertical: 10, borderRadius: 12, padding: 10 },
-        sessionMenuItem: { paddingVertical: 8, borderBottomWidth: 1, borderBottomColor: theme.border },
-        sessionMenuRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
-        sessionMenuName: { fontSize: 14, color: theme.text },
-        
-        modalOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.4)', justifyContent: 'flex-end' },
-        modalContent: { backgroundColor: theme.card, borderTopLeftRadius: 35, borderTopRightRadius: 35, paddingHorizontal: 20, paddingBottom: 40, maxHeight: SCREEN_HEIGHT * 0.85 },
-        modalHandle: { width: 45, height: 6, backgroundColor: theme.border, borderRadius: 3, marginBottom: 15, alignSelf: 'center', marginTop: 15 },
-        modalTitle: { fontSize: 22, fontWeight: '900', color: theme.text, textAlign: 'center' },
-        modalSubtitle: { fontSize: 14, color: theme.textLight, marginTop: 6, textAlign: 'center' },
-        accItem: { flexDirection: 'row', alignItems: 'center', padding: 18, borderRadius: 24, marginBottom: 14, backgroundColor: theme.background },
-        accItemActive: { backgroundColor: theme.primary + '08', borderWidth: 1.5, borderColor: theme.primary + '35' },
-        accAvatar: { width: 56, height: 56, borderRadius: 28 },
-        loggedInDot: { position: 'absolute', top: -2, right: -2, width: 16, height: 16, borderRadius: 8, backgroundColor: theme.success, borderWidth: 3, borderColor: theme.card },
-        accInfo: { flex: 1, marginLeft: 16 },
-        accName: { fontSize: 18, fontWeight: '800', color: theme.text },
-        accSchool: { fontSize: 13, color: theme.textLight, marginTop: 2 },
-        accMeta: { fontSize: 12, color: theme.primary, fontWeight: '700', marginTop: 5 },
-        lockBadge: { flexDirection: 'row', alignItems: 'center', backgroundColor: theme.warning + '12', paddingHorizontal: 12, paddingVertical: 6, borderRadius: 14 },
-        lockText: { fontSize: 12, fontWeight: '800', color: theme.warning, marginLeft: 5 },
-        modalLogoutBtn: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', padding: 16, borderTopWidth: 1, borderTopColor: theme.border, marginTop: 10 },
-        modalLogoutText: { color: theme.danger, fontWeight: '800', fontSize: 16, marginLeft: 10 },
-        
         notifDropdown: { backgroundColor: theme.card, borderRadius: 24, padding: 20, elevation: 10, borderWidth: 1, borderColor: theme.border },
         notifDropdownHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 15, paddingBottom: 10, borderBottomWidth: 1, borderBottomColor: theme.border },
         notifDropdownTitle: { fontSize: 16, fontWeight: '800', color: theme.text },
@@ -815,292 +711,808 @@ export default function TeacherDashboard() {
         notifItemTitle: { fontSize: 14, fontWeight: '800', color: theme.text },
         notifItemMsg: { fontSize: 12, color: theme.textLight, marginTop: 2 },
         notifItemTime: { fontSize: 10, color: theme.textLight, marginLeft: 10, fontWeight: '600' },
-    }), [theme, insets, isDark, flashcardData.length, activeSlide, isSearchActive, searchQuery]);
+        animatedSearchBar: { position: 'absolute', top: insets.top + 70, right: 20, height: 52, backgroundColor: theme.card, borderRadius: 25, flexDirection: 'row', alignItems: 'center', paddingHorizontal: 15, zIndex: 100, borderWidth: 1, borderColor: theme.border, elevation: 10 },
+        searchInput: { flex: 1, fontSize: 15, color: theme.text, marginLeft: 10 },
+        resultsContainer: { position: 'absolute', top: insets.top + 70, left: 20, right: 20, backgroundColor: theme.card, borderRadius: 15, maxHeight: 350, zIndex: 1000, borderWidth: 1, borderColor: theme.border, elevation: 10 },
+        resultItem: { flexDirection: 'row', alignItems: 'center', padding: 15, borderBottomWidth: 1, borderBottomColor: theme.border },
+        resultAvatar: { width: 44, height: 44, borderRadius: 22, backgroundColor: theme.background, marginRight: 15, justifyContent: 'center', alignItems: 'center' },
+        avatarImg: { width: 44, height: 44, borderRadius: 22 },
+        resultName: { fontSize: 16, fontWeight: '700', color: theme.text },
+        resultInfo: { fontSize: 13, color: theme.textLight },
+        typeBadge: { marginLeft: 'auto', fontSize: 10, color: '#fff', paddingVertical: 3, paddingHorizontal: 8, borderRadius: 6, fontWeight: 'bold' },
+        noResults: { padding: 25, textAlign: 'center', color: theme.textLight },
+    }), [theme, insets, isDark, flashcardData.length, activeSlide]);
 
     if (loading && !teacherData) return <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: theme.background }}><ActivityIndicator size="large" color={theme.primary} /></View>;
 
     return (
-        <View style={styles.container}>
-            <StatusBar barStyle={theme.statusBarStyle} backgroundColor="transparent" translucent={true} />
-            <View style={styles.header}>
-                <TouchableOpacity 
-                    onPress={() => setShowAccountModal(true)} 
-                    style={{ marginLeft: -20 }}
-                >
-                    <View style={{ position: 'relative' }}>
-                        <Image source={teacherData?.institute_logo ? { uri: teacherData.institute_logo } : require('../../assets/images/react-logo.png')} style={styles.headerLogo} resizeMode="contain" />
-                    </View>
-                </TouchableOpacity>
-                <View style={styles.headerRight}>
-                    <TouchableOpacity 
-                        onPress={() => !isLocked && setShowProfileMenu(true)} 
-                        style={[styles.avatarWrapper, isLocked && { opacity: 0.7 }]}
-                        activeOpacity={isLocked ? 1 : 0.7}
-                    >
-                        <View style={{ position: 'relative' }}>
-                            {teacherData?.photo_url ? <Image source={{ uri: teacherData.photo_url }} style={styles.headerAvatar} /> : <View style={[styles.placeholderAvatar, { backgroundColor: theme.primary }]}><Text style={styles.avatarText}>{teacherData?.name?.charAt(0) || 'T'}</Text></View>}
-                            {isLocked ? (
-                                <View style={{ position: 'absolute', bottom: 0, right: 0, backgroundColor: theme.danger, width: 18, height: 18, borderRadius: 9, justifyContent: 'center', alignItems: 'center', borderWidth: 2, borderColor: theme.background }}>
-                                    <Ionicons name="lock-closed" size={10} color="#fff" />
-                                </View>
-                            ) : (
-                                <View style={styles.onlineDot} />
-                            )}
-                        </View>
-                    </TouchableOpacity>
+        <TouchableWithoutFeedback onPress={() => { dismissSearch(); Keyboard.dismiss(); }}>
+            <View style={styles.container}>
+                <StatusBar barStyle={theme.statusBarStyle} backgroundColor="transparent" translucent={true} />
+                <View style={styles.header}>
+                    <TouchableOpacity onPress={() => setShowAccountModal(true)} style={{ marginLeft: -20 }}><View style={{ position: 'relative' }}><Image source={teacherData?.institute_logo ? { uri: teacherData.institute_logo } : require('../../assets/images/react-logo.png')} style={styles.headerLogo} resizeMode="contain" /></View></TouchableOpacity>
+                    <View style={styles.headerRight}><TouchableOpacity onPress={() => !isLocked && setShowProfileMenu(true)} style={[styles.avatarWrapper, isLocked && { opacity: 0.7 }]} activeOpacity={isLocked ? 1 : 0.7}><View style={{ position: 'relative' }}>{teacherData?.photo_url ? <Image source={{ uri: teacherData.photo_url }} style={styles.headerAvatar} /> : <View style={[styles.placeholderAvatar, { backgroundColor: theme.primary }]}><Text style={styles.avatarText}>{teacherData?.name?.charAt(0) || 'T'}</Text></View>}{isLocked ? (<View style={{ position: 'absolute', bottom: 0, right: 0, backgroundColor: theme.danger, width: 18, height: 18, borderRadius: 9, justifyContent: 'center', alignItems: 'center', borderWidth: 2, borderColor: theme.background }}><Ionicons name="lock-closed" size={10} color="#fff" /></View>) : (<View style={styles.onlineDot} />)}</View></TouchableOpacity></View>
                 </View>
-            </View>
 
-            {isSearchActive && (
-                <Animated.View style={[styles.animatedSearchBar, animatedSearchStyle]}>
-                    <Ionicons name="search" size={20} color={theme.textLight} />
-                    <TextInput style={styles.searchInput} placeholder="Search Students..." placeholderTextColor={theme.textLight} value={searchQuery} onChangeText={(t) => { setSearchQuery(t); }} autoFocus />
-                    <TouchableOpacity onPress={toggleSearch}><Ionicons name="close-circle" size={20} color={theme.textLight} /></TouchableOpacity>
-                </Animated.View>
-            )}
+                {isSearchActive && <Animated.View style={[styles.animatedSearchBar, animatedSearchStyle]}><Ionicons name="search" size={20} color={theme.textLight} /><TextInput style={styles.searchInput} placeholder="Search Students..." placeholderTextColor={theme.textLight} value={searchQuery} onChangeText={handleSearch} autoFocus /><TouchableOpacity onPress={toggleSearch}><Ionicons name="close-circle" size={20} color={theme.textLight} /></TouchableOpacity></Animated.View>}
 
-            <View style={{ position: 'relative', marginTop: 10, marginHorizontal: 20, zIndex: 90, flexDirection: 'row', alignItems: 'center', opacity: isSearchActive ? 0 : 1 }}>
-                <TouchableOpacity 
-                    style={[styles.notificationBar]} 
-                    activeOpacity={isLocked ? 1 : 0.9} 
-                    onPress={() => !isLocked && notifications.length > 0 && setShowNotifList(true)}
+                <View style={{ position: 'relative', marginTop: 10, marginHorizontal: 20, zIndex: 90, flexDirection: 'row', alignItems: 'center', opacity: isSearchActive ? 0 : 1 }}>
+                    <TouchableOpacity style={[styles.notificationBar]} activeOpacity={isLocked ? 1 : 0.9} onPress={() => !isLocked && notifications.length > 0 && setShowNotifList(true)}><View style={[styles.notifIconCircle, notifications.length === 0 && { backgroundColor: '#6366f1' }]}><Ionicons name="notifications" size={18} color="#fff" />{notifications.length > 0 && <View style={styles.notifBadgeRed} />}</View><View style={{ flex: 1, marginLeft: 12 }}><Text style={[styles.notifTitle, notifications.length === 0 && { color: theme.textLight }]}>{notifications.length > 0 ? `${notifications.length} New Updates` : 'No updates'}</Text><Text style={styles.notifText} numberOfLines={1}>{notifications.length > 0 ? notifications[0].message : 'Everything caught up'}</Text></View><Ionicons name={notifications.length > 0 ? "chevron-down" : "chevron-forward"} size={16} color={theme.textLight} /></TouchableOpacity>
+                    <TouchableOpacity onPress={toggleSearch} activeOpacity={0.7} style={{ marginLeft: 10 }}><LinearGradient colors={['#3b82f6', '#8b5cf6', '#ec4899']} style={[styles.gradientIconBtn]}><Ionicons name="search" size={22} color="#fff" /></LinearGradient></TouchableOpacity>
+                </View>
+
+                {showResults && <View style={styles.resultsContainer}>{searchResults.length === 0 ? <Text style={styles.noResults}>{isSearching ? 'Searching...' : 'No students found'}</Text> : <FlatList data={searchResults} keyExtractor={(item, index) => item.id.toString() + index} renderItem={({ item }) => <TouchableOpacity style={styles.resultItem} onPress={() => handleCreateResult(item)}><View style={styles.resultAvatar}>{item.photo_url ? <Image source={{ uri: item.photo_url }} style={styles.avatarImg} /> : <Ionicons name="person" size={20} color={theme.textLight} />}</View><View><Text style={styles.resultName}>{item.name}</Text><Text style={styles.resultInfo}>{`Class: ${item.class}-${item.section}`}</Text></View><Text style={[styles.typeBadge, { backgroundColor: theme.primary }]}>STUDENT</Text></TouchableOpacity>} />}</View>}
+
+                <ScrollView 
+                    style={styles.content} 
+                    showsVerticalScrollIndicator={false} 
+                    contentContainerStyle={{ paddingBottom: insets.bottom + 100 }} 
+                    refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} colors={[theme.primary]} tintColor={theme.primary} />}
                 >
-                    <View style={[styles.notifIconCircle, notifications.length === 0 && { backgroundColor: '#6366f1' }]}><Ionicons name="notifications" size={18} color="#fff" />{notifications.length > 0 && <View style={styles.notifBadgeRed} />}</View>
-                    <View style={{ flex: 1, marginLeft: 12 }}><Text style={[styles.notifTitle, notifications.length === 0 && { color: theme.textLight }]}>{notifications.length > 0 ? `${notifications.length} New Updates` : 'No updates'}</Text><Text style={styles.notifText} numberOfLines={1}>{notifications.length > 0 ? notifications[0].message : 'Everything caught up'}</Text></View>
-                    <Ionicons name={notifications.length > 0 ? "chevron-down" : "chevron-forward"} size={16} color={theme.textLight} />
-                </TouchableOpacity>
-                <TouchableOpacity 
-                    onPress={() => {
-                        if (isLocked) {
-                            Toast.show({ type: 'error', text1: 'Locked', text2: 'Subscription expired', position: 'bottom', bottomOffset: 40 });
-                            return;
-                        }
-                        toggleSearch();
-                    }} 
-                    activeOpacity={isLocked ? 1 : 0.8}
-                >
-                    <LinearGradient colors={['#3b82f6', '#8b5cf6', '#ec4899']} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={[styles.gradientIconBtn]}><Ionicons name="search" size={22} color="#fff" /></LinearGradient>
-                </TouchableOpacity>
-
-                {isLocked && (
-                    <View style={{ ...StyleSheet.absoluteFillObject, backgroundColor: isDark ? 'rgba(0,0,0,0.6)' : 'rgba(255,255,255,0.6)', borderRadius: 16, zIndex: 100, justifyContent: 'center', alignItems: 'center' }}>
-                        <Ionicons name="lock-closed" size={16} color={theme.danger} />
-                    </View>
-                )}
-            </View>
-
-            <ScrollView style={styles.content} showsVerticalScrollIndicator={false} contentContainerStyle={{ paddingBottom: insets.bottom + 40 }} refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} colors={[theme.primary]} tintColor={theme.primary} />}>
-                <View style={{ position: 'relative', marginTop: 15, marginBottom: 5 }}>
-                    <Animated.FlatList
-                        ref={flatListRef as any}
-                        data={flashcardData}
-                        renderItem={renderFlashcardItem}
-                        keyExtractor={(item, index) => item.type + index}
-                        horizontal
-                        pagingEnabled
-                        showsHorizontalScrollIndicator={false}
-                        onMomentumScrollEnd={onMomentumScrollEnd}
-                        getItemLayout={(data, index) => ({ length: SCREEN_WIDTH, offset: SCREEN_WIDTH * index, index })}
-                        snapToInterval={SCREEN_WIDTH}
-                        decelerationRate="fast"
-                        style={{ width: SCREEN_WIDTH }}
+                <View style={{ width: SCREEN_WIDTH, height: 185, marginTop: 15, marginBottom: 5 }}>
+                    <Animated.FlatList 
+                        ref={flatListRef as any} 
+                        data={flashcardData} 
+                        renderItem={renderFlashcardItem} 
+                        keyExtractor={(item, index) => item.type + index} 
+                        horizontal 
+                        pagingEnabled 
+                        showsHorizontalScrollIndicator={false} 
+                        onMomentumScrollEnd={onMomentumScrollEnd} 
+                        getItemLayout={(data, index) => ({ length: SCREEN_WIDTH, offset: SCREEN_WIDTH * index, index })} 
+                        snapToInterval={SCREEN_WIDTH} 
+                        decelerationRate="fast" 
+                        style={{ flex: 1 }} 
                     />
-                    <View style={{ flexDirection: 'row', justifyContent: 'center', marginTop: 10 }}>{flashcardData.filter(f => !f.isDuplicate).map((_, idx) => <View key={idx} style={{ width: activeSlide === idx ? 20 : 8, height: 8, borderRadius: 4, backgroundColor: activeSlide === idx ? theme.primary : theme.border, marginHorizontal: 4 }} />)}</View>
-                    
-                    {isLocked && (
-                        <View style={{
-                            ...StyleSheet.absoluteFillObject,
-                            backgroundColor: theme.background,
-                            zIndex: 1000,
-                            justifyContent: 'center',
-                            alignItems: 'center',
-                            borderWidth: 1,
-                            borderColor: theme.border,
-                            top: -10,
-                            bottom: -20,
-                            left: -5,
-                            right: -5
-                        }}>
-                            <View style={{ width: 64, height: 64, borderRadius: 32, backgroundColor: theme.danger + '10', justifyContent: 'center', alignItems: 'center' }}>
-                                <Ionicons name="lock-closed" size={36} color={theme.danger} />
-                            </View>
-                            <Text style={{ color: theme.text, fontWeight: '900', marginTop: 15, fontSize: 18 }}>Staff Insights Locked</Text>
-                            <Text style={{ color: theme.textLight, fontSize: 13, marginTop: 5, fontWeight: '600' }}>Subscription Renewal Required</Text>
-                        </View>
-                    )}
+                    <View style={{ flexDirection: 'row', justifyContent: 'center', marginTop: 10 }}>
+                        {flashcardData.map((_, idx) => (
+                            <View 
+                                key={idx} 
+                                style={{ 
+                                    width: activeSlide === idx ? 20 : 8, 
+                                    height: 8, 
+                                    borderRadius: 4, 
+                                    backgroundColor: activeSlide === idx ? theme.primary : theme.border, 
+                                    marginHorizontal: 4 
+                                }} 
+                            />
+                        ))}
+                    </View>
                 </View>
 
-                <Modal visible={absentReasonModalVisible} transparent={true} animationType="fade">
-                    <View style={styles.reasonModalOverlay}><BlurView intensity={30} style={StyleSheet.absoluteFill} /><KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : 'height'} style={{ width: '100%', alignItems: 'center' }}><View style={styles.reasonModalContent}><View style={styles.reasonModalHeader}><Text style={styles.reasonModalTitle}>Reason for Absence</Text><Text style={styles.reasonModalSubtitle}>Optional: Add a note or just skip</Text></View><TextInput style={styles.reasonInput} placeholder="Enter reason..." placeholderTextColor={theme.textLight + '80'} value={absentReason} onChangeText={setAbsentReason} multiline numberOfLines={3} /><View style={styles.reasonModalFooter}><TouchableOpacity style={[styles.reasonBtn, { backgroundColor: theme.border }]} onPress={() => handleMarkSelfAttendance('absent')}><Text style={{ color: theme.text, fontWeight: '800' }}>SKIP</Text></TouchableOpacity><TouchableOpacity style={[styles.reasonBtn, { backgroundColor: theme.danger }]} onPress={() => handleMarkSelfAttendance('absent', absentReason)}><Text style={{ color: '#fff', fontWeight: '900' }}>MARK ABSENT</Text></TouchableOpacity></View><TouchableOpacity style={{ marginTop: 20, alignItems: 'center' }} onPress={() => setAbsentReasonModalVisible(false)}><Text style={{ color: theme.textLight, fontWeight: '700' }}>Cancel</Text></TouchableOpacity></View></KeyboardAvoidingView></View>
-                </Modal>
-
-                {schedule.length > 0 && (
-                    <View style={[styles.routineSection, { position: 'relative' }]}>
-                        <View style={styles.sectionHeader}><Text style={styles.sectionTitle}>Today's Schedule</Text><TouchableOpacity style={styles.viewWeeklyBtn} onPress={() => {
-                            if (isLocked) {
-                                Toast.show({ 
-                                    type: 'error', 
-                                    text1: 'Locked', 
-                                    text2: 'Subscription expired',
-                                    position: 'bottom',
-                                    bottomOffset: 40
-                                });
-                                return;
-                            }
-                            setIsWeeklyModalOpen(true)
-                        }}><Text style={styles.viewWeeklyText}>Weekly Flow</Text><Ionicons name="calendar-outline" size={14} color={theme.primary} /></TouchableOpacity></View>
-                        <View style={styles.todayRoutineCard}><ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{paddingRight: 20}}>{schedule.filter(s => s.day === ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'][new Date().getDay()]).length === 0 ? <View style={{ padding: 20, alignItems: 'center' }}><Text style={{ color: theme.textLight, fontSize: 14, fontWeight: '600' }}>No lectures today ☕</Text></View> : schedule.filter(s => s.day === ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'][new Date().getDay()]).map((item, idx) => {
-                            const now = new Date(); const currentTime = now.getHours() * 60 + now.getMinutes(); const parseTime = (t: string) => { if (!t) return 0; const [time, modifier] = t.split(' '); let [hours, minutes] = time.split(':').map(Number); if (modifier === 'PM' && hours < 12) hours += 12; if (modifier === 'AM' && hours === 12) hours = 0; return hours * 60 + minutes; };
-                            const start = parseTime(item.startTime); const end = parseTime(item.endTime); const isLive = currentTime >= start && currentTime <= end;
-                            return <View key={idx} style={[styles.lecturePill, isLive && styles.liveLecturePill]}>{isLive && <View style={styles.liveBadge}><Text style={styles.liveBadgeText}>LIVE</Text></View>}<Text style={styles.pillTime}>{item.startTime} - {item.endTime}</Text><Text style={styles.pillSubject} numberOfLines={1}>{item.subject}</Text><Text style={styles.pillTarget}>Class {item.className}-{item.section}</Text></View>;
-                        })}</ScrollView></View>
-
-                        {isLocked && (
-                            <View style={{
-                                ...StyleSheet.absoluteFillObject,
-                                backgroundColor: theme.background,
-                                zIndex: 1000,
-                                justifyContent: 'center',
-                                alignItems: 'center',
-                                borderWidth: 1,
-                                borderColor: theme.border,
-                                top: 5,
-                                bottom: -5,
-                                left: 10,
-                                right: 10,
-                                borderRadius: 24
-                            }}>
-                                <Ionicons name="lock-closed" size={24} color={theme.danger} />
-                                <Text style={{ color: theme.text, fontWeight: '800', marginTop: 8, fontSize: 14 }}>Schedule Hidden</Text>
-                            </View>
-                        )}
+                {/* Today's Schedule - Compact Premium Redesign */}
+                <View style={{ marginTop: 15 }}>
+                    <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingHorizontal: 20, marginBottom: 12 }}>
+                        <View>
+                            <Text style={{ fontSize: 18, fontWeight: '900', color: theme.text }}>Today's Schedule</Text>
+                            <View style={{ height: 3, width: 20, backgroundColor: theme.primary, borderRadius: 2, marginTop: 4 }} />
+                        </View>
+                        <TouchableOpacity 
+                            style={{ flexDirection: 'row', alignItems: 'center', backgroundColor: isDark ? '#1a1a1a' : '#f0f0f0', paddingHorizontal: 12, paddingVertical: 6, borderRadius: 10 }} 
+                            onPress={() => setIsWeeklyModalOpen(true)}
+                        >
+                            <Text style={{ fontSize: 11, fontWeight: '800', color: theme.textLight, marginRight: 4 }}>WEEKLY</Text>
+                            <Ionicons name="calendar-outline" size={12} color={theme.textLight} />
+                        </TouchableOpacity>
                     </View>
-                )}
+
+                    <ScrollView 
+                        ref={studentScrollRef}
+                        horizontal 
+                        showsHorizontalScrollIndicator={false} 
+                        contentContainerStyle={{ paddingLeft: 20, paddingRight: 20, paddingVertical: 5 }}
+                    >
+                        {(() => {
+                            if (!routine || !Array.isArray(routine) || routine.length === 0) {
+                                return (
+                                    <View style={{ width: SCREEN_WIDTH - 40, height: 80, backgroundColor: theme.card, borderRadius: 20, justifyContent: 'center', alignItems: 'center', borderWidth: 1, borderColor: theme.border, borderStyle: 'dashed' }}>
+                                        <Text style={{ color: theme.textLight, fontSize: 13, fontWeight: '600' }}>No routine found for today</Text>
+                                    </View>
+                                );
+                            }
+
+                            const days = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
+                            const todayName = days[new Date().getDay()];
+                            const todayData = routine.filter((item: any) => item.day === todayName).sort((a, b) => a.startTime.localeCompare(b.startTime));
+
+                            if (todayData.length === 0) {
+                                return (
+                                    <View style={{ width: SCREEN_WIDTH - 40, height: 80, backgroundColor: theme.card, borderRadius: 20, justifyContent: 'center', alignItems: 'center', borderWidth: 1, borderColor: theme.border, borderStyle: 'dashed' }}>
+                                        <Text style={{ color: theme.textLight, fontSize: 13, fontWeight: '600' }}>You're free today! ☕</Text>
+                                    </View>
+                                );
+                            }
+
+                            return todayData.map((item: any, pIdx: number) => {
+                                const now = new Date();
+                                const currentTime = now.getHours() * 60 + now.getMinutes();
+                                const parseTime = (t: string) => {
+                                    if (!t) return 0;
+                                    const [hours, minutes] = t.split(':').map(Number);
+                                    return hours * 60 + minutes;
+                                };
+                                const start = parseTime(item.startTime);
+                                const end = parseTime(item.endTime);
+                                const isLive = currentTime >= start && currentTime <= end;
+
+                                // Stunning Premium Blended Gradients
+                                const PREMIUM_GRADIENTS = [
+                                    ['#4158D0', '#C850C0', '#FFCC70'], // Cosmic Fusion
+                                    ['#0093E9', '#80D0C7'],             // Deep Ocean
+                                    ['#8EC5FC', '#E0C3FC'],             // Lavender Sky
+                                    ['#FBAB7E', '#F7CE68'],             // Sunset Glow
+                                    ['#85FFBD', '#FFFB7D'],             // Fresh Mint
+                                    ['#21D4FD', '#B721FF'],             // Electric Violet
+                                    ['#08AEEA', '#2AF598'],             // Arctic Cyan
+                                ];
+                                
+                                const gradient = PREMIUM_GRADIENTS[pIdx % PREMIUM_GRADIENTS.length];
+
+                                return (
+                                    <TouchableOpacity 
+                                        key={pIdx} 
+                                        activeOpacity={0.95}
+                                        style={{ 
+                                            width: 175, 
+                                            height: 120, 
+                                            marginRight: 16, 
+                                            borderRadius: 28, 
+                                            elevation: isLive ? 15 : 5,
+                                            shadowColor: gradient[0],
+                                            shadowOpacity: isLive ? 0.7 : 0.2,
+                                            shadowRadius: 15,
+                                            shadowOffset: { width: 0, height: 8 },
+                                        }}
+                                    >
+                                        <LinearGradient
+                                            colors={gradient}
+                                            start={{ x: 0, y: 0 }}
+                                            end={{ x: 1, y: 1 }}
+                                            style={{ 
+                                                flex: 1, 
+                                                borderRadius: 28, 
+                                                padding: 18,
+                                                borderWidth: isLive ? 2.5 : 0,
+                                                borderColor: 'rgba(255,255,255,0.7)',
+                                                justifyContent: 'space-between',
+                                                overflow: 'hidden',
+                                            }}
+                                        >
+                                            {/* Advanced Decorative Elements (Glassmorphism) */}
+                                            <View style={{ 
+                                                position: 'absolute', 
+                                                right: -25, 
+                                                top: -25, 
+                                                width: 90, 
+                                                height: 90, 
+                                                borderRadius: 45, 
+                                                backgroundColor: 'rgba(255,255,255,0.2)', 
+                                                zIndex: 0 
+                                            }} />
+                                            
+                                            <View style={{ 
+                                                position: 'absolute', 
+                                                left: -30, 
+                                                bottom: -30, 
+                                                width: 80, 
+                                                height: 80, 
+                                                borderRadius: 40, 
+                                                backgroundColor: 'rgba(0,0,0,0.08)', 
+                                                zIndex: 0 
+                                            }} />
+
+                                            <View style={{ zIndex: 1 }}>
+                                                <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
+                                                    <View style={{ 
+                                                        flexDirection: 'row', 
+                                                        alignItems: 'center', 
+                                                        backgroundColor: 'rgba(255,255,255,0.28)',
+                                                        paddingHorizontal: 10,
+                                                        paddingVertical: 5,
+                                                        borderRadius: 12
+                                                    }}>
+                                                        <Ionicons 
+                                                            name="time" 
+                                                            size={13} 
+                                                            color="#fff" 
+                                                        />
+                                                        <Text style={{ 
+                                                            fontSize: 10.5, 
+                                                            fontWeight: '900', 
+                                                            color: '#fff',
+                                                            marginLeft: 5,
+                                                            letterSpacing: 0.2
+                                                        }}>
+                                                            {item.startTime} - {item.endTime}
+                                                        </Text>
+                                                    </View>
+                                                    
+                                                    {isLive && <LiveBadge />}
+                                                </View>
+                                                
+                                                <Text style={{ 
+                                                    fontSize: 19, 
+                                                    fontWeight: '900', 
+                                                    color: '#fff',
+                                                    letterSpacing: -0.6,
+                                                    textShadowColor: 'rgba(0,0,0,0.15)',
+                                                    textShadowOffset: { width: 0, height: 1.5 },
+                                                    textShadowRadius: 3
+                                                }} numberOfLines={1}>
+                                                    {item.subject}
+                                                </Text>
+                                            </View>
+
+                                            <View style={{ 
+                                                flexDirection: 'row', 
+                                                alignItems: 'center', 
+                                                justifyContent: 'space-between',
+                                                zIndex: 1,
+                                                marginTop: 4
+                                            }}>
+                                                <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+                                                    <View style={{ 
+                                                        width: 28, 
+                                                        height: 28, 
+                                                        borderRadius: 10, 
+                                                        backgroundColor: 'rgba(255,255,255,0.3)', 
+                                                        justifyContent: 'center', 
+                                                        alignItems: 'center',
+                                                        marginRight: 10
+                                                    }}>
+                                                        <Ionicons name="school" size={14} color="#fff" />
+                                                    </View>
+                                                    <Text style={{ 
+                                                        fontSize: 14, 
+                                                        fontWeight: '800', 
+                                                        color: 'rgba(255,255,255,0.95)',
+                                                        letterSpacing: -0.2
+                                                    }}>
+                                                        {item.className}-{item.section}
+                                                    </Text>
+                                                </View>
+                                                
+                                                <View style={{ backgroundColor: 'rgba(255,255,255,0.2)', padding: 4, borderRadius: 10 }}>
+                                                    <Ionicons name="chevron-forward" size={16} color="#fff" />
+                                                </View>
+                                            </View>
+                                        </LinearGradient>
+                                    </TouchableOpacity>
+                                );
+                            });
+                        })()}
+                    </ScrollView>
+                </View>
 
                 <View style={styles.actionsContainer}>
                     <View style={styles.actionsBox}>
-                        {(isActionsExpanded ? actions : actions.slice(0, 3)).map((action, index) => (
-                            <TouchableOpacity 
-                                key={index} 
-                                style={styles.actionCard} 
-                                onPress={() => router.push(action.path as any)}
-                            >
-                                <View style={[styles.actionIconCircle, { backgroundColor: isDark ? action.bgDark : action.bgLight }]}>
-                                    {action.icon === 'custom-rupee' ? (
-                                        <Text style={{ fontSize: 24, color: action.color, fontWeight: 'bold' }}>₹</Text>
-                                    ) : (
-                                        <Ionicons name={action.icon as any} size={24} color={action.color} />
-                                    )}
-                                </View>
-                                <Text style={styles.actionText}>{action.title}</Text>
-                            </TouchableOpacity>
-                        ))}
-                        <TouchableOpacity style={styles.expandButton} onPress={() => {
-                            LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
-                            setIsActionsExpanded(!isActionsExpanded);
-                        }}>
-                            <Ionicons name={isActionsExpanded ? "chevron-up" : "chevron-down"} size={18} color={theme.textLight} />
-                        </TouchableOpacity>
-
-                        {/* LARGE LOCK OVERLAY */}
-                        {isLocked && (
-                            <View style={{
-                                ...StyleSheet.absoluteFillObject,
-                                backgroundColor: isDark ? 'rgba(0,0,0,0.85)' : 'rgba(255,255,255,0.9)',
-                                borderRadius: 22,
-                                justifyContent: 'center',
-                                alignItems: 'center',
-                                zIndex: 1000,
-                                borderWidth: 1,
-                                borderColor: theme.danger + '40'
-                            }}>
-                                <View style={{
-                                    width: 60,
-                                    height: 60,
-                                    borderRadius: 30,
-                                    backgroundColor: theme.danger + '15',
-                                    justifyContent: 'center',
-                                    alignItems: 'center',
-                                    marginBottom: 12
-                                }}>
-                                    <Ionicons name="lock-closed" size={32} color={theme.danger} />
-                                </View>
-                                <Text style={{ color: theme.text, fontWeight: '900', fontSize: 16 }}>Actions Locked</Text>
-                                <Text style={{ color: theme.textLight, fontSize: 12, marginTop: 4, fontWeight: '600' }}>Renew Subscription to Access</Text>
-                                <TouchableOpacity 
-                                    onPress={() => Toast.show({ type: 'error', text1: 'Renewal Required', text2: 'Please contact administration', position: 'bottom', bottomOffset: 40 })}
-                                    style={{ marginTop: 15, paddingHorizontal: 20, paddingVertical: 8, borderRadius: 12, backgroundColor: theme.danger }}
-                                >
-                                    <Text style={{ color: '#fff', fontWeight: '800', fontSize: 13 }}>GET ACCESS</Text>
-                                </TouchableOpacity>
-                            </View>
-                        )}
+                        {actions.map((action, index) => (<TouchableOpacity key={index} style={styles.actionCard} onPress={() => router.push(action.path as any)}><View style={[styles.actionIconCircle, { backgroundColor: isDark ? action.bgDark : action.bgLight }]}><Ionicons name={action.icon as any} size={24} color={action.color} /></View><Text style={styles.actionText}>{action.title}</Text></TouchableOpacity>))}
                     </View>
                 </View>
             </ScrollView>
 
-            <Modal visible={showProfileMenu} transparent={true} animationType="fade" onRequestClose={() => setShowProfileMenu(false)}>
-                <TouchableOpacity style={styles.profileMenuOverlay} activeOpacity={1} onPress={() => setShowProfileMenu(false)}><View style={styles.profileMenu}><View style={styles.profileHeader}>{teacherData?.photo_url ? <Image source={{ uri: teacherData.photo_url }} style={styles.headerAvatar} /> : <View style={[styles.placeholderAvatar, { backgroundColor: theme.primary }]}><Text style={styles.avatarText}>{teacherData?.name?.charAt(0) || 'T'}</Text></View>}<View style={styles.profileInfo}><Text style={styles.profileName}>{teacherData?.name}</Text><Text style={styles.profileSub}>{teacherData?.institute_name}</Text></View></View>
-                
-                <TouchableOpacity style={styles.menuItem} onPress={() => toggleTheme()}><Ionicons name={isDark ? "sunny-outline" : "moon-outline"} size={20} color={theme.text} /><Text style={styles.menuText}>{isDark ? 'Light Mode' : 'Dark Mode'}</Text><View style={{ flex: 1 }} /><View style={[styles.toggleBackground, isDark && { backgroundColor: theme.primary }]}><View style={[styles.toggleCircle, isDark && styles.toggleCircleActive]} /></View></TouchableOpacity>
+            <Modal visible={showNotifList} transparent={true} animationType="fade" onRequestClose={() => setShowNotifList(false)}><TouchableOpacity style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.4)', justifyContent: 'flex-start', paddingTop: insets.top + 70, paddingHorizontal: 20 }} activeOpacity={1} onPress={() => setShowNotifList(false)}><View style={styles.notifDropdown}><View style={styles.notifDropdownHeader}><Text style={styles.notifDropdownTitle}>Recent Updates</Text><TouchableOpacity onPress={() => setNotifications([])}><Text style={{ color: theme.danger, fontWeight: '700' }}>Clear All</Text></TouchableOpacity></View><ScrollView style={{ MAX_HEIGHT: 400 }} showsVerticalScrollIndicator={false}>{notifications.length === 0 ? <View style={{ padding: 20, alignItems: 'center' }}><Text style={{ color: theme.textLight }}>No recent updates</Text></View> : notifications.map((item) => <View key={item.id} style={styles.notifItem}><View style={[styles.notifItemDot, { backgroundColor: item.type === 'fees' ? '#10b981' : item.type === 'request' ? '#f59e0b' : theme.primary }]} /><View style={{ flex: 1 }}><Text style={styles.notifItemTitle}>{item.title}</Text><Text style={styles.notifItemMsg}>{item.message}</Text></View><Text style={styles.notifItemTime}>{item.time}</Text></View>)}</ScrollView></View></TouchableOpacity></Modal>
 
-                {/* Academic Session Switcher */}
-                <TouchableOpacity 
-                    style={styles.menuItem} 
-                    onPress={() => setShowSessionPicker(!showSessionPicker)}
+            {/* PROFILE MENU MODAL */}
+            <Modal
+                visible={showProfileMenu}
+                transparent={true}
+                animationType="fade"
+                onRequestClose={() => setShowProfileMenu(false)}
+            >
+                <TouchableOpacity
+                    style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.5)', justifyContent: 'flex-start', alignItems: 'flex-end' }}
+                    activeOpacity={1}
+                    onPress={() => setShowProfileMenu(false)}
                 >
-                    <Ionicons name="calendar-outline" size={20} color={theme.text} />
-                    <View style={{ flex: 1 }}>
-                        <Text style={styles.menuText}>Academic Session</Text>
-                        <Text style={{ fontSize: 11, color: theme.primary, fontWeight: '700', marginLeft: 12 }}>
-                            {sessions.find(s => s.id === selectedSessionId)?.name || 'Select Session'}
-                        </Text>
-                    </View>
-                    <Ionicons name={showSessionPicker ? "chevron-up" : "chevron-down"} size={16} color={theme.textLight} />
-                </TouchableOpacity>
-
-                {showSessionPicker && (
-                    <View style={styles.sessionMenuPicker}>
-                        {sessions.length === 0 && <Text style={{padding: 10, color: theme.textLight, textAlign: 'center', fontSize: 12}}>No sessions found</Text>}
-                        {sessions.map((session) => (
-                            <View key={session.id} style={styles.sessionMenuItem}>
-                                <TouchableOpacity 
-                                    style={styles.sessionMenuRow}
-                                    onPress={async () => {
-                                        if (selectedSessionId !== session.id) {
-                                            try {
-                                                await AsyncStorage.setItem('selectedSessionId', String(session.id));
-                                                setSelectedSessionId(session.id);
-                                                setShowSessionPicker(false);
-                                                setShowProfileMenu(false);
-                                                Toast.show({ type: 'success', text1: 'Session Switched', text2: `Viewing data for ${session.name}` });
-                                                onRefresh(session.id);
-                                            } catch (e) {
-                                                Toast.show({ type: 'error', text1: 'Error', text2: 'Failed to switch session' });
-                                            }
-                                        }
-                                    }}
-                                >
-                                    <Text style={[styles.sessionMenuName, session.id === selectedSessionId && { color: theme.primary, fontWeight: '800' }]}>
-                                        {session.name}
-                                    </Text>
-                                    <View style={{ flexDirection: 'row', gap: 10 }}>
-                                        {session.id === selectedSessionId && <Ionicons name="checkmark" size={16} color={theme.primary} />}
-                                    </View>
-                                </TouchableOpacity>
+                    <View style={{ marginTop: insets.top + 60, marginRight: 20, width: 280, backgroundColor: theme.card, borderRadius: 24, padding: 20, elevation: 10 }}>
+                        <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 20, paddingBottom: 15, borderBottomWidth: 1, borderBottomColor: theme.border }}>
+                            {teacherData?.photo_url ? (
+                                <Image source={{ uri: teacherData.photo_url }} style={{ width: 44, height: 44, borderRadius: 22 }} />
+                            ) : (
+                                <View style={{ width: 44, height: 44, borderRadius: 22, backgroundColor: theme.primary, justifyContent: 'center', alignItems: 'center' }}>
+                                    <Text style={{ color: '#fff', fontSize: 18, fontWeight: 'bold' }}>{teacherData?.name?.charAt(0) || 'T'}</Text>
+                                </View>
+                            )}
+                            <View style={{ marginLeft: 12, flex: 1 }}>
+                                <Text style={{ fontSize: 18, fontWeight: 'bold', color: theme.text }}>{teacherData?.name}</Text>
+                                <Text style={{ fontSize: 12, color: theme.textLight, marginTop: 2 }}>{teacherData?.institute_name}</Text>
                             </View>
-                        ))}
-                    </View>
-                )}
+                        </View>
 
-                <TouchableOpacity style={styles.menuItem} onPress={() => { setShowProfileMenu(false); router.push('/(teacher)/profile'); }}><Ionicons name="person-outline" size={20} color={theme.text} /><Text style={styles.menuText}>My Profile</Text></TouchableOpacity><TouchableOpacity style={styles.menuItem} onPress={handleLogout}><Ionicons name="log-out-outline" size={20} color={theme.danger} /><Text style={[styles.menuText, { color: theme.danger }]}>Logout</Text></TouchableOpacity></View></TouchableOpacity>
+                        <TouchableOpacity style={{ flexDirection: 'row', alignItems: 'center', paddingVertical: 12 }} onPress={() => { setShowProfileMenu(false); router.push('/(teacher)/profile'); }}>
+                            <Ionicons name="person-outline" size={20} color={theme.text} />
+                            <Text style={{ fontSize: 16, color: theme.text, marginLeft: 12 }}>My Profile</Text>
+                        </TouchableOpacity>
+
+                        <TouchableOpacity style={{ flexDirection: 'row', alignItems: 'center', paddingVertical: 12 }} onPress={() => setShowSessionPicker(!showSessionPicker)}>
+                            <Ionicons name="calendar-outline" size={20} color={theme.text} />
+                            <View style={{ flex: 1 }}>
+                                <Text style={{ fontSize: 16, color: theme.text, marginLeft: 12 }}>Academic Session</Text>
+                                <Text style={{ fontSize: 11, color: theme.primary, fontWeight: '700', marginLeft: 12 }}>
+                                    {sessions.find(s => s.id === selectedSessionId)?.name || 'Select Session'}
+                                </Text>
+                            </View>
+                            <Ionicons name={showSessionPicker ? "chevron-up" : "chevron-down"} size={16} color={theme.textLight} />
+                        </TouchableOpacity>
+
+                        {showSessionPicker && (
+                            <View style={{ backgroundColor: isDark ? '#1a1a1a' : '#f9f9f9', marginVertical: 10, borderRadius: 12, padding: 10 }}>
+                                {sessions.map((session) => (
+                                    <TouchableOpacity 
+                                        key={session.id} 
+                                        style={{ paddingVertical: 10, borderBottomWidth: 1, borderBottomColor: theme.border, flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}
+                                        onPress={() => {
+                                            AsyncStorage.setItem('selectedSessionId', String(session.id));
+                                            setSelectedSessionId(session.id);
+                                            setShowSessionPicker(false);
+                                            setShowProfileMenu(false);
+                                            Toast.show({
+                                                type: 'success',
+                                                text1: 'Session Switched',
+                                                text2: `Viewing data for ${session.name}`
+                                            });
+                                            onRefresh(session.id);
+                                        }}
+                                    >
+                                        <Text style={[{ fontSize: 14, color: theme.text }, session.id === selectedSessionId && { color: theme.primary, fontWeight: '800' }]}>
+                                            {session.name}
+                                        </Text>
+                                        {session.id === selectedSessionId && <Ionicons name="checkmark" size={16} color={theme.primary} />}
+                                    </TouchableOpacity>
+                                ))}
+                            </View>
+                        )}
+
+                        <TouchableOpacity style={{ flexDirection: 'row', alignItems: 'center', paddingVertical: 12 }} onPress={() => toggleTheme()}>
+                            <Ionicons name={isDark ? "sunny-outline" : "moon-outline"} size={20} color={theme.text} />
+                            <Text style={{ fontSize: 16, color: theme.text, marginLeft: 12 }}>{isDark ? 'Light Mode' : 'Dark Mode'}</Text>
+                            <View style={{ flex: 1 }} />
+                            <View style={{ width: 44, height: 24, borderRadius: 12, backgroundColor: isDark ? theme.primary : '#ddd', padding: 2 }}>
+                                <View style={[{ width: 20, height: 20, borderRadius: 10, backgroundColor: '#fff' }, isDark && { alignSelf: 'flex-end' }]} />
+                            </View>
+                        </TouchableOpacity>
+
+                        <View style={{ height: 1, backgroundColor: theme.border, marginVertical: 10 }} />
+
+                        <TouchableOpacity style={{ flexDirection: 'row', alignItems: 'center', paddingVertical: 12 }} onPress={async () => {
+                            await AsyncStorage.removeItem('teacherToken');
+                            await AsyncStorage.removeItem('teacherData');
+                            router.replace('/(auth)/teacher-login');
+                        }}>
+                            <Ionicons name="log-out-outline" size={20} color={theme.danger} />
+                            <Text style={{ fontSize: 16, color: theme.danger, marginLeft: 12, fontWeight: '700' }}>Logout</Text>
+                        </TouchableOpacity>
+                    </View>
+                </TouchableOpacity>
             </Modal>
 
-            <Modal visible={showAccountModal} transparent={true} animationType="slide" onRequestClose={() => setShowAccountModal(false)}><TouchableOpacity style={styles.modalOverlay} activeOpacity={1} onPress={() => setShowAccountModal(false)}><View style={styles.modalContent}><View style={styles.modalHeader}><View style={styles.modalHandle} /><Text style={styles.modalTitle}>Multi-Institute Access</Text></View><ScrollView style={{marginTop:10}} showsVerticalScrollIndicator={false}>{fetchingAccounts ? <ActivityIndicator style={{ margin: 20 }} color={theme.primary} /> : allAccounts.map((acc) => { const isActive = acc.id === teacherData?.id; return <TouchableOpacity key={acc.id} style={[styles.accItem, isActive && styles.accItemActive]} onPress={() => {}} activeOpacity={0.7}><View style={{position:'relative'}}>{acc.photo_url ? <Image source={{ uri: acc.photo_url }} style={styles.accAvatar} /> : <View style={[styles.accAvatar, { backgroundColor: theme.primary + '15' }]}><Text style={{fontSize:24, fontWeight:'900', color:theme.primary}}>{acc.name[0]}</Text></View>}</View><View style={styles.accInfo}><Text style={styles.accName}>{acc.name}</Text><Text style={styles.accSchool}>{acc?.institute_name || 'Institute'}</Text><Text style={styles.accMeta}>{acc.subject} • {acc.qualification}</Text></View>{isActive && <Ionicons name="checkmark-circle" size={24} color={theme.success} />}</TouchableOpacity>; })}</ScrollView><TouchableOpacity style={styles.modalLogoutBtn} onPress={handleLogout}><Ionicons name="log-out-outline" size={22} color={theme.danger} /><Text style={styles.modalLogoutText}>Sign Out</Text></TouchableOpacity></View></TouchableOpacity></Modal>
+            {/* PROFESSIONAL WEEKLY FLOW MODAL */}
+            <Modal
+                visible={isWeeklyModalOpen}
+                transparent={true}
+                animationType="fade"
+                onRequestClose={() => setIsWeeklyModalOpen(false)}
+            >
+                <View style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.85)', justifyContent: 'center', alignItems: 'center' }}>
+                    <TouchableOpacity 
+                        style={StyleSheet.absoluteFill} 
+                        activeOpacity={1} 
+                        onPress={() => setIsWeeklyModalOpen(false)} 
+                    />
+                    
+                    <View 
+                        style={{ 
+                            width: SCREEN_WIDTH * 0.95, 
+                            height: SCREEN_HEIGHT * 0.8, 
+                            backgroundColor: theme.card, 
+                            borderRadius: 40, 
+                            overflow: 'hidden',
+                            borderWidth: 1,
+                            borderColor: theme.border,
+                            elevation: 25
+                        }}
+                    >
+                        {/* Header Area */}
+                        <View style={{ padding: 24, paddingBottom: 15 }}>
+                            <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20 }}>
+                                <View>
+                                    <Text style={{ fontSize: 24, fontWeight: '900', color: theme.text }}>Weekly Flow</Text>
+                                    <Text style={{ fontSize: 12, fontWeight: '700', color: theme.primary, textTransform: 'uppercase', marginTop: 2 }}>Academic Schedule</Text>
+                                </View>
+                                <TouchableOpacity 
+                                    onPress={() => setIsWeeklyModalOpen(false)}
+                                    style={{ 
+                                        width: 44, 
+                                        height: 44, 
+                                        borderRadius: 22, 
+                                        backgroundColor: isDark ? '#333' : '#f0f0f0', 
+                                        justifyContent: 'center', 
+                                        alignItems: 'center' 
+                                    }}
+                                >
+                                    <Ionicons name="close" size={24} color={theme.text} />
+                                </TouchableOpacity>
+                            </View>
 
-            <Modal visible={isWeeklyModalOpen} animationType="slide" transparent={true}><View style={styles.modalOverlay}><View style={styles.routineModalContent}><View style={styles.modalHeader}><View><Text style={styles.modalTitle}>Weekly Flow</Text></View><TouchableOpacity onPress={() => setIsWeeklyModalOpen(false)}><Ionicons name="close-circle" size={32} color={theme.textLight} /></TouchableOpacity></View><ScrollView style={{ marginTop: 20 }} showsVerticalScrollIndicator={false}><View style={{ flexDirection: 'column' }}>{['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'].map((day) => { const dayClasses = schedule.filter(s => s.day === day); if (dayClasses.length === 0) return null; return <View key={day} style={{ marginBottom: 25 }}><Text style={styles.dayHeader}>{day}</Text>{dayClasses.map((item, idx) => <View key={idx} style={styles.lectureCard}><View style={styles.lectureCardHeader}><Text style={styles.lectureSubject}>{item.subject}</Text><Text style={styles.lectureTime}>{item.startTime} - {item.endTime}</Text></View><View style={{flexDirection:'row', marginTop:8, gap:10}}><View style={styles.viewWeeklyBtn}><Text style={{fontSize:11, color:theme.primary, fontWeight:'700'}}>Class {item.className}-{item.section}</Text></View></View></View>)}</View>; })}</View></ScrollView></View></View></Modal>
+                            {/* Professional Day Selector Strip */}
+                            <ScrollView 
+                                horizontal 
+                                showsHorizontalScrollIndicator={false}
+                                contentContainerStyle={{ gap: 10, paddingRight: 20 }}
+                            >
+                                {DAYS.map((day, index) => {
+                                    const isActive = activeWeeklyDay === day;
+                                    const isToday = new Date().toLocaleDateString('en-US', { weekday: 'long' }) === day;
+                                    
+                                    return (
+                                        <TouchableOpacity 
+                                            key={day}
+                                            onPress={() => {
+                                                setActiveWeeklyDay(day);
+                                                weekPagerRef.current?.scrollToIndex({ index, animated: true });
+                                            }}
+                                            style={{
+                                                paddingHorizontal: 18,
+                                                paddingVertical: 10,
+                                                borderRadius: 20,
+                                                backgroundColor: isActive ? theme.primary : (isDark ? '#1a1a1a' : '#f5f5f5'),
+                                                borderWidth: 1,
+                                                borderColor: isActive ? theme.primary : (isToday ? theme.primary + '40' : theme.border),
+                                                flexDirection: 'row',
+                                                alignItems: 'center',
+                                                gap: 6
+                                            }}
+                                        >
+                                            {isToday && <View style={{ width: 6, height: 6, borderRadius: 3, backgroundColor: isActive ? '#fff' : theme.primary }} />}
+                                            <Text style={{ 
+                                                fontSize: 13, 
+                                                fontWeight: '800', 
+                                                color: isActive ? '#fff' : (isToday ? theme.primary : theme.textLight)
+                                            }}>
+                                                {day.substring(0, 3).toUpperCase()}
+                                            </Text>
+                                        </TouchableOpacity>
+                                    );
+                                })}
+                            </ScrollView>
+                        </View>
 
-            <Modal visible={showNotifList} transparent={true} animationType="fade" onRequestClose={() => setShowNotifList(false)}><TouchableOpacity style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.4)', justifyContent: 'flex-start', paddingTop: insets.top + 70, paddingHorizontal: 20 }} activeOpacity={1} onPress={() => setShowNotifList(false)}><View style={styles.notifDropdown}><View style={styles.notifDropdownHeader}><Text style={styles.notifDropdownTitle}>Recent Updates</Text><TouchableOpacity onPress={() => setNotifications([])}><Text style={{ color: theme.danger, fontWeight: '700' }}>Clear All</Text></TouchableOpacity></View><ScrollView style={{ maxHeight: 400 }} showsVerticalScrollIndicator={false}>{notifications.length === 0 ? <View style={{ padding: 20, alignItems: 'center' }}><Text style={{ color: theme.textLight }}>No recent updates</Text></View> : notifications.map((item) => <View key={item.id} style={styles.notifItem}><View style={[styles.notifItemDot, { backgroundColor: item.type === 'request' ? '#f59e0b' : item.type === 'salary' ? '#10b981' : theme.primary }]} /><View style={{ flex: 1 }}><Text style={styles.notifItemTitle}>{item.title}</Text><Text style={styles.notifItemMsg}>{item.message}</Text></View><Text style={styles.notifItemTime}>{item.time}</Text></View>)}</ScrollView></View></TouchableOpacity></Modal>
+                        {/* Content Area - Horizontal Pager */}
+                        <View style={{ flex: 1, backgroundColor: isDark ? '#0a0a0a' : '#fcfcfc' }}>
+                            {!routine || !Array.isArray(routine) || routine.length === 0 ? (
+                                <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center', padding: 40 }}>
+                                    <Ionicons name="calendar-clear-outline" size={60} color={theme.border} />
+                                    <Text style={{ color: theme.textLight, marginTop: 15, fontSize: 16, fontWeight: '700', textAlign: 'center' }}>No schedule data found</Text>
+                                </View>
+                            ) : (
+                                <FlatList
+                                    ref={weekPagerRef as any}
+                                    data={DAYS}
+                                    horizontal
+                                    pagingEnabled
+                                    showsHorizontalScrollIndicator={false}
+                                    keyExtractor={(item) => item}
+                                    onMomentumScrollEnd={(e) => {
+                                        const index = Math.round(e.nativeEvent.contentOffset.x / (SCREEN_WIDTH * 0.95));
+                                        setActiveWeeklyDay(DAYS[index]);
+                                    }}
+                                    getItemLayout={(data, index) => ({
+                                        length: SCREEN_WIDTH * 0.95,
+                                        offset: SCREEN_WIDTH * 0.95 * index,
+                                        index,
+                                    })}
+                                    renderItem={({ item: day }) => {
+                                        const dayData = routine.filter((item: any) => item.day === day).sort((a, b) => a.startTime.localeCompare(b.startTime));
+                                        
+                                        return (
+                                            <View style={{ width: SCREEN_WIDTH * 0.95 }}>
+                                                {dayData.length === 0 ? (
+                                                    <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center' }}>
+                                                        <View style={{ width: 80, height: 80, borderRadius: 40, backgroundColor: theme.primary + '10', justifyContent: 'center', alignItems: 'center', marginBottom: 15 }}>
+                                                            <Ionicons name="cafe-outline" size={40} color={theme.primary} />
+                                                        </View>
+                                                        <Text style={{ color: theme.text, fontSize: 18, fontWeight: '800' }}>No Lectures</Text>
+                                                        <Text style={{ color: theme.textLight, fontSize: 14, fontWeight: '600', marginTop: 5 }}>Enjoy your free day!</Text>
+                                                    </View>
+                                                ) : (
+                                                    <ScrollView 
+                                                        showsVerticalScrollIndicator={false}
+                                                        contentContainerStyle={{ padding: 24, paddingBottom: 60 }}
+                                                        scrollEventThrottle={1}
+                                                        keyboardShouldPersistTaps="handled"
+                                                        nestedScrollEnabled={true}
+                                                    >
+                                                        {dayData.map((item: any, idx: number) => {
+                                                            const isLast = idx === dayData.length - 1;
+                                                            return (
+                                                                <View key={idx} style={{ flexDirection: 'row', minHeight: 100 }}>
+                                                                    {/* Timeline Sidebar */}
+                                                                    <View style={{ alignItems: 'center', width: 60, marginRight: 15 }}>
+                                                                        <View style={{ 
+                                                                            width: 14, 
+                                                                            height: 14, 
+                                                                            borderRadius: 7, 
+                                                                            backgroundColor: theme.primary,
+                                                                            borderWidth: 3,
+                                                                            borderColor: theme.card,
+                                                                            zIndex: 2,
+                                                                            elevation: 2
+                                                                        }} />
+                                                                        {!isLast && <View style={{ flex: 1, width: 2, backgroundColor: theme.primary + '30', marginVertical: 2 }} />}
+                                                                    </View>
+
+                                                                    {/* Lecture Content Card */}
+                                                                    <View style={{ flex: 1, paddingBottom: 25 }}>
+                                                                        <View style={{ 
+                                                                            backgroundColor: theme.card, 
+                                                                            borderRadius: 24, 
+                                                                            padding: 20, 
+                                                                            borderWidth: 1, 
+                                                                            borderColor: theme.border,
+                                                                            shadowColor: '#000',
+                                                                            shadowOffset: { width: 0, height: 4 },
+                                                                            shadowOpacity: 0.05,
+                                                                            shadowRadius: 10,
+                                                                            elevation: 2
+                                                                        }}>
+                                                                            <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 10, gap: 8 }}>
+                                                                                <Ionicons name="time" size={14} color={theme.primary} />
+                                                                                <Text style={{ fontSize: 12, fontWeight: '900', color: theme.primary, letterSpacing: 0.5 }}>
+                                                                                    {item.startTime} - {item.endTime}
+                                                                                </Text>
+                                                                            </View>
+                                                                            
+                                                                            <Text style={{ fontSize: 18, fontWeight: '900', color: theme.text, marginBottom: 8 }}>{item.subject}</Text>
+                                                                            
+                                                                            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
+                                                                                <View style={{ backgroundColor: theme.primary + '15', paddingHorizontal: 10, paddingVertical: 5, borderRadius: 10, borderSize: 1, borderColor: theme.primary + '20' }}>
+                                                                                    <Text style={{ fontSize: 11, fontWeight: '800', color: theme.primary }}>CLASS {item.className}-{item.section}</Text>
+                                                                                </View>
+                                                                                <View style={{ width: 4, height: 4, borderRadius: 2, backgroundColor: theme.border }} />
+                                                                                <Text style={{ fontSize: 11, fontWeight: '700', color: theme.textLight }}>Session Period</Text>
+                                                                            </View>
+                                                                        </View>
+                                                                    </View>
+                                                                </View>
+                                                            );
+                                                        })}
+                                                    </ScrollView>
+                                                )}
+                                            </View>
+                                        );
+                                    }}
+                                />
+                            )}
+                        </View>
+                    </View>
+                </View>
+            </Modal>
+
+            {/* ACCOUNT SWITCHING MODAL */}
+            <Modal
+                visible={showAccountModal}
+                transparent={true}
+                animationType="slide"
+                onRequestClose={() => { setShowAccountModal(false); setSelectedSwitchAccount(null); setSwitchCode(''); }}
+            >
+                <KeyboardAvoidingView 
+                    behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+                    style={{ flex: 1 }}
+                >
+                    <View style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.6)', justifyContent: 'flex-end' }}>
+                        <TouchableOpacity 
+                            style={StyleSheet.absoluteFill} 
+                            activeOpacity={1} 
+                            onPress={() => { setShowAccountModal(false); setSelectedSwitchAccount(null); setSwitchCode(''); }} 
+                        />
+                        <View style={{ 
+                            backgroundColor: theme.card, 
+                            borderTopLeftRadius: 35, 
+                            borderTopRightRadius: 35, 
+                            padding: 25, 
+                            paddingBottom: insets.bottom + 30,
+                            maxHeight: SCREEN_HEIGHT * 0.85
+                        }}>
+                            <View style={{ width: 40, height: 5, backgroundColor: theme.border, borderRadius: 3, alignSelf: 'center', marginBottom: 20 }} />
+                            
+                            <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 25 }}>
+                                <View>
+                                    <Text style={{ fontSize: 22, fontWeight: '900', color: theme.text }}>Accounts</Text>
+                                    <Text style={{ fontSize: 13, color: theme.textLight, marginTop: 2 }}>
+                                        {selectedSwitchAccount ? `Connecting to ${selectedSwitchAccount.institute_name}` : 'Select an institute to switch'}
+                                    </Text>
+                                </View>
+                                <TouchableOpacity onPress={() => { setShowAccountModal(false); setSelectedSwitchAccount(null); setSwitchCode(''); }}>
+                                    <Ionicons name="close-circle" size={30} color={theme.textLight} />
+                                </TouchableOpacity>
+                            </View>
+
+                            {fetchingAccounts ? (
+                                <View style={{ padding: 50, alignItems: 'center' }}>
+                                    <ActivityIndicator size="large" color={theme.primary} />
+                                    <Text style={{ marginTop: 15, color: theme.textLight, fontWeight: '700' }}>Processing...</Text>
+                                </View>
+                            ) : !selectedSwitchAccount ? (
+                                <ScrollView showsVerticalScrollIndicator={false} style={{ marginBottom: 10 }}>
+                                    {/* Current Active Account Header */}
+                                    <View style={{ 
+                                        backgroundColor: theme.primary + '10', 
+                                        padding: 20, 
+                                        borderRadius: 28, 
+                                        marginBottom: 20, 
+                                        borderWidth: 1.5, 
+                                        borderColor: theme.primary,
+                                        flexDirection: 'row',
+                                        alignItems: 'center'
+                                    }}>
+                                        <View style={{ width: 60, height: 60, borderRadius: 18, backgroundColor: theme.card, justifyContent: 'center', alignItems: 'center', elevation: 2 }}>
+                                            {teacherData?.institute_logo ? (
+                                                <Image source={{ uri: teacherData.institute_logo }} style={{ width: 45, height: 45, resizeMode: 'contain' }} />
+                                            ) : (
+                                                <Ionicons name="school" size={30} color={theme.primary} />
+                                            )}
+                                        </View>
+                                        <View style={{ flex: 1, marginLeft: 15 }}>
+                                            <Text style={{ fontSize: 18, fontWeight: '900', color: theme.text }}>{teacherData?.name}</Text>
+                                            <Text style={{ fontSize: 13, fontWeight: '700', color: theme.primary, marginTop: 2 }}>{teacherData?.institute_name}</Text>
+                                        </View>
+                                        <View style={{ backgroundColor: theme.primary, paddingHorizontal: 10, paddingVertical: 5, borderRadius: 10 }}>
+                                            <Text style={{ fontSize: 10, fontWeight: '900', color: '#fff' }}>ACTIVE</Text>
+                                        </View>
+                                    </View>
+
+                                    {allAccounts.filter(acc => acc.id !== teacherData?.id).length === 0 ? (
+                                        <View style={{ padding: 30, alignItems: 'center' }}>
+                                            <Ionicons name="information-circle-outline" size={40} color={theme.textLight} />
+                                            <Text style={{ color: theme.textLight, marginTop: 10, textAlign: 'center', fontWeight: '600' }}>No other linked institutes found for this mobile number.</Text>
+                                        </View>
+                                    ) : (
+                                        allAccounts.filter(acc => acc.id !== teacherData?.id).map((acc) => (
+                                            <TouchableOpacity 
+                                                key={acc.id}
+                                                style={{
+                                                    flexDirection: 'row',
+                                                    alignItems: 'center',
+                                                    padding: 18,
+                                                    borderRadius: 24,
+                                                    backgroundColor: theme.background,
+                                                    marginBottom: 12,
+                                                    borderWidth: 1,
+                                                    borderColor: theme.border
+                                                }}
+                                                onPress={() => setSelectedSwitchAccount(acc)}
+                                            >
+                                                <View style={{ width: 50, height: 50, borderRadius: 15, backgroundColor: theme.primary + '15', justifyContent: 'center', alignItems: 'center', marginRight: 15 }}>
+                                                    {acc.institute_logo ? (
+                                                        <Image source={{ uri: acc.institute_logo }} style={{ width: 35, height: 35, resizeMode: 'contain' }} />
+                                                    ) : (
+                                                        <Ionicons name="school" size={24} color={theme.primary} />
+                                                    )}
+                                                </View>
+                                                <View style={{ flex: 1 }}>
+                                                    <Text style={{ fontSize: 16, fontWeight: '800', color: theme.text }}>{acc.institute_name}</Text>
+                                                    <Text style={{ fontSize: 12, color: theme.textLight, marginTop: 2 }}>{acc.name} • {acc.subject}</Text>
+                                                </View>
+                                                <Ionicons name="chevron-forward" size={18} color={theme.border} />
+                                            </TouchableOpacity>
+                                        ))
+                                    )}
+                                </ScrollView>
+                            ) : (
+                                <ScrollView showsVerticalScrollIndicator={false} keyboardShouldPersistTaps="handled">
+                                    <View style={{ paddingBottom: 20 }}>
+                                        <Text style={{ fontSize: 12, fontWeight: '800', color: theme.textLight, marginBottom: 10, textTransform: 'uppercase', letterSpacing: 1 }}>Enter Access Code</Text>
+                                        <TextInput 
+                                            style={{
+                                                backgroundColor: isDark ? '#1a1a1a' : '#f5f5f5',
+                                                borderRadius: 18,
+                                                padding: 18,
+                                                fontSize: 20,
+                                                fontWeight: '900',
+                                                color: theme.text,
+                                                textAlign: 'center',
+                                                letterSpacing: 2,
+                                                borderWidth: 1,
+                                                borderColor: theme.border
+                                            }}
+                                            placeholder="Enter Code"
+                                            placeholderTextColor={theme.textLight}
+                                            keyboardType="default"
+                                            value={switchCode}
+                                            onChangeText={setSwitchCode}
+                                            autoFocus
+                                        />
+                                        
+                                        <TouchableOpacity 
+                                            style={{
+                                                backgroundColor: theme.primary,
+                                                paddingVertical: 18,
+                                                borderRadius: 20,
+                                                alignItems: 'center',
+                                                marginTop: 25,
+                                                elevation: 5,
+                                                shadowColor: theme.primary,
+                                                shadowOpacity: 0.3,
+                                                shadowRadius: 10
+                                            }}
+                                            onPress={handleSwitchAccount}
+                                        >
+                                            <Text style={{ color: '#fff', fontSize: 16, fontWeight: '900' }}>Confirm Switch</Text>
+                                        </TouchableOpacity>
+
+                                        <TouchableOpacity 
+                                            style={{ marginTop: 15, paddingVertical: 10, alignItems: 'center' }}
+                                            onPress={() => { setSelectedSwitchAccount(null); setSwitchCode(''); }}
+                                        >
+                                            <Text style={{ color: theme.textLight, fontWeight: '700' }}>Back to Institutes</Text>
+                                        </TouchableOpacity>
+                                    </View>
+                                </ScrollView>
+                            )}
+                        </View>
+                    </View>
+                </KeyboardAvoidingView>
+            </Modal>
+
+            {/* ABSENT REASON MODAL */}
+            <Modal
+                visible={absentReasonModalVisible}
+                transparent={true}
+                animationType="fade"
+                onRequestClose={() => setAbsentReasonModalVisible(false)}
+            >
+                <View style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.6)', justifyContent: 'center', alignItems: 'center' }}>
+                    <View style={{ width: SCREEN_WIDTH * 0.85, backgroundColor: theme.card, borderRadius: 24, padding: 25, elevation: 10 }}>
+                        <Text style={{ fontSize: 20, fontWeight: '900', color: theme.text, marginBottom: 10 }}>Absence Reason</Text>
+                        <Text style={{ fontSize: 13, color: theme.textLight, marginBottom: 20 }}>Please provide a reason for your absence or skip to mark without one.</Text>
+                        
+                        <TextInput
+                            style={{ 
+                                backgroundColor: isDark ? '#1a1a1a' : '#f0f0f0', 
+                                borderRadius: 12, 
+                                padding: 15, 
+                                color: theme.text, 
+                                minHeight: 80, 
+                                textAlignVertical: 'top',
+                                borderWidth: 1,
+                                borderColor: theme.border
+                            }}
+                            placeholder="Type your reason here..."
+                            placeholderTextColor={theme.textLight}
+                            multiline
+                            value={absentReason}
+                            onChangeText={setAbsentReason}
+                        />
+
+                        <View style={{ marginTop: 25, gap: 10 }}>
+                            <TouchableOpacity 
+                                style={{ backgroundColor: theme.primary, paddingVertical: 14, borderRadius: 12, alignItems: 'center' }}
+                                onPress={() => handleMarkSelfAttendance('absent', absentReason)}
+                                disabled={markingAttendance}
+                            >
+                                {markingAttendance ? <ActivityIndicator color="#fff" /> : <Text style={{ color: '#fff', fontWeight: '900' }}>Confirm Absence</Text>}
+                            </TouchableOpacity>
+
+                            <TouchableOpacity 
+                                style={{ backgroundColor: theme.primary + '15', paddingVertical: 14, borderRadius: 12, alignItems: 'center', borderWidth: 1, borderColor: theme.primary + '30' }}
+                                onPress={() => handleMarkSelfAttendance('absent', '')}
+                                disabled={markingAttendance}
+                            >
+                                <Text style={{ color: theme.primary, fontWeight: '900' }}>Skip & Mark Absent</Text>
+                            </TouchableOpacity>
+
+                            <TouchableOpacity 
+                                style={{ paddingVertical: 10, alignItems: 'center' }}
+                                onPress={() => setAbsentReasonModalVisible(false)}
+                            >
+                                <Text style={{ color: theme.textLight, fontWeight: '700' }}>Cancel</Text>
+                            </TouchableOpacity>
+                        </View>
+                    </View>
+                </View>
+            </Modal>
         </View>
+    </TouchableWithoutFeedback>
     );
 }

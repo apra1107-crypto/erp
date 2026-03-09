@@ -1,4 +1,4 @@
-const IP_ADDRESS = '13.51.207.67';
+const IP_ADDRESS = '10.56.70.252';
 const PORT = '5000';
 export const BASE_URL = `http://${IP_ADDRESS}:${PORT}`;
 
@@ -17,8 +17,11 @@ export const API_ENDPOINTS = {
     ATTENDANCE: `${BASE_URL}/api/attendance`,
     ABSENT_REQUEST: `${BASE_URL}/api/absent-request`,
     SUBSCRIPTION: `${BASE_URL}/api/subscription`,
-    FEES: `${BASE_URL}/api/fees`,
     ROUTINE: `${BASE_URL}/api/routine`,
-    ADMIT_CARD: `${BASE_URL}/api/admit-cards`,
+    ADMIT_CARD: `${BASE_URL}/api/manage-admit-cards`,
     STATS: `${BASE_URL}/api/stats`,
+    TRANSPORT: `${BASE_URL}/api/transport`,
+    ONE_TIME_FEES: `${BASE_URL}/api/one-time-fees`,
+    ACADEMIC_SESSIONS: `${BASE_URL}/api/academic-sessions`,
+    HOMEWORK: `${BASE_URL}/api/homework`,
 };

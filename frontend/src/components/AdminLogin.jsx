@@ -5,7 +5,7 @@ import { toast } from 'react-toastify';
 import { API_ENDPOINTS } from '../config';
 import './AuthForms.css';
 
-const AdminLogin = ({ onBack, onClose }) => {
+const AdminLogin = ({ onBack, onClose, isSplitView }) => {
     const navigate = useNavigate();
     const [loading, setLoading] = useState(false);
     const [formData, setFormData] = useState({
@@ -46,7 +46,9 @@ const AdminLogin = ({ onBack, onClose }) => {
                 navigate('/admin-dashboard');
             }, 800);
         } catch (error) {
-            toast.error(error.response?.data?.message || 'Invalid credentials');
+            console.error('Login error details:', error);
+            const errorMessage = error.response?.data?.message || error.message || 'Invalid credentials';
+            toast.error(errorMessage);
         } finally {
             setLoading(false);
         }
@@ -54,23 +56,38 @@ const AdminLogin = ({ onBack, onClose }) => {
 
     return (
         <div className="auth-step-container">
-            <button className="step-back-btn" onClick={onBack}>
-                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
-                    <path d="M19 12H5M12 19l-7-7 7-7" />
-                </svg>
-                Back to roles
-            </button>
-
-            <div className="auth-view-header">
-                <div className="auth-view-icon orange">
-                    <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
-                        <path d="M12 2L2 7l10 5 10-5-10-5z" />
-                        <path d="M2 17l10 5 10-5M2 12l10 5 10-5" />
-                    </svg>
+            {isSplitView && (
+                <div className="split-view-header">
+                    <div className="auth-view-icon orange">
+                        <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
+                            <path d="M12 2L2 7l10 5 10-5-10-5z" />
+                            <path d="M2 17l10 5 10-5M2 12l10 5 10-5" />
+                        </svg>
+                    </div>
+                    <h2 className="auth-view-title">Admin Portal</h2>
+                    <p className="auth-view-subtitle">System administration</p>
                 </div>
-                <h2 className="auth-view-title">Admin Portal</h2>
-                <p className="auth-view-subtitle">System administrator access</p>
-            </div>
+            )}
+            {!isSplitView && (
+                <>
+                    <button className="step-back-btn" onClick={onBack}>
+                        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
+                            <path d="M19 12H5M12 19l-7-7 7-7" />
+                        </svg>
+                        Back to roles
+                    </button>
+                    <div className="auth-view-header">
+                        <div className="auth-view-icon orange">
+                            <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
+                                <path d="M12 2L2 7l10 5 10-5-10-5z" />
+                                <path d="M2 17l10 5 10-5M2 12l10 5 10-5" />
+                            </svg>
+                        </div>
+                        <h2 className="auth-view-title">Admin Portal</h2>
+                        <p className="auth-view-subtitle">System administrator access</p>
+                    </div>
+                </>
+            )}
 
             <form className="auth-view-form" onSubmit={handleLogin}>
                 <div className="auth-input-group">
@@ -114,9 +131,11 @@ const AdminLogin = ({ onBack, onClose }) => {
                 </button>
             </form>
 
-            <div className="auth-view-footer">
-                <p>Restricted access for system administrators only</p>
-            </div>
+            {!isSplitView && (
+                <div className="auth-view-footer">
+                    <p>Restricted access for system administrators only</p>
+                </div>
+            )}
         </div>
     );
 };

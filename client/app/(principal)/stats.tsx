@@ -10,6 +10,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import Toast from 'react-native-toast-message';
 import { Ionicons } from '@expo/vector-icons';
 import DateTimePicker from '@react-native-community/datetimepicker';
+import { LinearGradient } from 'expo-linear-gradient';
 import { useTheme } from '../../context/ThemeContext';
 import { API_ENDPOINTS } from '../../constants/Config';
 
@@ -34,78 +35,41 @@ export default function PrincipalStats() {
     const [selectedDate, setSelectedDate] = useState(new Date());
     const [showDatePicker, setShowDatePicker] = useState(false);
 
-    // Revenue Specific Filters
-    const [revMonth, setRevMonth] = useState(new Date());
-    const [revDate, setRevDate] = useState(new Date());
-    const [activePicker, setActivePicker] = useState<'global' | 'rev_date'>('global');
-
-    // Months with configurations
-    const [configuredMonths, setConfiguredMonths] = useState<string[]>([]);
-    const [showMonthPicker, setShowMonthPicker] = useState(false);
-
     // Attendance UI States
     const [isAttendanceExpanded, setIsAttendanceExpanded] = useState(false);
     const [isTeacherExpanded, setIsTeacherExpanded] = useState(false);
     const [detailModalVisible, setDetailModalVisible] = useState(false);
+    const [revenueModalVisible, setRevenueModalVisible] = useState(false);
+    const [revenueSelectedDate, setRevenueSelectedDate] = useState(new Date());
+    const [revenueStudents, setRevenueStudents] = useState<any[]>([]);
+    const [loadingRevenueStudents, setLoadingRevenueStudents] = useState(false);
+    const [revenueType, setRevenueType] = useState<'monthly' | 'onetime'>('monthly');
     const [selectedSection, setSelectedSection] = useState<any>(null);
     const [sectionStudents, setSectionStudents] = useState<any[]>([]);
     const [loadingDetails, setLoadingDetails] = useState(false);
     const [detailTab, setDetailTab] = useState<'present' | 'absent'>('present');
 
-    // Revenue Student List States
-    const [paymentModalVisible, setPaymentModalVisible] = useState(false);
-
-    const fetchConfiguredMonths = async () => {
-        try {
-            const token = await AsyncStorage.getItem('token');
-            const userDataStr = await AsyncStorage.getItem('userData');
-            if (!userDataStr) return;
-            
-            const userData = JSON.parse(userDataStr);
-            const instituteId = userData.institute_id || userData.id;
-            const activeSessionId = userData.current_session_id;
-            
-            if (!instituteId) return;
-
-            const response = await axios.get(
-                `${API_ENDPOINTS.FEES}/configured-months/${instituteId}`,
-                { 
-                    headers: { 
-                        Authorization: `Bearer ${token}`,
-                        'x-academic-session-id': activeSessionId?.toString()
-                    } 
-                }
-            );
-            setConfiguredMonths(response.data || []);
-        } catch (error) {
-            console.error('Error fetching configured months:', error);
-        }
-    };
-
     const fetchStats = useCallback(async () => {
         try {
             setLoading(true);
             const token = await AsyncStorage.getItem('token');
+            const storedSessionId = await AsyncStorage.getItem('selectedSessionId');
             const userDataStr = await AsyncStorage.getItem('userData');
             const userData = userDataStr ? JSON.parse(userDataStr) : null;
-            const activeSessionId = userData?.current_session_id;
+            const activeSessionId = storedSessionId || userData?.current_session_id;
             
             // Try to find session name if available in userData
             if (userData?.sessions) {
-                const s = userData.sessions.find((s: any) => s.id === activeSessionId);
+                const s = userData.sessions.find((s: any) => s.id === (activeSessionId ? parseInt(activeSessionId) : null));
                 if (s) setActiveSessionName(s.name);
                 else setActiveSessionName('Session ' + activeSessionId);
             } else if (activeSessionId) {
                 setActiveSessionName('Session ' + activeSessionId);
             }
 
-            // Filters based on tab context or specifically for revenue
-            const targetMonthDate = activeTab === 'revenue' ? revMonth : selectedDate;
-            const targetDayDate = activeTab === 'revenue' ? revDate : selectedDate;
-
-            const month = targetMonthDate.getMonth() + 1;
-            const year = targetMonthDate.getFullYear();
-            const dateStr = targetDayDate.toISOString().split('T')[0];
+            const month = selectedDate.getMonth() + 1;
+            const year = selectedDate.getFullYear();
+            const dateStr = selectedDate.toISOString().split('T')[0];
 
             const response = await axios.get(
                 `${API_ENDPOINTS.STATS}?month=${month}&year=${year}&date=${dateStr}`,
@@ -130,22 +94,46 @@ export default function PrincipalStats() {
             setLoading(false);
             setRefreshing(false);
         }
-    }, [selectedDate, revMonth, revDate, activeTab]);
+    }, [selectedDate]);
 
     useFocusEffect(
         useCallback(() => {
             fetchStats();
-            if (activeTab === 'revenue') {
-                fetchConfiguredMonths();
-            }
-        }, [fetchStats, activeTab])
+        }, [fetchStats])
     );
 
-    useEffect(() => {
-        if (activeTab === 'revenue') {
-            fetchConfiguredMonths();
+    const fetchDailyRevenueStudents = async () => {
+        try {
+            setLoadingRevenueStudents(true);
+            const token = await AsyncStorage.getItem('token');
+            const storedSessionId = await AsyncStorage.getItem('selectedSessionId');
+            const userDataStr = await AsyncStorage.getItem('userData');
+            const userData = userDataStr ? JSON.parse(userDataStr) : null;
+            const activeSessionId = storedSessionId || userData?.current_session_id;
+
+            const dateStr = revenueSelectedDate.toISOString().split('T')[0];
+            const response = await axios.get(
+                `${API_ENDPOINTS.PRINCIPAL}/daily-revenue-details?date=${dateStr}&type=${revenueType}`,
+                { 
+                    headers: { 
+                        Authorization: `Bearer ${token}`,
+                        'x-academic-session-id': activeSessionId?.toString()
+                    } 
+                }
+            );
+            setRevenueStudents(response.data);
+        } catch (error) {
+            console.error('Error fetching daily revenue:', error);
+        } finally {
+            setLoadingRevenueStudents(false);
         }
-    }, [activeTab]);
+    };
+
+    useEffect(() => {
+        if (revenueModalVisible) {
+            fetchDailyRevenueStudents();
+        }
+    }, [revenueSelectedDate, revenueModalVisible]);
 
     const fetchSectionDetails = async (className: string, section: string) => {
         try {
@@ -178,7 +166,6 @@ export default function PrincipalStats() {
     const onRefresh = () => {
         setRefreshing(true);
         fetchStats();
-        if (activeTab === 'revenue') fetchConfiguredMonths();
     };
 
     const changeMonth = (delta: number) => {
@@ -203,29 +190,36 @@ export default function PrincipalStats() {
         headerTitle: { fontSize: 20, fontWeight: '900', color: theme.text },
         
         tabContainer: {
+            paddingHorizontal: 20,
+            paddingVertical: 10,
             flexDirection: 'row',
-            backgroundColor: theme.card,
-            paddingHorizontal: 10,
-            borderBottomWidth: 1,
-            borderBottomColor: theme.border,
+            alignItems: 'center',
         },
         tab: {
-            flex: 1,
-            paddingVertical: 15,
-            alignItems: 'center',
-            borderBottomWidth: 3,
-            borderBottomColor: 'transparent',
+            paddingHorizontal: 20,
+            paddingVertical: 10,
+            borderRadius: 20,
+            marginRight: 10,
+            backgroundColor: theme.card,
+            borderWidth: 1,
+            borderColor: theme.border,
+            shadowColor: '#000',
+            shadowOffset: { width: 0, height: 2 },
+            shadowOpacity: 0.05,
+            shadowRadius: 5,
+            elevation: 2,
         },
         activeTab: {
-            borderBottomColor: theme.primary,
+            backgroundColor: theme.primary,
+            borderColor: theme.primary,
         },
         tabText: {
-            fontSize: 12,
+            fontSize: 13,
             fontWeight: '800',
             color: theme.textLight,
         },
         activeTabText: {
-            color: theme.primary,
+            color: '#fff',
         },
 
         content: { flex: 1 },
@@ -419,23 +413,6 @@ export default function PrincipalStats() {
         rollText: { fontSize: 14, fontWeight: '900', color: theme.primary },
         studentName: { fontSize: 16, fontWeight: '700', color: theme.text },
 
-        // Revenue Styles
-        revenueGrid: {
-            flexDirection: 'row',
-            flexWrap: 'wrap',
-            gap: 12,
-        },
-        revenueBox: {
-            width: (SCREEN_WIDTH - 64) / 2,
-            backgroundColor: theme.background,
-            padding: 15,
-            borderRadius: 18,
-            borderWidth: 1,
-            borderColor: theme.border,
-        },
-        revenueAmount: { fontSize: 18, fontWeight: '900', color: theme.text, marginTop: 5 },
-        revenueLabel: { fontSize: 10, fontWeight: '800', color: theme.textLight, textTransform: 'uppercase' },
-
         sectionCard: {
             backgroundColor: theme.card,
             marginHorizontal: 15,
@@ -454,6 +431,22 @@ export default function PrincipalStats() {
             alignSelf: 'center',
             marginTop: 12,
             marginBottom: 20,
+        },
+        revenueRow: {
+            flexDirection: 'row',
+            justifyContent: 'space-between',
+            alignItems: 'center',
+        },
+        progressBar: {
+            height: 8,
+            backgroundColor: isDark ? '#ffffff10' : '#00000005',
+            borderRadius: 4,
+            overflow: 'hidden',
+            marginTop: 5,
+        },
+        progressFill: {
+            height: '100%',
+            borderRadius: 4,
         },
     }), [theme, insets, isDark]);
 
@@ -485,7 +478,7 @@ export default function PrincipalStats() {
 
                 <TouchableOpacity 
                     style={styles.monthSelector}
-                    onPress={() => { setActivePicker('global'); setShowDatePicker(true); }}
+                    onPress={() => { setShowDatePicker(true); }}
                 >
                     <View style={{ flexDirection: 'row', alignItems: 'center' }}>
                         <Ionicons name="calendar" size={22} color={theme.primary} />
@@ -579,6 +572,151 @@ export default function PrincipalStats() {
         );
     };
 
+    const renderRevenueTab = () => {
+        if (!stats?.revenue) return null;
+        const rev = stats.revenue;
+        const totalExpected = (rev.monthly?.expected || 0) + (rev.oneTime?.expected || 0);
+        const totalCollected = (rev.monthly?.collected || 0) + (rev.oneTime?.collected || 0);
+        const totalRemaining = totalExpected - totalCollected;
+
+        const months = ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"];
+
+        return (
+            <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={{ paddingBottom: insets.bottom + 60 }}>
+                <View style={{ paddingHorizontal: 20, paddingTop: 20 }}>
+                    <Text style={{ fontSize: 24, fontWeight: '900', color: theme.text }}>Financial Insights</Text>
+                </View>
+
+                {/* Period Selector */}
+                <View style={styles.monthSelector}>
+                    <TouchableOpacity style={styles.navBtn} onPress={() => {
+                        const d = new Date(selectedDate);
+                        d.setMonth(d.getMonth() - 1);
+                        setSelectedDate(d);
+                    }}>
+                        <Ionicons name="chevron-back" size={20} color={theme.text} />
+                    </TouchableOpacity>
+                    <Text style={styles.monthText}>{months[selectedDate.getMonth()]} {selectedDate.getFullYear()}</Text>
+                    <TouchableOpacity style={styles.navBtn} onPress={() => {
+                        const d = new Date(selectedDate);
+                        d.setMonth(d.getMonth() + 1);
+                        setSelectedDate(d);
+                    }}>
+                        <Ionicons name="chevron-forward" size={20} color={theme.text} />
+                    </TouchableOpacity>
+                </View>
+
+                {/* Monthly Collection Card */}
+                <TouchableOpacity 
+                    activeOpacity={0.9} 
+                    onPress={() => {
+                        setRevenueType('monthly');
+                        setRevenueSelectedDate(new Date());
+                        setRevenueModalVisible(true);
+                    }}
+                >
+                    <LinearGradient 
+                        colors={['#1e40af', '#1e3a8a']} 
+                        style={[styles.flashcard, { padding: 22, borderRadius: 28, marginBottom: 10 }]}
+                    >
+                        <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
+                            <Text style={{ color: 'rgba(255,255,255,0.7)', fontSize: 11, fontWeight: '800', letterSpacing: 1 }}>MONTHLY FEES COLLECTION</Text>
+                            <Ionicons name="calendar" size={16} color="rgba(255,255,255,0.5)" />
+                        </View>
+                        <Text style={{ color: '#fff', fontSize: 28, fontWeight: '900', marginTop: 8 }}>₹{rev.monthly.collected.toLocaleString()}</Text>
+                        
+                        <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginTop: 15, paddingTop: 15, borderTopWidth: 1, borderTopColor: 'rgba(255,255,255,0.1)' }}>
+                            <View>
+                                <Text style={{ color: 'rgba(255,255,255,0.5)', fontSize: 9, fontWeight: '700' }}>EXPECTED</Text>
+                                <Text style={{ color: '#fff', fontSize: 14, fontWeight: '800' }}>₹{rev.monthly.expected.toLocaleString()}</Text>
+                            </View>
+                            <View style={{ alignItems: 'flex-end' }}>
+                                <Text style={{ color: 'rgba(255,255,255,0.5)', fontSize: 9, fontWeight: '700' }}>DUE</Text>
+                                <Text style={{ color: '#f87171', fontSize: 14, fontWeight: '800' }}>₹{(rev.monthly.expected - rev.monthly.collected).toLocaleString()}</Text>
+                            </View>
+                        </View>
+                    </LinearGradient>
+                </TouchableOpacity>
+
+                {/* One-Time Collection Card */}
+                <TouchableOpacity 
+                    activeOpacity={0.9} 
+                    onPress={() => {
+                        setRevenueType('onetime');
+                        
+                        // Month-Aware Date Logic
+                        const now = new Date();
+                        const isSelectedMonthCurrent = 
+                            selectedDate.getMonth() === now.getMonth() && 
+                            selectedDate.getFullYear() === now.getFullYear();
+                        
+                        if (isSelectedMonthCurrent) {
+                            setRevenueSelectedDate(new Date());
+                        } else {
+                            // Set to 1st of the month being viewed in Stats
+                            setRevenueSelectedDate(new Date(selectedDate.getFullYear(), selectedDate.getMonth(), 1));
+                        }
+                        
+                        setRevenueModalVisible(true);
+                    }}
+                >
+                    <LinearGradient 
+                        colors={['#831843', '#701a75']} 
+                        style={[styles.flashcard, { padding: 22, borderRadius: 28, marginTop: 5 }]}
+                    >
+                        <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
+                            <Text style={{ color: 'rgba(255,255,255,0.7)', fontSize: 11, fontWeight: '800', letterSpacing: 1 }}>ONE-TIME FEES COLLECTION</Text>
+                            <Ionicons name="flash" size={16} color="rgba(255,255,255,0.5)" />
+                        </View>
+                        <Text style={{ color: '#fff', fontSize: 28, fontWeight: '900', marginTop: 8 }}>₹{rev.oneTime.collected.toLocaleString()}</Text>
+                        
+                        <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginTop: 15, paddingTop: 15, borderTopWidth: 1, borderTopColor: 'rgba(255,255,255,0.1)' }}>
+                            <View>
+                                <Text style={{ color: 'rgba(255,255,255,0.5)', fontSize: 9, fontWeight: '700' }}>TARGET</Text>
+                                <Text style={{ color: '#fff', fontSize: 14, fontWeight: '800' }}>₹{rev.oneTime.expected.toLocaleString()}</Text>
+                            </View>
+                            <View style={{ alignItems: 'flex-end' }}>
+                                <Text style={{ color: 'rgba(255,255,255,0.5)', fontSize: 9, fontWeight: '700' }}>PENDING</Text>
+                                <Text style={{ color: '#f87171', fontSize: 14, fontWeight: '800' }}>₹{(rev.oneTime.expected - rev.oneTime.collected).toLocaleString()}</Text>
+                            </View>
+                        </View>
+                    </LinearGradient>
+                </TouchableOpacity>
+
+                {/* Monthly Revenue Breakdown List - Keep this but make it cleaner */}
+                <View style={{ paddingHorizontal: 20, marginTop: 25, marginBottom: 10 }}>
+                    <Text style={{ fontSize: 18, fontWeight: '900', color: theme.text }}>Detailed Breakdown</Text>
+                </View>
+
+                <View 
+                    style={[styles.sectionCard, { marginTop: 0 }]}
+                >
+                    <View style={{ gap: 15 }}>
+                        <View>
+                            <View style={styles.revenueRow}>
+                                <Text style={{ color: theme.text, fontWeight: '700', fontSize: 14 }}>Monthly Tuition Progress</Text>
+                                <Text style={{ color: theme.primary, fontWeight: '800' }}>{Math.round((rev.monthly.collected / rev.monthly.expected) * 100) || 0}%</Text>
+                            </View>
+                            <View style={styles.progressBar}>
+                                <View style={[styles.progressFill, { width: `${(rev.monthly.collected / rev.monthly.expected) * 100}%`, backgroundColor: '#3b82f6' }]} />
+                            </View>
+                        </View>
+
+                        <View>
+                            <View style={styles.revenueRow}>
+                                <Text style={{ color: theme.text, fontWeight: '700', fontSize: 14 }}>One-Time Campaign Progress</Text>
+                                <Text style={{ color: '#ec4899', fontWeight: '800' }}>{Math.round((rev.oneTime.collected / rev.oneTime.expected) * 100) || 0}%</Text>
+                            </View>
+                            <View style={styles.progressBar}>
+                                <View style={[styles.progressFill, { width: `${(rev.oneTime.collected / rev.oneTime.expected) * 100}%`, backgroundColor: '#ec4899' }]} />
+                            </View>
+                        </View>
+                    </View>
+                </View>
+            </ScrollView>
+        );
+    };
+
     const renderTeacherTab = () => {
         if (!stats?.attendance) return null;
         const teacherToday = stats.attendance.today.teachers;
@@ -601,7 +739,7 @@ export default function PrincipalStats() {
 
                 <TouchableOpacity 
                     style={styles.monthSelector}
-                    onPress={() => { setActivePicker('global'); setShowDatePicker(true); }}
+                    onPress={() => { setShowDatePicker(true); }}
                 >
                     <View style={{ flexDirection: 'row', alignItems: 'center' }}>
                         <Ionicons name="calendar" size={22} color={theme.primary} />
@@ -690,266 +828,36 @@ export default function PrincipalStats() {
         );
     };
 
-    const renderRevenueTab = () => {
-        if (!stats?.revenue) return null;
-        const { overall, monthly, daily } = stats.revenue;
-
-        const mDate = revMonth;
-        const dDate = revDate;
-
-        return (
-            <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={{ paddingBottom: insets.bottom + 60 }}>
-                {/* 1. Overall Session Summary */}
-                <View style={[styles.sectionCard, { marginTop: 20 }]}>
-                    <Text style={styles.cardTitle}>Overall Session Summary</Text>
-                    
-                    {/* Totals Header Row */}
-                    <View style={{ flexDirection: 'row', gap: 12, marginBottom: 15 }}>
-                        <View style={[styles.revenueBox, { flex: 1, backgroundColor: theme.success + '10', borderColor: theme.success, width: 'auto' }]}>
-                            <Text style={[styles.revenueLabel, { color: theme.success }]}>Total Collected</Text>
-                            <Text style={[styles.revenueAmount, { color: theme.success, fontSize: 20 }]}>₹{(overall?.totalCollected || 0).toLocaleString()}</Text>
-                        </View>
-                        <View style={[styles.revenueBox, { flex: 1, backgroundColor: theme.danger + '10', borderColor: theme.danger, width: 'auto' }]}>
-                            <Text style={[styles.revenueLabel, { color: theme.danger }]}>Total Remaining</Text>
-                            <Text style={[styles.revenueAmount, { color: theme.danger, fontSize: 20 }]}>₹{(overall?.totalPending || 0).toLocaleString()}</Text>
-                        </View>
-                    </View>
-
-                    <View style={styles.revenueGrid}>
-                        {/* Monthly Column */}
-                        <View style={[styles.revenueBox, { width: '100%', marginBottom: 5 }]}>
-                            <Text style={styles.revenueLabel}>Total Monthly Fees (Created)</Text>
-                            <Text style={[styles.revenueAmount, { fontSize: 22, color: theme.primary }]}>₹{(overall?.monthlyExpected || 0).toLocaleString()}</Text>
-                            <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginTop: 8, paddingTop: 8, borderTopWidth: 1, borderTopColor: theme.border }}>
-                                <View>
-                                    <Text style={{ fontSize: 9, color: theme.success, fontWeight: '800' }}>COLLECTED</Text>
-                                    <Text style={{ fontSize: 14, color: theme.success, fontWeight: '900' }}>₹{(overall?.monthlyCollected || 0).toLocaleString()}</Text>
-                                </View>
-                                <View style={{ alignItems: 'flex-end' }}>
-                                    <Text style={{ fontSize: 9, color: theme.danger, fontWeight: '800' }}>PENDING</Text>
-                                    <Text style={{ fontSize: 14, color: theme.danger, fontWeight: '900' }}>₹{((overall?.monthlyExpected || 0) - (overall?.monthlyCollected || 0)).toLocaleString()}</Text>
-                                </View>
-                            </View>
-                        </View>
-
-                        {/* Occasional Column */}
-                        <View style={[styles.revenueBox, { width: '100%', marginBottom: 5 }]}>
-                            <Text style={styles.revenueLabel}>Total Occasional Fees (Created)</Text>
-                            <Text style={[styles.revenueAmount, { fontSize: 22, color: theme.primary }]}>₹{(overall?.occasionalExpected || 0).toLocaleString()}</Text>
-                            <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginTop: 8, paddingTop: 8, borderTopWidth: 1, borderTopColor: theme.border }}>
-                                <View>
-                                    <Text style={{ fontSize: 9, color: theme.success, fontWeight: '800' }}>COLLECTED</Text>
-                                    <Text style={{ fontSize: 14, color: theme.success, fontWeight: '900' }}>₹{(overall?.occasionalCollected || 0).toLocaleString()}</Text>
-                                </View>
-                                <View style={{ alignItems: 'flex-end' }}>
-                                    <Text style={{ fontSize: 9, color: theme.danger, fontWeight: '800' }}>PENDING</Text>
-                                    <Text style={{ fontSize: 14, color: theme.danger, fontWeight: '900' }}>₹{((overall?.occasionalExpected || 0) - (overall?.occasionalCollected || 0)).toLocaleString()}</Text>
-                                </View>
-                            </View>
-                        </View>
-                    </View>
-                </View>
-
-                {/* 2. Month-wise Collection Flashcard */}
-                <View style={[styles.flashcard, { marginTop: 25 }]}>
-                    {/* Header with Title and Month Selection on Top Right */}
-                    <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20 }}>
-                        <View>
-                            <Text style={styles.dayText}>Monthly Analysis</Text>
-                            <Text style={styles.dateText}>Revenue breakdown for selected month</Text>
-                        </View>
-                        <TouchableOpacity 
-                            style={{ 
-                                flexDirection: 'row', 
-                                alignItems: 'center', 
-                                backgroundColor: theme.primary + '15', 
-                                paddingHorizontal: 12, 
-                                paddingVertical: 8, 
-                                borderRadius: 12,
-                                borderWidth: 1,
-                                borderColor: theme.primary + '30'
-                            }}
-                            onPress={() => setShowMonthPicker(true)}
-                        >
-                            <Text style={{ fontSize: 13, fontWeight: '800', color: theme.primary }}>
-                                {mDate.toLocaleDateString('en-IN', { month: 'short', year: 'numeric' })}
-                            </Text>
-                            <Ionicons name="chevron-down" size={16} color={theme.primary} style={{ marginLeft: 6 }} />
-                        </TouchableOpacity>
-                    </View>
-
-                    {/* Row 1: Expected Revenue (Potential) */}
-                    <View style={{ marginBottom: 15 }}>
-                        <Text style={[styles.revenueLabel, { marginBottom: 8, color: theme.textLight }]}>Total Expected (Potential Revenue)</Text>
-                        <View style={{ flexDirection: 'row', gap: 12 }}>
-                            <View style={[styles.revenueBox, { flex: 1, width: 'auto', backgroundColor: theme.background }]}>
-                                <Text style={styles.revenueLabel}>Monthly</Text>
-                                <Text style={[styles.revenueAmount, { fontSize: 16 }]}>₹{(monthly?.monthlyExpected || 0).toLocaleString()}</Text>
-                            </View>
-                            <View style={[styles.revenueBox, { flex: 1, width: 'auto', backgroundColor: theme.background }]}>
-                                <Text style={styles.revenueLabel}>Occasional</Text>
-                                <Text style={[styles.revenueAmount, { fontSize: 16 }]}>₹{(monthly?.occasionalExpected || 0).toLocaleString()}</Text>
-                            </View>
-                        </View>
-                    </View>
-
-                    {/* Row 2: Collected Revenue (Till Now) */}
-                    <View style={{ marginBottom: 20 }}>
-                        <Text style={[styles.revenueLabel, { marginBottom: 8, color: theme.success }]}>Collected Revenue (Till Now)</Text>
-                        <View style={{ flexDirection: 'row', gap: 12 }}>
-                            <View style={[styles.revenueBox, { flex: 1, width: 'auto', backgroundColor: theme.success + '08', borderColor: theme.success + '30' }]}>
-                                <Text style={[styles.revenueLabel, { color: theme.success }]}>Monthly</Text>
-                                <Text style={[styles.revenueAmount, { color: theme.success, fontSize: 16 }]}>₹{(monthly?.monthlyCollected || 0).toLocaleString()}</Text>
-                            </View>
-                            <View style={[styles.revenueBox, { flex: 1, width: 'auto', backgroundColor: theme.success + '08', borderColor: theme.success + '30' }]}>
-                                <Text style={[styles.revenueLabel, { color: theme.success }]}>Occasional</Text>
-                                <Text style={[styles.revenueAmount, { color: theme.success, fontSize: 16 }]}>₹{(monthly?.occasionalCollected || 0).toLocaleString()}</Text>
-                            </View>
-                        </View>
-                    </View>
-
-                    {/* Final: Grand Total Collection */}
-                    <View style={[styles.revenueBox, { 
-                        width: '100%', 
-                        backgroundColor: theme.primary, 
-                        borderWidth: 0,
-                        paddingVertical: 18,
-                        shadowColor: theme.primary,
-                        shadowOffset: { width: 0, height: 8 },
-                        shadowOpacity: 0.3,
-                        shadowRadius: 12,
-                        elevation: 8
-                    }]}>
-                        <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
-                            <View>
-                                <Text style={[styles.revenueLabel, { color: 'rgba(255,255,255,0.8)' }]}>Grand Total Collection</Text>
-                                <Text style={{ fontSize: 11, color: 'rgba(255,255,255,0.6)', fontWeight: '700' }}>Combined Monthly & Occasional</Text>
-                            </View>
-                            <Text style={[styles.revenueAmount, { color: '#fff', fontSize: 24 }]}>
-                                ₹{(monthly?.totalCollected || 0).toLocaleString()}
-                            </Text>
-                        </View>
-                    </View>
-                </View>
-
-                {/* 3. Specific Day Collection Flashcard */}
-                <View style={[styles.flashcard, { marginTop: 25, marginBottom: 40 }]}>
-                    <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20 }}>
-                        <View>
-                            <Text style={styles.dayText}>Daily Analysis</Text>
-                            <Text style={styles.dateText}>Revenue for specific date</Text>
-                        </View>
-                        <TouchableOpacity
-                            style={{
-                                flexDirection: 'row',
-                                alignItems: 'center',
-                                backgroundColor: theme.primary + '15',
-                                paddingHorizontal: 12,
-                                paddingVertical: 8,
-                                borderRadius: 12,
-                                borderWidth: 1,
-                                borderColor: theme.primary + '30'
-                            }}
-                            onPress={() => { setActivePicker('rev_date'); setShowDatePicker(true); }}
-                        >
-                            <Text style={{ fontSize: 13, fontWeight: '800', color: theme.primary }}>
-                                {dDate.toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' })}
-                            </Text>
-                            <Ionicons name="chevron-down" size={16} color={theme.primary} style={{ marginLeft: 6 }} />
-                        </TouchableOpacity>
-                    </View>
-
-                    {/* Row 1: Month Context */}
-                    <View style={{ marginBottom: 20 }}>
-                        <Text style={[styles.revenueLabel, { marginBottom: 8, color: theme.textLight }]}>
-                            Total Collected in {dDate.toLocaleDateString('en-IN', { month: 'long' })} (Context)
-                        </Text>
-                        <View style={{ flexDirection: 'row', gap: 12 }}>
-                            <View style={[styles.revenueBox, { flex: 1, width: 'auto', backgroundColor: theme.background }]}>
-                                <Text style={styles.revenueLabel}>Monthly</Text>
-                                <Text style={[styles.revenueAmount, { fontSize: 16 }]}>₹{(monthly?.monthlyCollected || 0).toLocaleString()}</Text>
-                            </View>
-                            <View style={[styles.revenueBox, { flex: 1, width: 'auto', backgroundColor: theme.background }]}>
-                                <Text style={styles.revenueLabel}>Occasional</Text>
-                                <Text style={[styles.revenueAmount, { fontSize: 16 }]}>₹{(monthly?.occasionalCollected || 0).toLocaleString()}</Text>
-                            </View>
-                        </View>
-                    </View>
-
-                    {/* Row 2: Day Stats */}
-                    <View style={{ marginBottom: 20 }}>
-                        <Text style={[styles.revenueLabel, { marginBottom: 8, color: theme.primary }]}>
-                            Collected on {dDate.toLocaleDateString('en-IN', { day: '2-digit', month: 'long' })}
-                        </Text>
-                        <View style={{ flexDirection: 'row', gap: 12 }}>
-                            <View style={[styles.revenueBox, { flex: 1, width: 'auto', backgroundColor: theme.primary + '08', borderColor: theme.primary + '30' }]}>
-                                <Text style={[styles.revenueLabel, { color: theme.primary }]}>Monthly</Text>
-                                <Text style={[styles.revenueAmount, { color: theme.primary, fontSize: 16 }]}>₹{(daily?.monthly || 0).toLocaleString()}</Text>
-                            </View>
-                            <View style={[styles.revenueBox, { flex: 1, width: 'auto', backgroundColor: theme.primary + '08', borderColor: theme.primary + '30' }]}>
-                                <Text style={[styles.revenueLabel, { color: theme.primary }]}>Occasional</Text>
-                                <Text style={[styles.revenueAmount, { color: theme.primary, fontSize: 16 }]}>₹{(daily?.occasional || 0).toLocaleString()}</Text>
-                            </View>
-                        </View>
-                    </View>
-
-                    {/* Final: Grand Total Day */}
-                    <TouchableOpacity 
-                        style={[styles.revenueBox, {
-                            width: '100%',
-                            backgroundColor: theme.card,
-                            borderWidth: 1,
-                            borderColor: theme.primary,
-                            paddingVertical: 15,
-                            borderStyle: 'dashed'
-                        }]}
-                        onPress={() => setPaymentModalVisible(true)}
-                    >
-                        <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
-                            <View>
-                                <Text style={[styles.revenueLabel, { color: theme.primary }]}>Total Day Collection</Text>
-                                <Text style={{ fontSize: 10, color: theme.primary + '80', fontWeight: '800' }}>CLICK TO VIEW STUDENTS</Text>
-                            </View>
-                            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
-                                <Text style={[styles.revenueAmount, { color: theme.primary, fontSize: 20 }]}>
-                                    ₹{(daily?.total || 0).toLocaleString()}
-                                </Text>
-                                <Ionicons name="chevron-forward" size={18} color={theme.primary} />
-                            </View>
-                        </View>
-                    </TouchableOpacity>
-                </View>
-            </ScrollView>
-        );
-    };
-
     return (
-        <View style={styles.container}>
-            <StatusBar barStyle={theme.statusBarStyle} backgroundColor={theme.card} />
+        <View style={[styles.container, { paddingTop: insets.top }]}>
+            <StatusBar barStyle={theme.statusBarStyle} backgroundColor="transparent" translucent={true} />
 
-            <View style={styles.header}>
+            <View style={{ flexDirection: 'row', alignItems: 'center', paddingHorizontal: 20, paddingVertical: 15 }}>
                 <TouchableOpacity style={styles.backBtn} onPress={() => router.back()}>
-                    <Ionicons name="arrow-back" size={24} color={theme.text} />
+                    <Ionicons name="chevron-back" size={28} color={theme.text} />
                 </TouchableOpacity>
-                <View>
-                    <Text style={styles.headerTitle}>Stats</Text>
-                    {activeSessionName ? <Text style={{ fontSize: 10, color: theme.primary, fontWeight: '800', marginTop: -2 }}>{activeSessionName}</Text> : null}
-                </View>
+                <Text style={styles.headerTitle}>Stats</Text>
             </View>
 
             {/* Tabs */}
-            <View style={styles.tabContainer}>
-                {(['students', 'teachers', 'revenue'] as TabType[]).map((tab) => (
-                    <TouchableOpacity
-                        key={tab}
-                        style={[styles.tab, activeTab === tab && styles.activeTab]}
-                        onPress={() => setActiveTab(tab)}
-                    >
-                        <Text style={[styles.tabText, activeTab === tab && styles.activeTabText]}>
-                            {tab.charAt(0).toUpperCase() + tab.slice(1)}
-                        </Text>
-                    </TouchableOpacity>
-                ))}
+            <View style={{ marginBottom: 5 }}>
+                <ScrollView 
+                    horizontal 
+                    showsHorizontalScrollIndicator={false} 
+                    contentContainerStyle={styles.tabContainer}
+                >
+                    {(['students', 'teachers', 'revenue'] as TabType[]).map((tab) => (
+                        <TouchableOpacity
+                            key={tab}
+                            style={[styles.tab, activeTab === tab && styles.activeTab]}
+                            onPress={() => setActiveTab(tab)}
+                        >
+                            <Text style={[styles.tabText, activeTab === tab && styles.activeTabText]}>
+                                {tab.charAt(0).toUpperCase() + tab.slice(1)}
+                            </Text>
+                        </TouchableOpacity>
+                    ))}
+                </ScrollView>
             </View>
 
             <View style={styles.content}>
@@ -958,8 +866,8 @@ export default function PrincipalStats() {
                 ) : (
                     <>
                         {activeTab === 'students' && renderAttendanceTab()}
-                        {activeTab === 'revenue' && renderRevenueTab()}
                         {activeTab === 'teachers' && renderTeacherTab()}
+                        {activeTab === 'revenue' && renderRevenueTab()}
                     </>
                 )}
             </View>
@@ -1043,129 +951,108 @@ export default function PrincipalStats() {
                 </View>
             </Modal>
 
-            {/* Payment Details Modal */}
+            {/* Daily Revenue Detail Modal */}
             <Modal
-                visible={paymentModalVisible}
+                visible={revenueModalVisible}
                 transparent={true}
                 animationType="slide"
-                onRequestClose={() => setPaymentModalVisible(false)}
+                onRequestClose={() => setRevenueModalVisible(false)}
             >
                 <View style={styles.modalOverlay}>
-                    <View style={styles.modalContent}>
+                    <View style={[styles.modalContent, { height: '85%' }]}>
                         <View style={styles.modalHandle} />
                         <View style={styles.modalHeader}>
                             <View>
-                                <Text style={styles.modalTitle}>Fee Payments</Text>
+                                <Text style={styles.modalTitle}>Daily Collection</Text>
                                 <Text style={{ color: theme.textLight }}>
-                                    {revDate.toLocaleDateString('en-IN', { day: '2-digit', month: 'long', year: 'numeric' })}
+                                    {revenueType === 'monthly' ? 'Monthly Fee Breakdown' : 'One-Time Fee Breakdown'}
                                 </Text>
                             </View>
-                            <TouchableOpacity onPress={() => setPaymentModalVisible(false)}>
+                            <TouchableOpacity onPress={() => setRevenueModalVisible(false)}>
                                 <Ionicons name="close-circle" size={32} color={theme.textLight} />
                             </TouchableOpacity>
                         </View>
 
-                        <View style={{ backgroundColor: theme.primary + '10', padding: 15, marginHorizontal: 20, marginTop: 15, borderRadius: 15, flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
-                            <Text style={{ fontSize: 14, fontWeight: '800', color: theme.primary }}>Total Collections</Text>
-                            <Text style={{ fontSize: 18, fontWeight: '900', color: theme.primary }}>₹{(stats?.revenue?.daily?.total || 0).toLocaleString()}</Text>
+                        {/* Date Switcher */}
+                        <View style={[styles.monthSelector, { marginVertical: 10 }]}>
+                            <TouchableOpacity style={styles.navBtn} onPress={() => {
+                                const d = new Date(revenueSelectedDate);
+                                d.setDate(d.getDate() - 1);
+                                setRevenueSelectedDate(d);
+                            }}>
+                                <Ionicons name="chevron-back" size={20} color={theme.text} />
+                            </TouchableOpacity>
+                            <Text style={styles.monthText}>
+                                {revenueSelectedDate.toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' })}
+                            </Text>
+                            <TouchableOpacity style={styles.navBtn} onPress={() => {
+                                const d = new Date(revenueSelectedDate);
+                                d.setDate(d.getDate() + 1);
+                                if (d <= new Date()) setRevenueSelectedDate(d);
+                            }}>
+                                <Ionicons name="chevron-forward" size={20} color={theme.text} />
+                            </TouchableOpacity>
                         </View>
 
-                        <FlatList
-                            data={stats?.revenue?.daily?.payments || []}
-                            keyExtractor={(item, idx) => item.id.toString() + idx}
-                            contentContainerStyle={{ paddingBottom: 40, paddingTop: 10 }}
-                            renderItem={({ item }) => (
-                                <View style={[styles.studentItem, { marginHorizontal: 20, paddingHorizontal: 0 }]}>
-                                    <View style={[styles.rollBadge, { width: 32, height: 32, marginRight: 10 }]}>
-                                        <Text style={[styles.rollText, { fontSize: 12 }]}>{item.roll_no}</Text>
-                                    </View>
-                                    {item.photo_url ? (
-                                        <Image source={{ uri: item.photo_url }} style={{ width: 44, height: 44, borderRadius: 22, marginRight: 12 }} />
-                                    ) : (
-                                        <View style={{ width: 44, height: 44, borderRadius: 22, backgroundColor: theme.background, justifyContent: 'center', alignItems: 'center', marginRight: 12, borderWidth: 1, borderColor: theme.border }}>
-                                            <Ionicons name="person" size={22} color={theme.textLight} />
+                        <View style={{ paddingHorizontal: 20, marginBottom: 10 }}>
+                            <Text style={{ fontSize: 14, fontWeight: '800', color: theme.primary }}>
+                                Total Collected: ₹{revenueStudents.reduce((sum, s) => sum + parseFloat(s.amount || 0), 0).toLocaleString()}
+                            </Text>
+                        </View>
+
+                        {loadingRevenueStudents ? (
+                            <ActivityIndicator size="large" color={theme.primary} style={{ marginTop: 50 }} />
+                        ) : (
+                            <FlatList
+                                data={revenueStudents}
+                                keyExtractor={(item, idx) => idx.toString()}
+                                contentContainerStyle={{ paddingBottom: 40 }}
+                                renderItem={({ item }) => (
+                                    <View style={styles.studentItem}>
+                                        <View style={styles.rollBadge}>
+                                            <Text style={styles.rollText}>{item.roll_no}</Text>
                                         </View>
-                                    )}
-                                    <View style={{ flex: 1 }}>
-                                        <Text style={[styles.studentName, { fontSize: 15 }]}>{item.name}</Text>
-                                        <Text style={{ fontSize: 11, color: theme.textLight, fontWeight: '700' }}>
-                                            Class {item.class}-{item.section} • <Text style={{ color: theme.primary }}>{item.fee_type.toUpperCase()}</Text>
-                                        </Text>
+                                        <View style={{ flex: 1 }}>
+                                            <Text style={styles.studentName}>{item.name}</Text>
+                                            <Text style={{ fontSize: 12, color: theme.textLight }}>
+                                                Class {item.class}-{item.section} • {item.fee_type}
+                                            </Text>
+                                        </View>
+                                        <View style={{ alignItems: 'flex-end' }}>
+                                            <Text style={{ fontSize: 16, fontWeight: '900', color: theme.success }}>
+                                                ₹{parseFloat(item.amount).toLocaleString()}
+                                            </Text>
+                                            <Text style={{ fontSize: 9, color: theme.textLight }}>
+                                                {new Date(item.paid_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                                            </Text>
+                                        </View>
                                     </View>
-                                    <View style={{ alignItems: 'flex-end' }}>
-                                        <Text style={{ fontSize: 16, fontWeight: '900', color: theme.success }}>₹{parseFloat(item.amount).toLocaleString()}</Text>
-                                        <Text style={{ fontSize: 9, color: theme.textLight, fontWeight: '800' }}>
-                                            {new Date(item.paid_at).toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit' })}
-                                        </Text>
+                                )}
+                                ListEmptyComponent={() => (
+                                    <View style={{ padding: 40, alignItems: 'center' }}>
+                                        <Ionicons name="receipt-outline" size={64} color={theme.border} />
+                                        <Text style={{ color: theme.textLight, marginTop: 15, fontSize: 16 }}>No collections on this date</Text>
                                     </View>
-                                </View>
-                            )}
-                            ListEmptyComponent={() => (
-                                <View style={{ padding: 60, alignItems: 'center' }}>
-                                    <Ionicons name="receipt-outline" size={60} color={theme.border} />
-                                    <Text style={{ color: theme.textLight, marginTop: 15, textAlign: 'center', fontWeight: '700' }}>No payments recorded for this date</Text>
-                                </View>
-                            )}
-                        />
+                                )}
+                            />
+                        )}
                     </View>
                 </View>
             </Modal>
 
             {showDatePicker && (
                 <DateTimePicker
-                    value={activePicker === 'rev_date' ? revDate : selectedDate}
+                    value={selectedDate}
                     mode="date"
                     display="default"
                     maximumDate={new Date()}
                                     onChange={(event, date) => {
                                         setShowDatePicker(false);
                                         if (date) {
-                                            if (activePicker === 'rev_date') {
-                                                setRevDate(date);
-                                                setRevMonth(date); // Sync month context
-                                            }
-                                            else setSelectedDate(date);
+                                            setSelectedDate(date);
                                         }
                                     }}                />
             )}
-
-            {/* Custom Month Picker Modal for Revenue */}
-            <Modal visible={showMonthPicker} transparent animationType="fade">
-                <View style={styles.modalOverlay}>
-                    <TouchableOpacity style={StyleSheet.absoluteFill} onPress={() => setShowMonthPicker(false)} />
-                    <View style={[styles.modalContent, { height: 'auto', paddingBottom: 40 }]}>
-                        <View style={styles.modalHandle} />
-                        <Text style={[styles.modalTitle, { textAlign: 'center', marginBottom: 20 }]}>Select Billing Month</Text>
-                        <ScrollView style={{ maxHeight: 300 }}>
-                            {configuredMonths.length > 0 ? (
-                                configuredMonths.map((m, idx) => (
-                                    <TouchableOpacity 
-                                        key={idx} 
-                                        style={[
-                                            styles.studentItem, 
-                                            { justifyContent: 'center' }
-                                        ]}
-                                        onPress={() => {
-                                            // Convert "Month YYYY" string to Date object
-                                            const [mName, year] = m.split(' ');
-                                            const monthIdx = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'].indexOf(mName);
-                                            const newMDate = new Date(parseInt(year), monthIdx, 1);
-                                            setRevMonth(newMDate);
-                                            setShowMonthPicker(false);
-                                        }}
-                                    >
-                                        <Text style={[styles.studentName, { color: theme.primary, fontSize: 18 }]}>{m}</Text>
-                                    </TouchableOpacity>
-                                ))
-                            ) : (
-                                <View style={{ padding: 20, alignItems: 'center' }}>
-                                    <Text style={{ color: theme.textLight }}>No fee structures found</Text>
-                                </View>
-                            )}
-                        </ScrollView>
-                    </View>
-                </View>
-            </Modal>
 
         </View>
     );

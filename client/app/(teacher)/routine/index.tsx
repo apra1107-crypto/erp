@@ -8,6 +8,8 @@ import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
 import { useTheme } from '../../../context/ThemeContext';
 import { API_ENDPOINTS } from '../../../constants/Config';
 import Toast from 'react-native-toast-message';
+import DateTimePicker from '@react-native-community/datetimepicker';
+import { LinearGradient } from 'expo-linear-gradient';
 
 const { width, height: SCREEN_HEIGHT } = Dimensions.get('window');
 const DAYS = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'];
@@ -38,6 +40,15 @@ export default function RoutineManager() {
     const [isViewOnly, setIsViewOnly] = useState(false);
     const [selectedDay, setSelectedDay] = useState('Monday');
 
+    // Filter State
+    const [filterModalVisible, setFilterModalVisible] = useState(false);
+    const [filterClass, setFilterClass] = useState<string>('');
+    const [filterSection, setFilterSection] = useState<string>('');
+
+    // Time Picker State
+    const [showTimePicker, setShowTimePicker] = useState(false);
+    const [pickerConfig, setPickerConfig] = useState<{ idx: number, field: string }>({ idx: -1, field: '' });
+
     // Slot Assign State
     const [activeSlot, setActiveSlot] = useState<any>(null);
     const [tempSlot, setTempSlot] = useState({ subject: '', teacherId: '' });
@@ -55,10 +66,11 @@ export default function RoutineManager() {
     const fetchInitialData = async () => {
         try {
             const token = await AsyncStorage.getItem('teacherToken');
+            const storedSessionId = await AsyncStorage.getItem('selectedSessionId');
             const userDataStr = await AsyncStorage.getItem('teacherData');
             const userData = userDataStr ? JSON.parse(userDataStr) : null;
             const userType = await AsyncStorage.getItem('userType') || 'teacher';
-            const sessionId = userData ? JSON.parse(userDataStr || '{}').current_session_id : null;
+            const sessionId = storedSessionId || (userData ? userData.current_session_id : null);
 
             if (!userData) return;
 
@@ -124,8 +136,9 @@ export default function RoutineManager() {
         try {
             setLoading(true);
             const token = await AsyncStorage.getItem('teacherToken');
+            const storedSessionId = await AsyncStorage.getItem('selectedSessionId');
             const userDataStr = await AsyncStorage.getItem('teacherData');
-            const sessionId = userDataStr ? JSON.parse(userDataStr).current_session_id : null;
+            const sessionId = storedSessionId || (userDataStr ? JSON.parse(userDataStr).current_session_id : null);
 
             const res = await axios.get(`${API_ENDPOINTS.ROUTINE}/${instituteId}/${r.class_name}/${r.section}`, {
                 headers: { 
@@ -162,8 +175,9 @@ export default function RoutineManager() {
                     onPress: async () => {
                         try {
                             const token = await AsyncStorage.getItem('teacherToken');
+                            const storedSessionId = await AsyncStorage.getItem('selectedSessionId');
                             const userDataStr = await AsyncStorage.getItem('teacherData');
-                            const sessionId = userDataStr ? JSON.parse(userDataStr).current_session_id : null;
+                            const sessionId = storedSessionId || (userDataStr ? JSON.parse(userDataStr).current_session_id : null);
 
                             await axios.delete(`${API_ENDPOINTS.ROUTINE}/${instituteId}/${r.class_name}/${r.section}`, {
                                 headers: { 
@@ -189,8 +203,9 @@ export default function RoutineManager() {
         }
         try {
             const token = await AsyncStorage.getItem('teacherToken');
+            const storedSessionId = await AsyncStorage.getItem('selectedSessionId');
             const userDataStr = await AsyncStorage.getItem('teacherData');
-            const sessionId = userDataStr ? JSON.parse(userDataStr).current_session_id : null;
+            const sessionId = storedSessionId || (userDataStr ? JSON.parse(userDataStr).current_session_id : null);
 
             await axios.post(`${API_ENDPOINTS.ROUTINE}/save`, {
                 instituteId,
@@ -268,6 +283,22 @@ export default function RoutineManager() {
         setConfig({ ...config, slots: newSlots });
     };
 
+    const onTimeChange = (event: any, selectedDate?: Date) => {
+        setShowTimePicker(false);
+        if (event.type === 'set' && selectedDate) {
+            const hours = selectedDate.getHours().toString().padStart(2, '0');
+            const minutes = selectedDate.getMinutes().toString().padStart(2, '0');
+            const timeString = `${hours}:${minutes}`;
+            updateSlot(pickerConfig.idx, pickerConfig.field, timeString);
+        }
+    };
+
+    const openTimePicker = (idx: number, field: string) => {
+        if (isViewOnly) return;
+        setPickerConfig({ idx, field });
+        setShowTimePicker(true);
+    };
+
     const toggleDay = (day: string) => {
         if (isViewOnly) return;
         const newDays = config.days.includes(day) 
@@ -281,15 +312,27 @@ export default function RoutineManager() {
         header: {
             flexDirection: 'row',
             alignItems: 'center',
-            paddingTop: insets.top + 10,
-            paddingBottom: 15,
+            paddingTop: insets.top + 15,
+            paddingBottom: 10,
             paddingHorizontal: 20,
-            backgroundColor: theme.card,
-            borderBottomWidth: 1,
-            borderBottomColor: theme.border,
+            zIndex: 10,
         },
-        headerTitle: { fontSize: 20, fontWeight: 'bold', color: theme.text, marginLeft: 15 },
-        scrollView: { padding: 20 },
+        headerTitle: { fontSize: 24, fontWeight: '900', color: theme.text, marginLeft: 0, letterSpacing: -0.5 },
+        backBtn: { 
+            width: 40, 
+            height: 40, 
+            borderRadius: 20, 
+            backgroundColor: theme.card, 
+            justifyContent: 'center', 
+            alignItems: 'center', 
+            marginRight: 15,
+            elevation: 2,
+            shadowColor: '#000',
+            shadowOffset: { width: 0, height: 2 },
+            shadowOpacity: 0.1,
+            shadowRadius: 4,
+        },
+        scrollView: { padding: 20, paddingBottom: insets.bottom + 100 },
         card: {
             backgroundColor: theme.card,
             borderRadius: 20,
@@ -317,11 +360,11 @@ export default function RoutineManager() {
         deleteBtn: { position: 'absolute', top: 15, right: 15, padding: 8 },
         fab: {
             position: 'absolute',
-            bottom: 30,
-            right: 30,
-            width: 60,
-            height: 60,
-            borderRadius: 30,
+            bottom: Math.max(30, insets.bottom + 15),
+            right: 25,
+            width: 65,
+            height: 65,
+            borderRadius: 32.5,
             backgroundColor: theme.primary,
             justifyContent: 'center',
             alignItems: 'center',
@@ -340,7 +383,9 @@ export default function RoutineManager() {
             backgroundColor: theme.card,
             borderTopLeftRadius: 35,
             borderTopRightRadius: 35,
-            padding: 20,
+            paddingHorizontal: 20,
+            paddingTop: 20,
+            paddingBottom: insets.bottom > 0 ? insets.bottom : 20,
             height: '95%',
         },
         modalHeader: {
@@ -465,7 +510,7 @@ export default function RoutineManager() {
             flexDirection: 'row',
             justifyContent: 'space-between',
             marginTop: 15,
-            paddingBottom: Platform.OS === 'ios' ? 20 : 10,
+            paddingBottom: 10,
             gap: 12
         },
         button: {
@@ -480,6 +525,21 @@ export default function RoutineManager() {
         buttonText: { color: '#fff', fontWeight: 'bold', fontSize: 16 },
         buttonTextSecondary: { color: theme.text }
     }), [theme, isDark, insets]);
+
+    // Filter Options derived from actual routines
+    const availableFilterOptions = useMemo(() => {
+        const classes = [...new Set(overview.map(r => String(r.class_name)))].sort((a, b) => a.localeCompare(b, undefined, { numeric: true }));
+        const sections = [...new Set(overview.map(r => String(r.section)))].sort();
+        return { classes, sections };
+    }, [overview]);
+
+    const filteredOverview = useMemo(() => {
+        return overview.filter(r => {
+            const classMatch = !filterClass || String(r.class_name) === filterClass;
+            const sectionMatch = !filterSection || String(r.section) === filterSection;
+            return classMatch && sectionMatch;
+        });
+    }, [overview, filterClass, filterSection]);
 
     if (loading && !isBuilderOpen) {
         return (
@@ -564,27 +624,29 @@ export default function RoutineManager() {
                     <View style={styles.slotRow}>
                         <View style={styles.slotInputGroup}>
                             <Text style={{ fontSize: 11, color: theme.textLight, marginBottom: 6, fontWeight: '700' }}>Start</Text>
-                            <TextInput
-                                style={[styles.input, { color: theme.text }]}
-                                value={slot.startTime}
-                                placeholder="09:00"
-                                placeholderTextColor={theme.textLight}
-                                onChangeText={(val) => updateSlot(idx, 'startTime', val)}
-                                editable={!isViewOnly}
-                                keyboardType="numbers-and-punctuation"
-                            />
+                            <TouchableOpacity 
+                                style={[styles.input, { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }]}
+                                onPress={() => openTimePicker(idx, 'startTime')}
+                                disabled={isViewOnly}
+                            >
+                                <Text style={{ color: slot.startTime ? theme.text : theme.textLight, fontSize: 16 }}>
+                                    {slot.startTime || '09:00'}
+                                </Text>
+                                <Ionicons name="time-outline" size={20} color={theme.primary} />
+                            </TouchableOpacity>
                         </View>
                         <View style={styles.slotInputGroup}>
                             <Text style={{ fontSize: 11, color: theme.textLight, marginBottom: 6, fontWeight: '700' }}>End</Text>
-                            <TextInput
-                                style={[styles.input, { color: theme.text }]}
-                                value={slot.endTime}
-                                placeholder="09:45"
-                                placeholderTextColor={theme.textLight}
-                                onChangeText={(val) => updateSlot(idx, 'endTime', val)}
-                                editable={!isViewOnly}
-                                keyboardType="numbers-and-punctuation"
-                            />
+                            <TouchableOpacity 
+                                style={[styles.input, { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }]}
+                                onPress={() => openTimePicker(idx, 'endTime')}
+                                disabled={isViewOnly}
+                            >
+                                <Text style={{ color: slot.endTime ? theme.text : theme.textLight, fontSize: 16 }}>
+                                    {slot.endTime || '09:45'}
+                                </Text>
+                                <Ionicons name="time-outline" size={20} color={theme.primary} />
+                            </TouchableOpacity>
                         </View>
                     </View>
 
@@ -605,38 +667,101 @@ export default function RoutineManager() {
                 </View>
             ))}
             {!isViewOnly && (
-                <TouchableOpacity style={[styles.button, { backgroundColor: theme.accent, marginTop: 5 }]} onPress={addSlot}>
-                    <Text style={styles.buttonText}>+ Add New Slot</Text>
+                <TouchableOpacity 
+                    style={[
+                        styles.button, 
+                        { 
+                            backgroundColor: isDark ? theme.primary + '30' : theme.primary + '10', 
+                            borderWidth: 1, 
+                            borderColor: theme.primary,
+                            marginTop: 15,
+                            borderStyle: 'dashed'
+                        }
+                    ]} 
+                    onPress={addSlot}
+                >
+                    <Text style={[styles.buttonText, { color: theme.primary }]}>+ Add New Slot</Text>
                 </TouchableOpacity>
+            )}
+
+            {showTimePicker && (
+                <DateTimePicker
+                    value={(() => {
+                        const currentVal = config.slots[pickerConfig.idx]?.[pickerConfig.field] || '09:00';
+                        const [h, m] = currentVal.split(':').map(Number);
+                        const d = new Date();
+                        d.setHours(h || 9, m || 0, 0, 0);
+                        return d;
+                    })()}
+                    mode="time"
+                    is24Hour={false}
+                    display={Platform.OS === 'ios' ? 'spinner' : 'clock'}
+                    onChange={onTimeChange}
+                />
             )}
         </ScrollView>
     );
 
     const renderStep3 = () => (
         <View style={{ flex: 1 }}>
-            <View style={styles.agendaDaySelector}>
-                <ScrollView horizontal showsHorizontalScrollIndicator={false}>
+            <View style={[styles.agendaDaySelector, { paddingHorizontal: 5 }]}>
+                <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ paddingVertical: 5 }}>
                     {config.days.map((day: string) => (
                         <TouchableOpacity
                             key={day}
-                            style={[styles.agendaDayChip, selectedDay === day && styles.agendaDayChipActive]}
+                            style={[
+                                styles.agendaDayChip, 
+                                selectedDay === day && styles.agendaDayChipActive,
+                                { borderRadius: 14, paddingHorizontal: 22, height: 44, justifyContent: 'center' }
+                            ]}
                             onPress={() => setSelectedDay(day)}
                         >
-                            <Text style={[styles.agendaDayText, selectedDay === day && styles.agendaDayTextActive]}>{day}</Text>
+                            <Text style={[
+                                styles.agendaDayText, 
+                                selectedDay === day && styles.agendaDayTextActive,
+                                { fontSize: 13, textTransform: 'uppercase', letterSpacing: 0.5 }
+                            ]}>
+                                {day}
+                            </Text>
                         </TouchableOpacity>
                     ))}
                 </ScrollView>
             </View>
 
-            <ScrollView style={styles.agendaList} showsVerticalScrollIndicator={false}>
+            <ScrollView 
+                style={styles.agendaList} 
+                showsVerticalScrollIndicator={false}
+                contentContainerStyle={{ paddingHorizontal: 5, paddingBottom: 100 }}
+            >
                 {config.slots.map((slot: any, sIdx: number) => {
                     const cellData = routineData[selectedDay]?.[sIdx] || { subject: '', teacherId: '' };
                     const teacherName = teachers.find(t => String(t.id) === String(cellData.teacherId))?.name;
+                    const isBreak = slot.type === 'break';
+                    
+                    const slotGradients = [
+                        ['#EEF2FF', '#E0E7FF'], // Indigo
+                        ['#ECFDF5', '#D1FAE5'], // Emerald
+                        ['#FFFBEB', '#FEF3C7'], // Amber
+                        ['#FDF2F8', '#FCE7F3'], // Pink
+                    ];
+                    const bgColors = slotGradients[sIdx % slotGradients.length];
 
                     return (
                         <TouchableOpacity
                             key={slot.id}
-                            style={styles.agendaItem}
+                            style={[
+                                styles.agendaItem,
+                                { 
+                                    borderWidth: 0, 
+                                    elevation: 2, 
+                                    shadowColor: '#000', 
+                                    shadowOpacity: 0.05, 
+                                    shadowRadius: 10,
+                                    minHeight: 110,
+                                    backgroundColor: isDark ? '#1a1a1a' : '#fff',
+                                    marginBottom: 16
+                                }
+                            ]}
                             activeOpacity={isViewOnly ? 1 : 0.7}
                             onPress={() => {
                                 if (!isViewOnly && slot.type !== 'break') {
@@ -645,36 +770,65 @@ export default function RoutineManager() {
                                 }
                             }}
                         >
-                            <View style={styles.agendaTimeContainer}>
-                                <Text style={styles.agendaTimeText}>{slot.startTime}</Text>
-                                <View style={{ height: 10, width: 1, backgroundColor: theme.border, marginVertical: 2 }} />
-                                <Text style={styles.agendaTimeText}>{slot.endTime}</Text>
-                                <Text style={styles.agendaTimeSub}>{slot.label}</Text>
+                            <View style={[
+                                styles.agendaTimeContainer, 
+                                { 
+                                    width: 100, 
+                                    backgroundColor: isDark ? '#222' : bgColors[0],
+                                    borderRightWidth: 0,
+                                    padding: 12
+                                }
+                            ]}>
+                                <View style={{ alignItems: 'center' }}>
+                                    <Text style={[styles.agendaTimeText, { fontSize: 14, color: isDark ? '#fff' : '#1e293b' }]}>{slot.startTime}</Text>
+                                    <View style={{ height: 20, width: 2, backgroundColor: isDark ? theme.primary : bgColors[1], marginVertical: 4, borderRadius: 1 }} />
+                                    <Text style={[styles.agendaTimeText, { fontSize: 14, color: isDark ? '#fff' : '#1e293b' }]}>{slot.endTime}</Text>
+                                </View>
+                                <View style={{ marginTop: 8, backgroundColor: isDark ? '#333' : '#fff', paddingHorizontal: 6, paddingVertical: 2, borderRadius: 6 }}>
+                                    <Text style={[styles.agendaTimeSub, { fontSize: 9, fontWeight: '900', color: isDark ? theme.textLight : '#64748b' }]}>
+                                        {slot.label.toUpperCase()}
+                                    </Text>
+                                </View>
                             </View>
 
-                            <View style={styles.agendaContent}>
-                                {slot.type === 'break' ? (
+                            <View style={[styles.agendaContent, { padding: 18 }]}>
+                                {isBreak ? (
                                     <View>
-                                        <Text style={[styles.agendaSubject, { color: theme.warning }]}>Recess / Break</Text>
-                                        <View style={styles.agendaBreakTag}>
-                                            <Text style={styles.agendaBreakText}>NON-ACADEMIC</Text>
+                                        <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 6 }}>
+                                            <MaterialCommunityIcons name="coffee" size={18} color={theme.warning} />
+                                            <Text style={[styles.agendaSubject, { color: theme.warning, marginLeft: 8, fontSize: 18 }]}>Recess / Break</Text>
+                                        </View>
+                                        <View style={[styles.agendaBreakTag, { backgroundColor: theme.warning + '15', borderRadius: 8 }]}>
+                                            <Text style={[styles.agendaBreakText, { color: theme.warning, letterSpacing: 0.5 }]}>TIME TO RECHARGE</Text>
                                         </View>
                                     </View>
                                 ) : cellData.subject ? (
                                     <View>
-                                        <Text style={styles.agendaSubject}>{cellData.subject}</Text>
-                                        <View style={styles.agendaTeacher}>
-                                            <Text style={{ color: theme.textLight }}>{teacherName || 'Not Assigned'}</Text>
+                                        <Text style={[styles.agendaSubject, { fontSize: 19, color: theme.text }]}>{cellData.subject}</Text>
+                                        <View style={{ flexDirection: 'row', alignItems: 'center', marginTop: 8 }}>
+                                            <View style={{ width: 24, height: 24, borderRadius: 12, backgroundColor: theme.primary + '15', justifyContent: 'center', alignItems: 'center', marginRight: 8 }}>
+                                                <Ionicons name="person" size={12} color={theme.primary} />
+                                            </View>
+                                            <Text style={[styles.agendaTeacher, { color: theme.textLight, fontSize: 14, fontWeight: '600' }]}>
+                                                {teacherName || 'Not Assigned'}
+                                            </Text>
                                         </View>
                                     </View>
                                 ) : (
-                                    <Text style={styles.agendaEmptyText}>{isViewOnly ? 'Free Period' : 'Tap to Assign'}</Text>
+                                    <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+                                        <Ionicons name="add-circle-outline" size={20} color={theme.border} />
+                                        <Text style={[styles.agendaEmptyText, { marginLeft: 8, fontSize: 15, fontWeight: '600' }]}>
+                                            {isViewOnly ? 'Free Period' : 'Tap to Assign Subject'}
+                                        </Text>
+                                    </View>
                                 )}
                             </View>
                             
-                            {!isViewOnly && slot.type !== 'break' && (
-                                <View style={{ justifyContent: 'center', paddingRight: 15 }}>
-                                    <Ionicons name="create-outline" size={20} color={theme.primary + '80'} />
+                            {!isViewOnly && !isBreak && (
+                                <View style={{ justifyContent: 'center', paddingRight: 20 }}>
+                                    <View style={{ width: 32, height: 32, borderRadius: 16, backgroundColor: theme.primary + '10', justifyContent: 'center', alignItems: 'center' }}>
+                                        <Ionicons name="pencil" size={16} color={theme.primary} />
+                                    </View>
                                 </View>
                             )}
                         </TouchableOpacity>
@@ -687,46 +841,132 @@ export default function RoutineManager() {
 
     return (
         <View style={styles.container}>
-            <StatusBar barStyle={isDark ? 'light-content' : 'dark-content'} backgroundColor={theme.card} />
-            <View style={styles.header}>
-                <TouchableOpacity onPress={() => router.back()}>
-                    <Ionicons name="chevron-back" size={28} color={theme.text} />
+            <StatusBar barStyle={isDark ? 'light-content' : 'dark-content'} backgroundColor="transparent" translucent={true} />
+            <View style={[styles.header, { justifyContent: 'space-between' }]}>
+                <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+                    <TouchableOpacity style={styles.backBtn} onPress={() => router.back()}>
+                        <Ionicons name="chevron-back" size={22} color={theme.text} />
+                    </TouchableOpacity>
+                    <Text style={styles.headerTitle}>Routine Manager</Text>
+                </View>
+                <TouchableOpacity 
+                    style={[
+                        styles.backBtn, 
+                        { marginRight: 0 }, 
+                        (filterClass || filterSection) && { backgroundColor: theme.primary + '20', borderColor: theme.primary }
+                    ]} 
+                    onPress={() => setFilterModalVisible(true)}
+                >
+                    <Ionicons name="filter" size={20} color={(filterClass || filterSection) ? theme.primary : theme.text} />
+                    {(filterClass || filterSection) && (
+                        <View style={{ position: 'absolute', top: 8, right: 8, width: 8, height: 8, borderRadius: 4, backgroundColor: theme.primary, borderWidth: 1.5, borderColor: theme.card }} />
+                    )}
                 </TouchableOpacity>
-                <Text style={styles.headerTitle}>Routine Manager</Text>
             </View>
 
-            <ScrollView contentContainerStyle={styles.scrollView}>
-                {overview.length === 0 ? (
+            <ScrollView contentContainerStyle={styles.scrollView} showsVerticalScrollIndicator={false}>
+                {filteredOverview.length === 0 ? (
                     <View style={{ alignItems: 'center', paddingVertical: 100 }}>
-                        <Ionicons name="calendar-outline" size={80} color={theme.border} />
-                        <Text style={{ color: theme.textLight, marginTop: 20, fontSize: 16 }}>No routines created yet</Text>
+                        <Ionicons name="search-outline" size={80} color={theme.border} />
+                        <Text style={{ color: theme.textLight, marginTop: 20, fontSize: 16 }}>
+                            {overview.length === 0 ? 'No routines created yet' : 'No matching routines found'}
+                        </Text>
+                        {(filterClass || filterSection) && (
+                            <TouchableOpacity onPress={() => { setFilterClass(''); setFilterSection(''); }}>
+                                <Text style={{ color: theme.primary, fontWeight: 'bold', marginTop: 10 }}>Clear Filters</Text>
+                            </TouchableOpacity>
+                        )}
                     </View>
                 ) : (
-                    overview.map((r, idx) => (
-                        <TouchableOpacity key={idx} style={styles.card} onPress={() => handleViewRoutine(r)}>
-                            <View style={{ flexDirection: 'row', alignItems: 'center' }}>
-                                <View style={{ width: 50, height: 50, borderRadius: 15, backgroundColor: theme.primary + '15', justifyContent: 'center', alignItems: 'center' }}>
-                                    <MaterialCommunityIcons name="calendar-clock" size={26} color={theme.primary} />
-                                </View>
-                                <View style={{ marginLeft: 15, flex: 1 }}>
-                                    <Text style={styles.cardTitle}>Class {r.class_name}</Text>
-                                    <Text style={styles.cardSubtitle}>Section {r.section}</Text>
-                                </View>
-                                <Ionicons name="chevron-forward" size={20} color={theme.border} />
-                            </View>
+                    filteredOverview.map((r, idx) => {
+                        const gradients = [
+                            ['#6366f1', '#a855f7'],
+                            ['#0ea5e9', '#2563eb'],
+                            ['#10b981', '#3b82f6'],
+                            ['#f59e0b', '#ef4444'],
+                        ];
+                        const gradient = gradients[idx % gradients.length];
+                        
+                        return (
+                            <TouchableOpacity 
+                                key={idx} 
+                                activeOpacity={0.9}
+                                style={{
+                                    marginBottom: 20,
+                                    borderRadius: 24,
+                                    elevation: 8,
+                                    shadowColor: gradient[0],
+                                    shadowOpacity: 0.2,
+                                    shadowRadius: 10,
+                                    shadowOffset: { width: 0, height: 4 },
+                                    backgroundColor: theme.card,
+                                }}
+                                onPress={() => handleViewRoutine(r)}
+                            >
+                                <LinearGradient
+                                    colors={isDark ? ['#1a1a1a', '#121212'] : ['#ffffff', '#f8fafc']}
+                                    style={{ borderRadius: 24, padding: 20, borderWidth: 1, borderColor: theme.border }}
+                                >
+                                    <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+                                        <LinearGradient
+                                            colors={gradient}
+                                            style={{ width: 56, height: 56, borderRadius: 18, justifyContent: 'center', alignItems: 'center', elevation: 4 }}
+                                        >
+                                            <MaterialCommunityIcons name="calendar-clock" size={28} color="#fff" />
+                                        </LinearGradient>
+                                        
+                                        <View style={{ marginLeft: 18, flex: 1 }}>
+                                            <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
+                                                <Text style={{ fontSize: 20, fontWeight: '900', color: theme.text, letterSpacing: -0.5 }}>
+                                                    Class {r.class_name}
+                                                </Text>
+                                                <View style={{ backgroundColor: r.is_published ? '#27AE6020' : '#F39C1220', paddingHorizontal: 10, paddingVertical: 4, borderRadius: 10 }}>
+                                                    <Text style={{ fontSize: 10, fontWeight: '900', color: r.is_published ? '#27AE60' : '#F39C12', textTransform: 'uppercase' }}>
+                                                        {r.is_published ? 'Published' : 'Draft'}
+                                                    </Text>
+                                                </View>
+                                            </View>
+                                            <Text style={{ fontSize: 14, color: theme.textLight, fontWeight: '600', marginTop: 2 }}>
+                                                Section {r.section} • {r.config?.slots?.length || 0} Slots
+                                            </Text>
+                                        </View>
+                                    </View>
 
-                            <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginTop: 15 }}>
-                                <View style={[styles.cardBadge, { backgroundColor: r.is_published ? '#27AE6015' : '#F39C1215', marginTop: 0 }]}>
-                                    <Text style={[styles.cardBadgeText, { color: r.is_published ? '#27AE60' : '#F39C12' }]}>
-                                        {r.is_published ? 'Published' : 'Draft'}
-                                    </Text>
-                                </View>
-                                <TouchableOpacity style={{ padding: 5 }} onPress={() => handleDeleteRoutine(r)}>
-                                    <Ionicons name="trash-outline" size={20} color={theme.danger} />
-                                </TouchableOpacity>
-                            </View>
-                        </TouchableOpacity>
-                    ))
+                                    <View style={{ height: 1, backgroundColor: theme.border, marginVertical: 15, opacity: 0.5 }} />
+
+                                    <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
+                                        <View style={{ flexDirection: 'row', gap: 6 }}>
+                                            {r.config?.days?.slice(0, 3).map((day: string) => (
+                                                <View key={day} style={{ backgroundColor: theme.primary + '10', paddingHorizontal: 8, paddingVertical: 4, borderRadius: 6 }}>
+                                                    <Text style={{ fontSize: 10, fontWeight: '800', color: theme.primary }}>{day.substring(0, 3)}</Text>
+                                                </View>
+                                            ))}
+                                            {(r.config?.days?.length || 0) > 3 && (
+                                                <Text style={{ fontSize: 10, color: theme.textLight, fontWeight: 'bold', alignSelf: 'center' }}>
+                                                    +{(r.config?.days?.length || 0) - 3} more
+                                                </Text>
+                                            )}
+                                        </View>
+                                        
+                                        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
+                                            <TouchableOpacity 
+                                                style={{ width: 36, height: 36, borderRadius: 18, backgroundColor: theme.danger + '15', justifyContent: 'center', alignItems: 'center' }}
+                                                onPress={() => handleDeleteRoutine(r)}
+                                            >
+                                                <Ionicons name="trash-outline" size={18} color={theme.danger} />
+                                            </TouchableOpacity>
+                                            <TouchableOpacity 
+                                                style={{ width: 36, height: 36, borderRadius: 18, backgroundColor: theme.primary + '15', justifyContent: 'center', alignItems: 'center' }}
+                                                onPress={() => handleViewRoutine(r)}
+                                            >
+                                                <Ionicons name="arrow-forward" size={18} color={theme.primary} />
+                                            </TouchableOpacity>
+                                        </View>
+                                    </View>
+                                </LinearGradient>
+                            </TouchableOpacity>
+                        );
+                    })
                 )}
             </ScrollView>
 
@@ -734,7 +974,12 @@ export default function RoutineManager() {
                 <Ionicons name="add" size={32} color="#fff" />
             </TouchableOpacity>
 
-            <Modal visible={isBuilderOpen} animationType="slide" transparent={true}>
+            <Modal 
+                visible={isBuilderOpen} 
+                animationType="slide" 
+                transparent={true}
+                onRequestClose={() => setIsBuilderOpen(false)}
+            >
                 <View style={styles.modalOverlay}>
                     <KeyboardAvoidingView 
                         behavior={Platform.OS === 'ios' ? 'padding' : undefined}
@@ -802,7 +1047,12 @@ export default function RoutineManager() {
                 </View>
 
                 {/* Assignment Sub-Modal */}
-                <Modal visible={activeSlot !== null} transparent={true} animationType="fade">
+                <Modal 
+                    visible={activeSlot !== null} 
+                    transparent={true} 
+                    animationType="fade"
+                    onRequestClose={() => setActiveSlot(null)}
+                >
                     <View style={[styles.modalOverlay, { justifyContent: 'center', padding: 20, backgroundColor: 'rgba(0,0,0,0.8)' }]}>
                         <KeyboardAvoidingView 
                             behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
@@ -883,9 +1133,67 @@ export default function RoutineManager() {
                             </View>
                         </KeyboardAvoidingView>
                     </View>
-                </Modal>
-            </Modal>
-
-        </View>
-    );
+                                </Modal>
+                            </Modal>
+                
+                            {/* Filter Bottom Sheet */}
+                            <Modal
+                                visible={filterModalVisible}
+                                transparent={true}
+                                animationType="slide"
+                                onRequestClose={() => setFilterModalVisible(false)}
+                            >
+                                <TouchableOpacity 
+                                    style={styles.modalOverlay} 
+                                    activeOpacity={1} 
+                                    onPress={() => setFilterModalVisible(false)}
+                                >
+                                    <TouchableOpacity 
+                                        activeOpacity={1} 
+                                        style={[styles.modalContent, { height: 'auto', paddingBottom: insets.bottom + 30 }]}
+                                    >
+                                        <View style={{ width: 40, height: 5, backgroundColor: theme.border, borderRadius: 3, alignSelf: 'center', marginBottom: 20 }} />
+                                        <View style={styles.modalHeader}>
+                                            <Text style={styles.modalTitle}>Filter Routines</Text>
+                                            <TouchableOpacity onPress={() => { setFilterClass(''); setFilterSection(''); setFilterModalVisible(false); }}>
+                                                <Text style={{ color: theme.danger, fontWeight: '700' }}>Reset</Text>
+                                            </TouchableOpacity>
+                                        </View>
+                
+                                                                <Text style={styles.label}>By Class</Text>
+                                                                <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ marginBottom: 10 }}>
+                                                                    {availableFilterOptions.classes.map(c => (
+                                                                        <TouchableOpacity
+                                                                            key={c}
+                                                                            style={[styles.dayChip, filterClass === c && styles.dayChipActive, { marginRight: 10 }]}
+                                                                            onPress={() => setFilterClass(filterClass === c ? '' : c)}
+                                                                        >
+                                                                            <Text style={[styles.dayChipText, filterClass === c && styles.dayChipTextActive]}>Class {c}</Text>
+                                                                        </TouchableOpacity>
+                                                                    ))}
+                                                                </ScrollView>
+                                        
+                                                                <Text style={styles.label}>By Section</Text>
+                                                                <ScrollView horizontal showsHorizontalScrollIndicator={false}>
+                                                                    {availableFilterOptions.sections.map(s => (
+                                                                        <TouchableOpacity
+                                                                            key={s}
+                                                                            style={[styles.dayChip, filterSection === s && styles.dayChipActive, { marginRight: 10 }]}
+                                                                            onPress={() => setFilterSection(filterSection === s ? '' : s)}
+                                                                        >
+                                                                            <Text style={[styles.dayChipText, filterSection === s && styles.dayChipTextActive]}>Sec {s}</Text>
+                                                                        </TouchableOpacity>
+                                                                    ))}
+                                                                </ScrollView>                
+                                        <TouchableOpacity 
+                                            style={[styles.button, styles.buttonPrimary, { marginTop: 30 }]} 
+                                            onPress={() => setFilterModalVisible(false)}
+                                        >
+                                            <Text style={styles.buttonText}>Apply Filter</Text>
+                                        </TouchableOpacity>
+                                    </TouchableOpacity>
+                                </TouchableOpacity>
+                            </Modal>
+                        </View>
+                    );
 }

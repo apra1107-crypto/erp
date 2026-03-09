@@ -46,64 +46,6 @@ export const toastConfig = {
       </View>
     </View>
   ),
-  fee: (props: any) => (
-    <View style={{
-      width: '95%',
-      backgroundColor: '#fff',
-      borderRadius: 20,
-      padding: 16,
-      flexDirection: 'row',
-      alignItems: 'center',
-      shadowColor: '#000',
-      shadowOffset: { width: 0, height: 6 },
-      shadowOpacity: 0.15,
-      shadowRadius: 12,
-      elevation: 8,
-      borderLeftWidth: 6,
-      borderLeftColor: '#3F51B5',
-      marginTop: 20
-    }}>
-      <View style={{
-        width: 44,
-        height: 44,
-        borderRadius: 22,
-        backgroundColor: '#E8EAF6',
-        justifyContent: 'center',
-        alignItems: 'center',
-        marginRight: 12
-      }}>
-        <Ionicons name="card" size={24} color="#3F51B5" />
-      </View>
-      <View style={{ flex: 1 }}>
-        <Text style={{ fontSize: 14, fontWeight: '900', color: '#1A237E' }}>{props.text1}</Text>
-        <Text style={{ fontSize: 12, color: '#5C6BC0', marginTop: 2, fontWeight: '700' }}>{props.text2}</Text>
-      </View>
-      <View style={{ flexDirection: 'row', gap: 8 }}>
-        <TouchableOpacity 
-          onPress={() => Toast.hide()}
-          style={{
-            backgroundColor: '#FFEBEE',
-            paddingHorizontal: 12,
-            paddingVertical: 10,
-            borderRadius: 10,
-          }}
-        >
-          <Text style={{ color: '#D32F2F', fontWeight: '900', fontSize: 11 }}>IGNORE</Text>
-        </TouchableOpacity>
-        <TouchableOpacity 
-          onPress={props.props.onPress}
-          style={{
-            backgroundColor: '#3F51B5',
-            paddingHorizontal: 12,
-            paddingVertical: 10,
-            borderRadius: 10,
-          }}
-        >
-          <Text style={{ color: '#fff', fontWeight: '900', fontSize: 11 }}>PAY NOW</Text>
-        </TouchableOpacity>
-      </View>
-    </View>
-  ),
   attendance: (props: any) => {
     const { status, teacher_name, date, student_name } = props.props;
     const isPresent = status === 'present';
@@ -230,11 +172,6 @@ export default function RootLayout() {
   const router = useRouter();
   const { expoPushToken, notification, lastResponse } = usePushNotifications();
 
-  const handleFeePress = () => {
-    router.push('/(student)/fees');
-    Toast.hide();
-  };
-
   useEffect(() => {
     const syncPushToken = async () => {
       if (expoPushToken) {
@@ -334,9 +271,7 @@ export default function RootLayout() {
           date: data?.date,
           student_name: data?.student_name || 'Student',
           onPress: () => {
-            if (data?.type === 'fees') {
-              router.push('/(student)/fees');
-            } else if (data?.type === 'admit-card') {
+            if (data?.type === 'admit-card') {
               router.push({ pathname: '/(student)/admit-card', params: { id: data.id } });
             } else if (data?.type === 'attendance') {
               router.push('/(student)/absent-note');
@@ -346,12 +281,6 @@ export default function RootLayout() {
               if (pathname.includes('(student)')) router.push('/(student)/notice');
               else if (pathname.includes('(teacher)')) router.push('/(teacher)/notice');
               else if (pathname.includes('(principal)')) router.push('/(principal)/notice');
-            } else if (data?.type === 'fee_received') {
-              if (pathname.includes('(principal)')) {
-                router.push('/(principal)/fees');
-              } else if (pathname.includes('(teacher)')) {
-                router.push('/(teacher)/fees');
-              }
             }
             Toast.hide();
           }
@@ -363,9 +292,7 @@ export default function RootLayout() {
   useEffect(() => {
     if (lastResponse) {
       const data = (lastResponse as any).notification.request.content.data;
-      if (data?.type === 'fees') {
-        router.push('/(student)/fees');
-      } else if (data?.type === 'admit-card') {
+      if (data?.type === 'admit-card') {
         router.push({ pathname: '/(student)/admit-card', params: { id: data.id } });
       } else if (data?.type === 'attendance') {
         router.push('/(student)/absent-note');
@@ -375,12 +302,6 @@ export default function RootLayout() {
         if (pathname.includes('(student)')) router.push('/(student)/notice');
         else if (pathname.includes('(teacher)')) router.push('/(teacher)/notice');
         else if (pathname.includes('(principal)')) router.push('/(principal)/notice');
-      } else if (data?.type === 'fee_received') {
-        if (pathname.includes('(principal)')) {
-          router.push('/(principal)/fees');
-        } else if (pathname.includes('(teacher)')) {
-          router.push('/(teacher)/fees');
-        }
       }
     }
   }, [lastResponse]);

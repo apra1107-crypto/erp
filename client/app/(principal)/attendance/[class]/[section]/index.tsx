@@ -57,8 +57,9 @@ export default function TakeAttendance() {
         setLoading(true);
         try {
             const token = await AsyncStorage.getItem('token');
+            const storedSessionId = await AsyncStorage.getItem('selectedSessionId');
             const userData = await AsyncStorage.getItem('userData');
-            const sessionId = userData ? JSON.parse(userData).current_session_id : null;
+            const sessionId = storedSessionId || (userData ? JSON.parse(userData).current_session_id : null);
             const dateStr = formatDateForAPI(selectedDate);
             
             const headers = { 
@@ -68,7 +69,7 @@ export default function TakeAttendance() {
 
             // Fetch students
             const studentsRes = await axios.get(
-                `${API_ENDPOINTS.PRINCIPAL}/student/list?class=${className}&section=${section}`,
+                `${API_ENDPOINTS.PRINCIPAL}/student/list?class=${className}&section=${section}&date=${dateStr}`,
                 { headers }
             );
 
@@ -116,8 +117,9 @@ export default function TakeAttendance() {
         setApproving(true);
         try {
             const token = await AsyncStorage.getItem('token');
+            const storedSessionId = await AsyncStorage.getItem('selectedSessionId');
             const userData = await AsyncStorage.getItem('userData');
-            const sessionId = userData ? JSON.parse(userData).current_session_id : null;
+            const sessionId = storedSessionId || (userData ? JSON.parse(userData).current_session_id : null);
 
             await axios.post(
                 `${API_ENDPOINTS.ABSENT_REQUEST}/approve/${requestId}`,
@@ -168,8 +170,9 @@ export default function TakeAttendance() {
         setSaving(true);
         try {
             const token = await AsyncStorage.getItem('token');
+            const storedSessionId = await AsyncStorage.getItem('selectedSessionId');
             const userData = await AsyncStorage.getItem('userData');
-            const sessionId = userData ? JSON.parse(userData).current_session_id : null;
+            const sessionId = storedSessionId || (userData ? JSON.parse(userData).current_session_id : null);
             const dateStr = formatDateForAPI(selectedDate);
 
             const attendanceArray = students.map(s => ({
@@ -209,6 +212,35 @@ export default function TakeAttendance() {
             });
         } finally {
             setSaving(false);
+        }
+    };
+
+    const renderLogChanges = (log: any) => {
+        if (!log.changes_made) return null;
+        try {
+            const changes = typeof log.changes_made === 'string' ? JSON.parse(log.changes_made) : log.changes_made;
+            if (changes.total === 0) return null;
+
+            let summaryParts = [];
+            if (changes.presentToAbsent?.length > 0) {
+                summaryParts.push(`Present ➡️ Absent: Roll ${changes.presentToAbsent.join(', ')}`);
+            }
+            if (changes.absentToPresent?.length > 0) {
+                summaryParts.push(`Absent ➡️ Present: Roll ${changes.absentToPresent.join(', ')}`);
+            }
+
+            return (
+                <View style={{ marginTop: 8, padding: 10, backgroundColor: isDark ? 'rgba(255,255,255,0.05)' : 'rgba(0,0,0,0.02)', borderRadius: 10 }}>
+                    <Text style={{ fontSize: 11, fontWeight: '800', color: theme.warning, textTransform: 'uppercase', marginBottom: 4 }}>
+                        {changes.total} Change{changes.total > 1 ? 's' : ''} Detailed
+                    </Text>
+                    {summaryParts.map((part, i) => (
+                        <Text key={i} style={{ fontSize: 12, color: theme.textLight, marginTop: 2 }}>{part}</Text>
+                    ))}
+                </View>
+            );
+        } catch (e) {
+            return <Text style={styles.logChanges}>{log.changes_made}</Text>;
         }
     };
 
@@ -337,7 +369,7 @@ export default function TakeAttendance() {
         absentText: { color: theme.danger },
         saveButton: {
             position: 'absolute',
-            bottom: 20,
+            bottom: Math.max(20, insets.bottom + 10),
             left: 20,
             right: 20,
             backgroundColor: theme.primary,
@@ -546,11 +578,9 @@ export default function TakeAttendance() {
                                     {log.action_type === 'initial' ? '📝 Took attendance' : '✏️ Modified attendance'}
                                 </Text>
                                 <Text style={styles.logStats}>
-                                    Total: {log.total_students} | Present: {log.present_count} | Absent: {log.absent_count}
+                                    Total: {log.total_students ?? '0'} | Present: {log.present_count ?? '0'} | Absent: {log.absent_count ?? '0'}
                                 </Text>
-                                {log.changes_made && (
-                                    <Text style={styles.logChanges}>{log.changes_made}</Text>
-                                )}
+                                {renderLogChanges(log)}
                             </View>
                         ))}
                     </View>

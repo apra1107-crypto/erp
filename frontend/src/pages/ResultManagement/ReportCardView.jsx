@@ -1,4 +1,5 @@
 import React, { useMemo } from 'react';
+import { BASE_URL } from '../../config';
 import './ReportCardView.css';
 
 const ReportCardView = ({
@@ -56,218 +57,139 @@ const ReportCardView = ({
         return subjectsBlueprint.reduce((sum, sub) => sum + (parseFloat(sub.max_theory) || 0) + (parseFloat(sub.max_practical) || 0), 0);
     }, [subjectsBlueprint]);
 
-    // Check if any subject has a manual grade filled
-    const hasSubjectGrades = useMemo(() => {
-        return marksData.some(m => m.grade && m.grade.trim() !== '');
-    }, [marksData]);
-
     if (!student || !exam) return <div className="loading-report">Preparing Report Card Data...</div>;
 
     return (
         <div className={`report-card-container ${isExporting ? 'is-exporting' : ''}`}>
-            <div className="report-card-box">
-                <div className="report-card-inner">
-                    {/* Decorative Top Border */}
-                    <div className="card-top-bar"></div>
-
-                    {/* Header Section */}
-                    {/* New Refined Header Section */}
-                    <div className="card-header">
-                        {/* ... existing header content ... */}
-                        <div className="header-primary-row">
-                            <div className="institute-brand-sync">
-                                {institute?.logo_url ? (
-                                    <img
-                                        src={isExporting ? `http://localhost:5000/api/proxy-image?url=${encodeURIComponent(institute.logo_url)}` : institute.logo_url}
-                                        alt="Logo"
-                                        className="header-logo-img"
-                                        crossOrigin={isExporting ? "anonymous" : undefined}
-                                    />
-                                ) : (
-                                    <div className="logo-placeholder-circle">{institute?.institute_name?.charAt(0)}</div>
-                                )}
-                                <h1 className="institute-name-main">{institute?.institute_name}</h1>
-                            </div>
-                        </div>
-                        <div className="header-secondary-info">
-                            <p className="inst-address-line">
-                                {institute?.address} {institute?.district} {institute?.state} {institute?.pincode}
-                            </p>
-                            <p className="inst-affiliation-line">
-                                {institute?.affiliation || 'Affiliated to CBSE / State Board'}
-                            </p>
-                        </div>
+            <div className="report-card">
+                <div className="paper-inner-border"></div>
+                
+                {/* Header */}
+                <div className="rc-header">
+                    <div className="rc-inst-row">
+                        {institute?.logo_url && (
+                            <img 
+                                src={isExporting ? `${BASE_URL}/api/proxy-image?url=${encodeURIComponent(institute.logo_url)}` : institute.logo_url} 
+                                className="rc-logo"
+                                crossOrigin={isExporting ? "anonymous" : undefined}
+                            />
+                        )}
+                        <h1 className="rc-inst-name">{institute?.institute_name}</h1>
                     </div>
-
-                    {/* Free Colourful Exam Title - Positioned above student details */}
-                    <div className="centered-exam-label">
-                        <h2 className="exam-title-colorful">
-                            {exam?.name || 'Academic Report Card'}
-                        </h2>
+                    {institute?.affiliation && <p className="rc-inst-affiliation">{institute.affiliation}</p>}
+                    <p className="rc-inst-sub">
+                        {institute?.address} {institute?.landmark} {institute?.district} {institute?.state} {institute?.pincode}
+                    </p>
+                    
+                    <div className="rc-exam-title-container">
+                        <h2 className="rc-exam-title">{exam?.name}</h2>
                     </div>
+                </div>
 
-                    {/* Student Information Section with Photo on Right */}
-                    <div className="student-meta-section-container">
-                        <div className="meta-details-left">
-                            <div className="meta-grid-new">
-                                <div className="meta-item">
-                                    <label>Student Name</label>
-                                    <span className="value-name">{student?.name}</span>
-                                </div>
-                                <div className="meta-item">
-                                    <label>Class & Section</label>
-                                    <span>{student?.class} - {student?.section}</span>
-                                </div>
-                                <div className="meta-item">
-                                    <label>Roll Number</label>
-                                    <span>{student?.roll_no}</span>
-                                </div>
-
-                                {/* Second Row */}
-                                <div className="meta-item">
-                                    <label>Father's Name</label>
-                                    <span>{student?.father_name || '-'}</span>
-                                </div>
-                                <div className="meta-item">
-                                    <label>Mother's Name</label>
-                                    <span>{student?.mother_name || '-'}</span>
-                                </div>
-                                <div className="meta-item">
-                                    <label>Date of Birth</label>
-                                    <span>{student?.dob ? new Date(student.dob).toLocaleDateString('en-GB') : '-'}</span>
-                                </div>
-                            </div>
-                        </div>
-
-                        <div className="meta-photo-right">
-                            <div className="student-profile-raw">
-                                <img
-                                    src={isExporting
-                                        ? `http://localhost:5000/api/proxy-image?url=${encodeURIComponent(student?.photo_url || student?.profile_image || '')}`
-                                        : (student?.photo_url || student?.profile_image || 'https://via.placeholder.com/150')}
-                                    alt="Student"
-                                    crossOrigin={isExporting ? "anonymous" : undefined}
-                                />
-                            </div>
-                        </div>
+                {/* Student Details */}
+                <div className="rc-student-section">
+                    <div className="rc-info-grid">
+                        <div className="rc-info-row"><div className="rc-info-label">STUDENT NAME</div><div className="rc-info-value">{student?.name}</div></div>
+                        <div className="rc-info-row"><div className="rc-info-label">CLASS & SECTION</div><div className="rc-info-value">{student?.class} - {student?.section}</div></div>
+                        <div className="rc-info-row"><div className="rc-info-label">ROLL NUMBER</div><div className="rc-info-value">{student?.roll_no}</div></div>
+                        <div className="rc-info-row"><div className="rc-info-label">FATHER'S NAME</div><div className="rc-info-value">{student?.father_name || '-'}</div></div>
+                        <div className="rc-info-row"><div className="rc-info-label">DATE OF BIRTH</div><div className="rc-info-value">{student?.dob ? new Date(student.dob).toLocaleDateString('en-GB') : '-'}</div></div>
                     </div>
-
-                    {/* Marks Table */}
-                    <div className="marks-table-section">
-                        <table className="report-table">
-                            <thead>
-                                <tr>
-                                    <th className="text-left">Subject</th>
-                                    <th>Max Marks</th>
-                                    <th>Pass Marks</th>
-                                    <th>Obtained</th>
-                                    {exam?.show_highest_marks && <th>Highest</th>}
-                                    {hasSubjectGrades && <th>Grade</th>}
-                                </tr>
-                            </thead>
-                            <tbody>
-                                {subjectsBlueprint.map((subject, index) => {
-                                    const res = marksData.find(m => m.subject === subject.name) || {};
-                                    const rawObtained = res.theory; // Display the original string (e.g. 80+18)
-                                    const highest = manualStats[`highest_${subject.name}`] || '-';
-
-                                    return (
-                                        <tr key={index}>
-                                            <td className="subject-name">{subject.name}</td>
-                                            <td>{(parseFloat(subject.max_theory) || 0) + (parseFloat(subject.max_practical) || 0)}</td>
-                                            <td>{subject.passing_marks || '-'}</td>
-                                            <td className="font-bold">{rawObtained || '-'}</td>
-                                            {exam?.show_highest_marks && <td>{highest}</td>}
-                                            {hasSubjectGrades && (
-                                                <td>
-                                                    <span className="grade-badge">{res.grade || '-'}</span>
-                                                </td>
-                                            )}
-                                        </tr>
-                                    );
-                                })}
-                            </tbody>
-                            <tfoot>
-                                <tr className="total-row">
-                                    <td colSpan={3} className="text-right">GRAND TOTAL</td>
-                                    <td className="total-val">{calculatedStats.total} / {totalMax}</td>
-                                    {exam?.show_highest_marks && <td></td>}
-                                    {hasSubjectGrades ? (
-                                        <td className="final-grade">{calculatedStats.grade}</td>
-                                    ) : (
-                                        <td className="final-grade" style={{ textAlign: 'center', fontWeight: 'bold' }}>
-                                            Grade: {calculatedStats.grade}
-                                        </td>
-                                    )}
-                                </tr>
-                            </tfoot>
-                        </table>
-
-                        <div className="percentage-display">
-                            <span>Aggregate Percentage: <b>{calculatedStats.percentage}%</b></span>
-                        </div>
+                    <div className="rc-photo-box">
+                        <img
+                            src={isExporting
+                                ? `${BASE_URL}/api/proxy-image?url=${encodeURIComponent(student?.photo_url || student?.profile_image || '')}`
+                                : (student?.photo_url || student?.profile_image || 'https://via.placeholder.com/150')}
+                            alt="Student"
+                            className="rc-photo"
+                            crossOrigin={isExporting ? "anonymous" : undefined}
+                        />
                     </div>
+                </div>
 
-                    {/* Toppers Section */}
-                    {(manualStats.section_topper_name || manualStats.class_topper_name) && (
-                        <div className="toppers-medal-section">
-                            {manualStats.section_topper_name && (
-                                <div className="medal-item">
-                                    <span className="label">Section Topper:</span>
-                                    <span className="value">{manualStats.section_topper_name} ({manualStats.section_topper_total})</span>
+                {/* Marks Table */}
+                <div className="rc-table-wrapper">
+                    <table className="rc-table">
+                        <thead className="rc-table-header">
+                            <tr>
+                                <th className="rc-text-left" style={{ width: '35%' }}>SUBJECT</th>
+                                <th>MAX</th>
+                                <th>PASS</th>
+                                <th>OBT</th>
+                                {!!exam.show_highest_marks && <th>HIGH</th>}
+                                <th>GRADE</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {subjectsBlueprint.map((sub, index) => {
+                                const res = marksData.find(m => m.subject === sub.name) || {};
+                                const highest = manualStats[`highest_${sub.name}`] || '-';
+                                return (
+                                    <tr key={index} className={`rc-table-row ${index % 2 === 1 ? 'alternate' : ''}`}>
+                                        <td className="rc-text-left" style={{ fontWeight: '900', color: '#1e293b' }}>{sub.name}</td>
+                                        <td>{(parseFloat(sub.max_theory) || 0) + (parseFloat(sub.max_practical) || 0)}</td>
+                                        <td>{sub.passing_marks || '-'}</td>
+                                        <td style={{ color: '#4f46e5', fontSize: '12px', fontWeight: '900' }}>{res.theory || '-'}</td>
+                                        {!!exam.show_highest_marks && <td style={{ color: '#6366f1' }}>{highest}</td>}
+                                        <td style={{ fontWeight: '900' }}>{res.grade || '-'}</td>
+                                    </tr>
+                                );
+                            })}
+                        </tbody>
+                    </table>
+                </div>
+
+                {/* Summary Footer */}
+                <div className="rc-summary-box">
+                    <div className="rc-summary-item">
+                        <div className="rc-summary-label">GRAND TOTAL</div>
+                        <div className="rc-summary-value">{calculatedStats.total} / {totalMax}</div>
+                    </div>
+                    <div className="rc-summary-item">
+                        <div className="rc-summary-label">PERCENTAGE</div>
+                        <div className="rc-summary-value">{calculatedStats.percentage}%</div>
+                    </div>
+                    <div className="rc-summary-item">
+                        <div className="rc-summary-label">FINAL GRADE</div>
+                        <div className="rc-summary-value" style={{ color: '#fbbf24' }}>{calculatedStats.grade}</div>
+                    </div>
+                </div>
+
+                {/* Achievement Medals */}
+                {(manualStats.section_topper_name || manualStats.class_topper_name) && (
+                    <div className="rc-medal-row">
+                        {manualStats.section_topper_name && (
+                            <div className="rc-medal">
+                                <span className="rc-medal-icon">🏆</span>
+                                <div style={{ flex: 1 }}>
+                                    <div className="rc-medal-text">Section Topper: {manualStats.section_topper_name}</div>
+                                    <div className="rc-medal-score">Score: {manualStats.section_topper_total} / {totalMax}</div>
                                 </div>
-                            )}
-                            {manualStats.class_topper_name && (
-                                <div className="medal-item">
-                                    <span className="label">Class Topper:</span>
-                                    <span className="value">{manualStats.class_topper_name} ({manualStats.class_topper_total})</span>
+                            </div>
+                        )}
+                        {manualStats.class_topper_name && (
+                            <div className="rc-medal">
+                                <span className="rc-medal-icon">🎖️</span>
+                                <div style={{ flex: 1 }}>
+                                    <div className="rc-medal-text">Class Topper: {manualStats.class_topper_name}</div>
+                                    <div className="rc-medal-score">Score: {manualStats.class_topper_total} / {totalMax}</div>
                                 </div>
-                            )}
-                        </div>
-                    )}
-
-                    {/* Remarks Section */}
-                    <div className="remarks-row">
-                        <div className="remarks-box">
-                            <h3>General Remarks</h3>
-                            <p className="remark-text">"{result?.overall_remark || 'Satisfactory performance. Keep working hard to achieve higher goals.'}"</p>
-                        </div>
-
-                        <div className="grading-scale-box">
-                            <h3>Grading System</h3>
-                            <div className="scale-list">
-                                {gradingRules.map((r, i) => (
-                                    <div key={i} className="scale-item">
-                                        <span className="scale-grade">{r.grade}</span>
-                                        <span className="scale-range">{r.min}% - {r.max}%</span>
-                                    </div>
-                                ))}
                             </div>
-                        </div>
+                        )}
                     </div>
+                )}
 
-                    {/* Footer Signatures */}
-                    <div className="report-footer">
-                        <div className="signature-area">
-                            <div className="sig-block">
-                                <div className="sig-line"></div>
-                                <span>Class Teacher</span>
-                            </div>
-                            <div className="sig-block">
-                                <div className="sig-line"></div>
-                                <span>Principal</span>
-                            </div>
-                            <div className="sig-block">
-                                <div className="sig-line"></div>
-                                <span>Parent Signature</span>
-                            </div>
-                        </div>
-                        <div className="footer-disclaimer">
-                            Computer generated report card. Verification required for official purposes.
-                        </div>
-                    </div>
+                {/* Remarks */}
+                <div className="rc-remarks">
+                    <div className="rc-remark-title">OFFICIAL REMARKS</div>
+                    <div className="rc-remark-text">"{result?.overall_remark || 'Satisfactory performance. Aim for higher goals in the next academic term.'}"</div>
+                </div>
 
-                    <div className="card-bottom-bar"></div>
+                {/* Signatures */}
+                <div className="rc-signatures">
+                    <div className="rc-sig-line"><span className="rc-sig-text">TEACHER</span></div>
+                    <div className="rc-sig-line"><span className="rc-sig-text">PRINCIPAL</span></div>
+                    <div className="rc-sig-line"><span className="rc-sig-text">PARENT</span></div>
                 </div>
             </div>
         </div>

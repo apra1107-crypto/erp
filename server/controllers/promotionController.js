@@ -5,7 +5,7 @@ import { emitToStudent } from '../utils/socket.js';
 // Promote Student
 export const promoteStudent = async (req, res) => {
     try {
-        const { studentId, newClass, newSection, newRollNo, targetSessionId } = req.body;
+        const { studentId, newClass, newSection, newRollNo, targetSessionId, monthlyFees, transportFacility, transportFees } = req.body;
         const instituteId = req.user.institute_id || req.user.id;
         const promotedBy = req.user.name || 'Administration';
 
@@ -43,8 +43,8 @@ export const promoteStudent = async (req, res) => {
         const result = await pool.query(
             `INSERT INTO students 
             (institute_id, unique_code, name, class, section, roll_no, dob, gender, 
-             father_name, mother_name, mobile, email, address, transport_facility, photo_url, session_id) 
-            VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16) 
+             father_name, mother_name, mobile, email, address, transport_facility, photo_url, session_id, monthly_fees, transport_fees, admission_date) 
+            VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, NOW()) 
             RETURNING *`,
             [
                 instituteId, 
@@ -60,9 +60,11 @@ export const promoteStudent = async (req, res) => {
                 student.mobile, 
                 student.email, 
                 student.address, 
-                student.transport_facility, 
+                transportFacility !== undefined ? transportFacility : student.transport_facility, 
                 student.photo_url, 
-                targetSessionId
+                targetSessionId,
+                parseFloat(monthlyFees || student.monthly_fees || 0),
+                parseFloat(transportFees || student.transport_fees || 0)
             ]
         );
 

@@ -375,61 +375,45 @@ const IDCardView = ({ userData }) => {
                 </header>
 
                 <div className="student-list-container">
-                    <table className="student-data-table">
-                        <thead>
-                            <tr>
-                                <th style={{ width: '60px' }}>{selectionMode ? 'Select' : 'Roll'}</th>
-                                <th>Student Identity</th>
-                                <th>Academic Info</th>
-                                <th style={{ textAlign: 'right' }}>Actions</th>
-                            </tr>
-                        </thead>
-                        <tbody>
-                            {filteredStudents.map(student => (
-                                <tr
-                                    key={student.id}
-                                    className={`student-row ${selectedIds.has(student.id) ? 'selected' : ''}`}
-                                    onClick={() => selectionMode ? toggleSelectOne(student.id) : setSelectedStudent(student)}
-                                >
-                                    <td>
-                                        {selectionMode ? (
-                                            <div className="selection-checkbox">
-                                                {selectedIds.has(student.id) && <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="4"><polyline points="20 6 9 17 4 12" /></svg>}
-                                            </div>
-                                        ) : (
-                                            <span className="roll-badge">{student.roll_no}</span>
+                    <div className="id-student-grid">
+                        {filteredStudents.map(student => (
+                            <div
+                                key={student.id}
+                                className={`id-student-card ${selectedIds.has(student.id) ? 'selected' : ''}`}
+                                onClick={() => selectionMode ? toggleSelectOne(student.id) : setSelectedStudent(student)}
+                            >
+                                {selectionMode && (
+                                    <div className="card-checkbox-corner">
+                                        {selectedIds.has(student.id) && (
+                                            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="4">
+                                                <polyline points="20 6 9 17 4 12" />
+                                            </svg>
                                         )}
-                                    </td>
-                                    <td>
-                                        <div className="student-cell-profile">
-                                            <div className="student-avatar-frame">
-                                                {student.photo_url ? (
-                                                    <img src={student.photo_url} alt="" />
-                                                ) : (
-                                                    <div className="student-initials">{student.name.charAt(0)}</div>
-                                                )}
-                                            </div>
-                                            <div className="student-meta-text">
-                                                <div className="student-name-main">{student.name}</div>
-                                                <div style={{ fontSize: '0.8rem', opacity: 0.6 }}>{student.mobile || 'No contact info'}</div>
-                                            </div>
-                                        </div>
-                                    </td>
-                                    <td>
-                                        <div style={{ display: 'flex', gap: '0.5rem' }}>
-                                            <span className="roll-badge" style={{ background: '#6366f115', color: '#6366f1' }}>Class {student.class}</span>
-                                            <span className="roll-badge" style={{ background: '#8b5cf615', color: '#8b5cf6' }}>Sec {student.section}</span>
-                                        </div>
-                                    </td>
-                                    <td style={{ textAlign: 'right' }}>
-                                        <button className="action-btn-text">
-                                            {selectionMode ? (selectedIds.has(student.id) ? 'Deselect' : 'Select') : 'Configure ➔'}
-                                        </button>
-                                    </td>
-                                </tr>
-                            ))}
-                        </tbody>
-                    </table>
+                                    </div>
+                                )}
+                                <div className="id-student-avatar">
+                                    {student.photo_url ? (
+                                        <img src={student.photo_url} alt={student.name} />
+                                    ) : (
+                                        <span>{student.name.charAt(0)}</span>
+                                    )}
+                                </div>
+                                <div className="id-student-info">
+                                    <h3>{student.name}</h3>
+                                    <p>Roll No: {student.roll_no}</p>
+                                </div>
+                                <div className="id-student-action">
+                                    {selectionMode ? (
+                                        <span className={`select-label ${selectedIds.has(student.id) ? 'active' : ''}`}>
+                                            {selectedIds.has(student.id) ? 'Selected' : 'Select'}
+                                        </span>
+                                    ) : (
+                                        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><path d="M5 12h14M12 5l7 7-7 7" /></svg>
+                                    )}
+                                </div>
+                            </div>
+                        ))}
+                    </div>
                 </div>
 
                 {showExportOptions && (
@@ -465,18 +449,23 @@ const IDCardView = ({ userData }) => {
     return (
         <div className="id-card-view-container">
             <header className="id-view-header">
-                <h2>Academic Credentials</h2>
-                <p>Browse through sections to manage official identity cards</p>
+                <h2>Identity Credentials</h2>
+                <p>Browse through sections to manage and export official student IDs</p>
             </header>
 
-            <div className="id-section-list">
+            <div className="id-section-grid">
                 {sectionList.map(sec => (
-                    <div key={`${sec.class}-${sec.section}`} className="id-section-item" onClick={() => setSelectedSection(sec)}>
-                        <div className="section-icon">🆔</div>
-                        <div className="section-info-label">GRADE</div>
-                        <h3 className="section-name">{sec.class} - {sec.section}</h3>
-                        <p className="section-count">{sec.count} Students Enrolled</p>
-                        <div className="section-arrow">➔</div>
+                    <div key={`${sec.class}-${sec.section}`} className="id-section-flashcard" onClick={() => setSelectedSection(sec)}>
+                        <div className="flash-icon">
+                            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2" /><circle cx="12" cy="7" r="4" /></svg>
+                        </div>
+                        <div className="flash-content">
+                            <span className="student-count-tag">{sec.count} Students</span>
+                            <h3>Class {sec.class} - {sec.section}</h3>
+                        </div>
+                        <div className="flash-arrow">
+                            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3"><path d="M5 12h14M12 5l7 7-7 7" /></svg>
+                        </div>
                     </div>
                 ))}
             </div>

@@ -130,27 +130,34 @@ export default function AcademicCalendarScreen() {
 
     const styles = useMemo(() => StyleSheet.create({
         container: { flex: 1, backgroundColor: theme.background },
-        header: {
-            backgroundColor: theme.card,
-            paddingTop: insets.top + 10,
-            paddingBottom: 15,
-            paddingHorizontal: 20,
-            flexDirection: 'row',
+        backBtn: { 
+            width: 40, 
+            height: 40, 
+            borderRadius: 20, 
+            backgroundColor: theme.card, 
+            justifyContent: 'center', 
             alignItems: 'center',
-            borderBottomWidth: 1,
-            borderBottomColor: theme.border,
+            marginRight: 12,
+            elevation: 2,
+            shadowColor: '#000',
+            shadowOffset: { width: 0, height: 2 },
+            shadowOpacity: 0.1,
+            shadowRadius: 4,
         },
-        backBtn: { padding: 5, marginRight: 15 },
-        headerTitle: { fontSize: 20, fontWeight: '900', color: theme.text },
+        headerTitle: { fontSize: 24, fontWeight: '900', color: theme.text, letterSpacing: -0.5 },
         
         filterContainer: {
             flexDirection: 'row',
-            padding: 15,
+            padding: 20,
+            marginHorizontal: 15,
             justifyContent: 'space-between',
             alignItems: 'center',
             backgroundColor: theme.card,
-            borderBottomWidth: 1,
-            borderBottomColor: theme.border,
+            borderRadius: 24,
+            borderWidth: 1,
+            borderColor: theme.border,
+            elevation: 3,
+            marginBottom: 10,
         },
         monthSelector: { flexDirection: 'row', alignItems: 'center', gap: 10 },
         monthText: { fontSize: 16, fontWeight: '800', color: theme.text, width: 100, textAlign: 'center' },
@@ -183,7 +190,7 @@ export default function AcademicCalendarScreen() {
         
         fab: {
             position: 'absolute',
-            bottom: 30,
+            bottom: Math.max(30, insets.bottom + 30),
             right: 25,
             width: 60,
             height: 60,
@@ -260,11 +267,12 @@ export default function AcademicCalendarScreen() {
     ];
 
     return (
-        <View style={styles.container}>
-            <StatusBar barStyle={theme.statusBarStyle} />
-            <View style={styles.header}>
+        <View style={[styles.container, { paddingTop: insets.top }]}>
+            <StatusBar barStyle={theme.statusBarStyle} backgroundColor="transparent" translucent={true} />
+            
+            <View style={{ flexDirection: 'row', alignItems: 'center', paddingHorizontal: 20, paddingVertical: 15 }}>
                 <TouchableOpacity style={styles.backBtn} onPress={() => router.back()}>
-                    <Ionicons name="arrow-back" size={24} color={theme.text} />
+                    <Ionicons name="chevron-back" size={28} color={theme.text} />
                 </TouchableOpacity>
                 <Text style={styles.headerTitle}>Academic Calendar</Text>
             </View>

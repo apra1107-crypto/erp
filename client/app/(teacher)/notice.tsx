@@ -1,5 +1,5 @@
 import { useState, useEffect, useMemo, useCallback } from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, ScrollView, ActivityIndicator, StatusBar, Modal, TextInput, FlatList, Dimensions, Platform, RefreshControl } from 'react-native';
+import { View, Text, StyleSheet, TouchableOpacity, ScrollView, ActivityIndicator, StatusBar, Modal, TextInput, FlatList, Dimensions, Platform, RefreshControl, KeyboardAvoidingView } from 'react-native';
 import { useRouter, useFocusEffect } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
@@ -9,6 +9,8 @@ import axios from 'axios';
 import { API_ENDPOINTS } from '../../constants/Config';
 import Toast from 'react-native-toast-message';
 import { Image } from 'react-native';
+import { BlurView } from 'expo-blur';
+import { LinearGradient } from 'expo-linear-gradient';
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
 
@@ -215,19 +217,33 @@ export default function NoticeScreen() {
     const styles = useMemo(() => StyleSheet.create({
         container: { flex: 1, backgroundColor: theme.background },
         header: {
-            backgroundColor: theme.card,
-            paddingTop: insets.top + 10,
-            paddingBottom: 15,
+            paddingTop: insets.top + 15,
+            paddingBottom: 10,
             paddingHorizontal: 20,
             flexDirection: 'row',
             alignItems: 'center',
-            borderBottomWidth: 1,
-            borderBottomColor: theme.border,
+            zIndex: 10,
         },
-        backBtn: { padding: 5, marginRight: 15 },
-        headerTitle: { fontSize: 20, fontWeight: '900', color: theme.text },
+        backBtn: { 
+            width: 40, 
+            height: 40, 
+            borderRadius: 20, 
+            backgroundColor: theme.card, 
+            justifyContent: 'center', 
+            alignItems: 'center', 
+            marginRight: 15,
+            elevation: 2,
+            shadowColor: '#000',
+            shadowOffset: { width: 0, height: 2 },
+            shadowOpacity: 0.1,
+            shadowRadius: 4,
+        },
+        headerTitle: { fontSize: 24, fontWeight: '900', color: theme.text, letterSpacing: -0.5 },
         
-        listContent: { padding: 15 },
+        listContent: { 
+            padding: 15,
+            paddingBottom: insets.bottom + 100 
+        },
         noticeCard: {
             backgroundColor: theme.card,
             borderRadius: 20,
@@ -253,7 +269,7 @@ export default function NoticeScreen() {
 
         fab: {
             position: 'absolute',
-            bottom: 30,
+            bottom: Math.max(30, insets.bottom + 10),
             right: 25,
             width: 60,
             height: 60,
@@ -274,8 +290,11 @@ export default function NoticeScreen() {
             backgroundColor: theme.card,
             borderTopLeftRadius: 35,
             borderTopRightRadius: 35,
-            padding: 25,
+            paddingHorizontal: 25,
+            paddingTop: 25,
+            paddingBottom: insets.bottom > 0 ? insets.bottom : 25,
             maxHeight: '90%',
+            flexShrink: 1,
         },
         modalHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20 },
         modalTitle: { fontSize: 22, fontWeight: '900', color: theme.text },
@@ -328,33 +347,59 @@ export default function NoticeScreen() {
         },
         publishBtnText: { color: '#fff', fontSize: 16, fontWeight: '900' },
 
-        // Preview Styles
+        // Premium Preview Styles
         previewContent: {
-            backgroundColor: '#fff', // Notice usually looks better on white/paper background
-            borderRadius: 20,
-            padding: 20,
-            minHeight: 400,
+            backgroundColor: theme.card,
+            borderRadius: 32,
+            padding: 0,
+            width: SCREEN_WIDTH * 0.92,
+            maxHeight: '80%',
+            overflow: 'hidden',
+            elevation: 15,
+            shadowColor: '#000',
+            shadowOffset: { width: 0, height: 15 },
+            shadowOpacity: 0.15,
+            shadowRadius: 30,
+            borderWidth: 1,
+            borderColor: theme.border,
         },
-        previewHeader: {
-            flexDirection: 'row',
-            alignItems: 'center',
-            marginBottom: 10,
+        previewGradient: {
+            padding: 24,
+            flexShrink: 1,
         },
-        previewLogo: { width: 50, height: 50, borderRadius: 10, marginRight: 15 },
-        previewInstName: { fontSize: 20, fontWeight: '900', color: '#1a1a1a', flex: 1 },
-        previewAffiliation: { fontSize: 12, fontWeight: '700', color: '#666', textAlign: 'center', marginVertical: 5 },
-        previewAddress: { fontSize: 11, color: '#888', textAlign: 'center', lineHeight: 16 },
-        previewLine: { height: 1, backgroundColor: '#eee', marginVertical: 15 },
-        previewNoticeContent: { fontSize: 16, color: '#333', lineHeight: 24, minHeight: 150 },
-        previewDate: { fontSize: 13, color: '#999', fontWeight: '700', marginTop: 20, textAlign: 'right' },
+        previewNoticeTopic: { 
+            fontSize: 24, 
+            fontWeight: '900', 
+            color: theme.text, 
+            marginBottom: 20, 
+            lineHeight: 32,
+            letterSpacing: -0.5,
+        },
+        previewNoticeContent: { 
+            fontSize: 16, 
+            color: theme.text, 
+            lineHeight: 26, 
+            opacity: 0.9,
+            minHeight: 150,
+        },
+        previewDate: { 
+            fontSize: 12, 
+            color: theme.textLight, 
+            fontWeight: '800', 
+            marginTop: 30, 
+            textAlign: 'right',
+            letterSpacing: 1,
+            textTransform: 'uppercase',
+        },
         closePreview: {
-            marginTop: 20,
-            backgroundColor: '#1a1a1a',
-            height: 50,
-            borderRadius: 15,
+            backgroundColor: theme.primary,
+            height: 60,
             justifyContent: 'center',
-            alignItems: 'center'
-        }
+            alignItems: 'center',
+            borderTopWidth: 1,
+            borderTopColor: theme.border,
+        },
+        closePreviewText: { color: '#fff', fontWeight: '900', fontSize: 16, letterSpacing: 2 }
     }), [theme, insets, isDark]);
 
     if (loading && !refreshing) {
@@ -371,7 +416,7 @@ export default function NoticeScreen() {
             
             <View style={styles.header}>
                 <TouchableOpacity style={styles.backBtn} onPress={() => router.back()}>
-                    <Ionicons name="arrow-back" size={24} color={theme.text} />
+                    <Ionicons name="chevron-back" size={22} color={theme.text} />
                 </TouchableOpacity>
                 <Text style={styles.headerTitle}>Notice Board</Text>
             </View>
@@ -437,8 +482,15 @@ export default function NoticeScreen() {
                 onRequestClose={() => setCreateModalVisible(false)}
             >
                 <View style={styles.modalOverlay}>
-                    <View style={styles.modalContent}>
-                        <ScrollView showsVerticalScrollIndicator={false}>
+                    <KeyboardAvoidingView 
+                        behavior={Platform.OS === 'ios' ? 'padding' : 'padding'}
+                        style={styles.modalContent}
+                    >
+                        <ScrollView 
+                            showsVerticalScrollIndicator={true} 
+                            keyboardShouldPersistTaps="handled"
+                            contentContainerStyle={{ paddingBottom: 50 }}
+                        >
                             <View style={styles.modalHeader}>
                                 <Text style={styles.modalTitle}>New Notice</Text>
                                 <TouchableOpacity onPress={() => setCreateModalVisible(false)}>
@@ -532,7 +584,7 @@ export default function NoticeScreen() {
                                 {publishing ? <ActivityIndicator color="#fff" /> : <Text style={styles.publishBtnText}>PUBLISH NOTICE</Text>}
                             </TouchableOpacity>
                         </ScrollView>
-                    </View>
+                    </KeyboardAvoidingView>
                 </View>
             </Modal>
 
@@ -545,35 +597,21 @@ export default function NoticeScreen() {
             >
                 <View style={[styles.modalOverlay, { justifyContent: 'center', padding: 20 }]}>
                     <View style={styles.previewContent}>
-                        <View style={styles.previewHeader}>
-                            {institute?.logo_url && (
-                                <Image source={{ uri: institute.logo_url }} style={styles.previewLogo} />
-                            )}
-                            <Text style={styles.previewInstName}>{institute?.institute_name}</Text>
-                        </View>
-                        
-                        <Text style={styles.previewAffiliation}>{institute?.affiliation || 'N/A'}</Text>
-                        
-                        <Text style={styles.previewAddress}>
-                            {institute?.address}, {institute?.landmark && `${institute.landmark}, `}
-                            {institute?.district}, {institute?.state} - {institute?.pincode}
-                        </Text>
-
-                        <View style={styles.previewLine} />
-
-                        <ScrollView showsVerticalScrollIndicator={false}>
-                            <Text style={{ fontSize: 18, fontWeight: '900', color: '#1a1a1a', marginBottom: 15, textAlign: 'center' }}>
-                                {selectedNotice?.topic}
-                            </Text>
-                            <Text style={styles.previewNoticeContent}>{selectedNotice?.content}</Text>
-                            
-                            <Text style={styles.previewDate}>
-                                Date: {new Date(selectedNotice?.created_at).toLocaleDateString('en-IN', { day: '2-digit', month: 'long', year: 'numeric' })}
-                            </Text>
+                        <ScrollView showsVerticalScrollIndicator={false} style={{ flexShrink: 1 }}>
+                            <View style={styles.previewGradient}>
+                                <Text style={styles.previewNoticeTopic}>
+                                    {selectedNotice?.topic}
+                                </Text>
+                                <Text style={styles.previewNoticeContent}>{selectedNotice?.content}</Text>
+                                
+                                <Text style={styles.previewDate}>
+                                    {new Date(selectedNotice?.created_at).toLocaleDateString('en-IN', { day: '2-digit', month: 'long', year: 'numeric' })}
+                                </Text>
+                            </View>
                         </ScrollView>
 
                         <TouchableOpacity style={styles.closePreview} onPress={() => setPreviewVisible(false)}>
-                            <Text style={{ color: '#fff', fontWeight: '800' }}>CLOSE</Text>
+                            <Text style={styles.closePreviewText}>DISMISS</Text>
                         </TouchableOpacity>
                     </View>
                 </View>

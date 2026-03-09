@@ -1,38 +1,21 @@
 import Razorpay from 'razorpay';
 import crypto from 'crypto';
 import db from '../config/db.js';
-import { emitToAdmin, emitToPrincipal } from '../utils/socket.js';
-import { sendFeeReceiptEmail } from '../utils/aws.js';
-import { sendPushNotification, notifyFeePayment } from '../utils/pushNotification.js';
+import { emitToPrincipal, emitToAdmin, emitToTeacher, emitToSpecificTeacher } from '../utils/socket.js';
 
-const getRazorpayInstance = () => {
-    const key_id = process.env.RAZORPAY_KEY_ID;
-    const key_secret = process.env.RAZORPAY_KEY_SECRET;
+const razorpay = new Razorpay({
+    key_id: process.env.RAZORPAY_KEY_ID || 'rzp_test_placeholder',
+    key_secret: process.env.RAZORPAY_KEY_SECRET || 'placeholder_secret',
+});
 
-    if (!key_id || !key_secret) {
-        throw new Error('Razorpay credentials (RAZORPAY_KEY_ID and RAZORPAY_KEY_SECRET) are missing in .env file');
-    }
-
-    return new Razorpay({
-        key_id,
-        key_secret,
-    });
-};
-
+// Subscription Order
 export const createOrder = async (req, res) => {
     try {
-        const razorpay = getRazorpayInstance();
-        const { amount, months } = req.body;
-        const { instituteId } = req.params;
-
+        const { amount, currency = 'INR' } = req.body;
         const options = {
-            amount: amount * 100, // amount in the smallest currency unit (paise)
-            currency: "INR",
-            receipt: `receipt_${Date.now()}`,
-            notes: {
-                instituteId,
-                months
-            }
+            amount: Math.round(amount * 100), // amount in smallest currency unit
+            currency,
+            receipt: `sub_receipt_${Date.now()}`,
         };
 
         const order = await razorpay.orders.create(options);
@@ -43,261 +26,362 @@ export const createOrder = async (req, res) => {
         });
     } catch (error) {
         console.error('Razorpay Order Error:', error);
-        res.status(500).json({ success: false, message: 'Failed to create order' });
+        res.status(500).json({ error: 'Failed to create Razorpay order' });
     }
 };
 
+// Subscription Payment Verification
 export const verifyPayment = async (req, res) => {
     try {
-        const razorpay = getRazorpayInstance();
+        const { instituteId } = req.params;
         const {
             razorpay_order_id,
             razorpay_payment_id,
             razorpay_signature,
-            instituteId,
             months,
             amount
         } = req.body;
 
-        const sign = razorpay_order_id + "|" + razorpay_payment_id;
-        const expectedSign = crypto
-            .createHmac("sha256", process.env.RAZORPAY_KEY_SECRET)
-            .update(sign.toString())
-            .digest("hex");
+        const body = razorpay_order_id + "|" + razorpay_payment_id;
+        const expectedSignature = crypto
+            .createHmac('sha256', process.env.RAZORPAY_KEY_SECRET || 'placeholder_secret')
+            .update(body.toString())
+            .digest('hex');
 
-        if (razorpay_signature === expectedSign) {
-            // Payment is verified
-            await fulfillSubscription(instituteId, months, amount / 100);
+        if (expectedSignature === razorpay_signature) {
+            // Update subscription (Logic from processPayment)
+            const currentRes = await db.query('SELECT subscription_end_date FROM subscription_settings WHERE institute_id = $1', [instituteId]);
 
-            res.json({
-                success: true,
-                message: "Payment verified successfully"
+            let startDate = new Date();
+            if (currentRes.rows.length > 0 && currentRes.rows[0].subscription_end_date) {
+                const existingEnd = new Date(currentRes.rows[0].subscription_end_date);
+                if (existingEnd > startDate) {
+                    startDate = existingEnd;
+                }
+            }
+
+            const newEndDate = new Date(startDate);
+            // Correct logic: Add actual minutes
+            newEndDate.setMinutes(newEndDate.getMinutes() + parseInt(months));
+
+            const query = `
+                UPDATE subscription_settings 
+                SET 
+                    subscription_end_date = $1,
+                    subscription_start_date = CURRENT_TIMESTAMP,
+                    last_payment_date = CURRENT_TIMESTAMP,
+                    last_action_details = $3,
+                    override_access = FALSE,
+                    updated_at = CURRENT_TIMESTAMP
+                WHERE institute_id = $2
+                RETURNING *
+            `;
+
+            const actionDetails = `Razorpay: ₹${Math.round(amount/100)} for ${months} mins`;
+            const result = await db.query(query, [newEndDate, instituteId, actionDetails]);
+
+            // Log payment (Convert amount from paise to rupees for logging)
+            const logAmount = parseFloat(amount) / 100;
+            await db.query('INSERT INTO subscription_logs (institute_id, action_type, details, amount) VALUES ($1, $2, $3, $4)',
+                [instituteId, 'PAYMENT', `Razorpay Payment (${razorpay_payment_id}) - ${months} minutes`, logAmount]);
+
+            // Notify via Socket
+            emitToAdmin('payment_received', {
+                instituteId,
+                amount,
+                subscription_end_date: result.rows[0].subscription_end_date
             });
+
+            emitToPrincipal(instituteId, 'subscription_update', {
+                settings: result.rows[0],
+                status: 'active'
+            });
+
+            emitToTeacher(instituteId, 'subscription_update', {
+                settings: result.rows[0],
+                status: 'active'
+            });
+
+            return res.json({ success: true, message: 'Payment verified and subscription extended' });
         } else {
-            res.status(400).json({ success: false, message: "Invalid signature" });
+            return res.status(400).json({ error: 'Invalid signature' });
         }
     } catch (error) {
-        console.error('Razorpay Verify Error:', error);
-        res.status(500).json({ success: false, message: 'Payment verification failed' });
+        console.error('Razorpay Verification Error:', error);
+        res.status(500).json({ error: 'Failed to verify payment' });
     }
 };
 
-const fulfillSubscription = async (instituteId, months, amount) => {
-    const currentRes = await db.query('SELECT subscription_end_date FROM subscription_settings WHERE institute_id = $1', [instituteId]);
-    let startDate = new Date();
-    if (currentRes.rows.length > 0 && currentRes.rows[0].subscription_end_date) {
-        const existingEnd = new Date(currentRes.rows[0].subscription_end_date);
-        if (existingEnd > startDate) {
-            startDate = existingEnd;
-        }
-    }
-
-    const newEndDate = new Date(startDate);
-    // 1 month = 1 minute for testing, or use real months if preferred. 
-    // Sticking to user's previous preference of 1 min for testing.
-    newEndDate.setMinutes(newEndDate.getMinutes() + parseInt(months));
-
-    const query = `
-        UPDATE subscription_settings 
-        SET 
-            subscription_end_date = $1,
-            last_payment_date = CURRENT_TIMESTAMP,
-            updated_at = CURRENT_TIMESTAMP
-        WHERE institute_id = $2
-        RETURNING *
-    `;
-    const result = await db.query(query, [newEndDate, instituteId]);
-
-    await db.query('INSERT INTO subscription_logs (institute_id, action_type, details, amount) VALUES ($1, $2, $3, $4)',
-        [instituteId, 'PAYMENT', `Subscription extended by ${months} months via Razorpay`, amount]);
-
-    emitToAdmin('payment_received', {
-        instituteId,
-        amount,
-        subscription_end_date: result.rows[0].subscription_end_date
-    });
-
-    emitToPrincipal(instituteId, 'subscription_update', {
-        settings: result.rows[0],
-        status: 'active'
-    });
-
-    return result.rows[0];
-};
-
-// --- Student Fee Payment Logic ---
-
+// Fee Payment Order
 export const createFeeOrder = async (req, res) => {
     try {
-        const razorpay = getRazorpayInstance();
-        const { amount, studentFeeId, feeType = 'monthly' } = req.body;
+        const { amount, studentId, month, year } = req.body;
+        if (!amount || !studentId || !month || !year) {
+            return res.status(400).json({ error: 'Missing required fee payment details' });
+        }
 
         const options = {
-            amount: Math.round(parseFloat(amount) * 100),
-            currency: "INR",
-            receipt: `fee_${feeType}_${studentFeeId}_${Date.now()}`,
-            notes: { studentFeeId, feeType }
+            amount: Math.round(amount * 100),
+            currency: 'INR',
+            receipt: `fee_receipt_${studentId}_${month}_${year}_${Date.now()}`,
+            notes: {
+                studentId,
+                month,
+                year,
+                type: 'monthly_fee'
+            }
         };
 
         const order = await razorpay.orders.create(options);
-        res.json({ success: true, order, key_id: process.env.RAZORPAY_KEY_ID });
+        res.json({
+            success: true,
+            order,
+            key_id: process.env.RAZORPAY_KEY_ID
+        });
     } catch (error) {
         console.error('Razorpay Fee Order Error:', error);
-        res.status(500).json({ success: false, message: 'Failed to create fee order' });
+        res.status(500).json({ error: 'Failed to create fee payment order' });
     }
 };
 
+// Fee Payment Verification
 export const verifyFeePayment = async (req, res) => {
-    const { razorpay_order_id, razorpay_payment_id, razorpay_signature, studentFeeId, instituteId, feeType, studentId, month_year, amount } = req.body;
     try {
-        const sign = razorpay_order_id + "|" + razorpay_payment_id;
-        const expectedSign = crypto.createHmac("sha256", process.env.RAZORPAY_KEY_SECRET).update(sign.toString()).digest("hex");
+        const {
+            razorpay_order_id,
+            razorpay_payment_id,
+            razorpay_signature,
+            studentId,
+            month,
+            year,
+            amount
+        } = req.body;
 
-        if (razorpay_signature === expectedSign) {
-            // 1. Handle Virtual Bill Creation if needed
-            if (feeType === 'monthly' && studentFeeId.toString().startsWith('VIRTUAL_')) {
-                // Fetch config and student to create real record
-                const configRes = await db.query('SELECT id, columns, class_data FROM fee_configurations WHERE institute_id = $1 AND month_year = $2', [instituteId, month_year]);
-                const config = configRes.rows[0];
-                const studentRes = await db.query('SELECT class, transport_facility FROM students WHERE id = $1', [studentId]);
-                const student = studentRes.rows[0];
+        const body = razorpay_order_id + "|" + razorpay_payment_id;
+        const expectedSignature = crypto
+            .createHmac('sha256', process.env.RAZORPAY_KEY_SECRET || 'placeholder_secret')
+            .update(body.toString())
+            .digest('hex');
 
-                let breakdown = {};
-                let total = 0;
-                const columns = typeof config.columns === 'string' ? JSON.parse(config.columns) : config.columns;
-                const classData = typeof config.class_data === 'string' ? JSON.parse(config.class_data) : config.class_data;
-                const classSettings = classData[student.class];
+        if (expectedSignature === razorpay_signature) {
+            // 1. Get student session info
+            const studentRes = await db.query('SELECT institute_id, session_id, name FROM students WHERE id = $1', [studentId]);
+            if (studentRes.rows.length === 0) return res.status(404).json({ error: 'Student not found' });
+            
+            const { institute_id, session_id, name } = studentRes.rows[0];
 
-                columns.forEach(col => {
-                    const trimmedCol = col.trim();
-                    const isTransport = trimmedCol.toLowerCase().includes('transport') || trimmedCol.toLowerCase().includes('bus');
-                    const amt = parseFloat(classSettings[trimmedCol] || 0);
-                    if (amt > 0 && (!isTransport || (isTransport && student.transport_facility))) {
-                        breakdown[trimmedCol] = amt;
-                        total += amt;
-                    }
+            // 2. Mark as PAID in student_fees
+            await db.query(
+                `INSERT INTO student_fees (student_id, institute_id, session_id, month, year, status, paid_at, collected_by, payment_method, transaction_id) 
+                 VALUES ($1, $2, $3, $4, $5, 'paid', NOW(), 'Online', 'Razorpay', $6)
+                 ON CONFLICT (student_id, month, year, session_id) 
+                 DO UPDATE SET status = 'paid', paid_at = NOW(), collected_by = 'Online', payment_method = 'Razorpay', transaction_id = $6`,
+                [studentId, institute_id, session_id, month, year, razorpay_payment_id]
+            );
+
+            // 3. Notify Principal & Special Teachers via Socket and Push
+            try {
+                const monthsNames = ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"];
+                const notifTitle = 'Fee Payment Received';
+                const safeAmount = parseFloat(amount || 0).toLocaleString();
+                const notifBody = `₹${safeAmount} received from ${name} for ${monthsNames[month - 1]} ${year}.`;
+
+                // Socket Notification to Principal
+                emitToPrincipal(institute_id, 'fee_payment_received', {
+                    studentId,
+                    studentName: name,
+                    month,
+                    year,
+                    amount,
+                    paymentId: razorpay_payment_id,
+                    type: 'MONTHLY',
+                    title: notifTitle,
+                    message: notifBody
                 });
 
-                const insertRes = await db.query(`
-                    INSERT INTO student_monthly_fees (student_id, institute_id, config_id, month_year, breakdown, total_amount, status, payment_id, paid_at)
-                    VALUES ($1, $2, $3, $4, $5, $6, 'paid', $7, CURRENT_TIMESTAMP)
-                    RETURNING id
-                `, [studentId, instituteId, config.id, month_year, JSON.stringify(breakdown), total, razorpay_payment_id]);
+                // Notify Student
+                const studentPushTokenRes = await db.query('SELECT push_token FROM students WHERE id = $1', [studentId]);
+                const studentPushToken = studentPushTokenRes.rows[0]?.push_token;
+                const studentNotifTitle = 'Payment Success';
+                const studentNotifBody = `Your online payment for ${monthsNames[month - 1]} ${year} was successful.`;
 
-                emitToPrincipal(instituteId, 'fee_payment_update', { studentFeeId: insertRes.rows[0].id, status: 'paid', feeType });
-            } else {
-                // 2. Regular Update
-                if (feeType === 'occasional') {
-                    // Update all items in the batch for this student
-                    // We need batch_id. If passed in body, use it. Else fetch it.
-                    let targetBatchId = req.body.batch_id;
+                emitToStudent(studentId, 'fee_payment_received', {
+                    title: studentNotifTitle,
+                    message: studentNotifBody,
+                    type: 'fees'
+                });
 
-                    if (!targetBatchId) {
-                        const fRes = await db.query('SELECT batch_id FROM student_occasional_fees WHERE id = $1', [studentFeeId]);
-                        if (fRes.rows.length > 0) targetBatchId = fRes.rows[0].batch_id;
-                    }
-
-                    if (targetBatchId) {
-                        await db.query(
-                            `UPDATE student_occasional_fees 
-                             SET status = 'paid', payment_id = $1, paid_at = CURRENT_TIMESTAMP 
-                             WHERE batch_id = $2 AND student_id = $3`,
-                            [razorpay_payment_id, targetBatchId, studentId]
-                        );
-                    } else {
-                        // Fallback single update if no batch found (should not happen)
-                        await db.query(
-                            `UPDATE student_occasional_fees SET status = 'paid', payment_id = $1, paid_at = CURRENT_TIMESTAMP WHERE id = $2`,
-                            [razorpay_payment_id, studentFeeId]
-                        );
-                    }
-                } else {
-                    // Monthly fee update
-                    await db.query(
-                        `UPDATE student_monthly_fees SET status = 'paid', payment_id = $1, paid_at = CURRENT_TIMESTAMP WHERE id = $2`,
-                        [razorpay_payment_id, studentFeeId]
-                    );
+                if (studentPushToken) {
+                    const { sendPushNotification } = await import('../utils/pushNotification.js');
+                    await sendPushNotification([studentPushToken], studentNotifTitle, studentNotifBody, { type: 'fee_payment' });
                 }
 
-                emitToPrincipal(instituteId, 'fee_payment_update', { studentFeeId, status: 'paid', feeType });
-            }
+                // Fetch push tokens for staff
+                const principalPushToken = await db.query('SELECT push_token FROM institutes WHERE id = $1', [institute_id]);
+                const specialTeachers = await db.query('SELECT id, push_token FROM teachers WHERE institute_id = $1 AND special_permission = true', [institute_id]);
+                
+                const tokens = [];
+                if (principalPushToken.rows[0]?.push_token) tokens.push(principalPushToken.rows[0].push_token);
+                
+                specialTeachers.rows.forEach(t => {
+                    if (t.push_token) tokens.push(t.push_token);
+                    // Also notify via socket
+                    emitToSpecificTeacher(t.id, 'fee_payment_received', {
+                        title: notifTitle,
+                        message: notifBody,
+                        type: 'fees'
+                    });
+                });
 
-            // --- Send Receipt Email ---
-            try {
-                // 1. Get Student Details (including email from the saved student record)
-                const studentDataRes = await db.query('SELECT name, email, roll_no, class, section FROM students WHERE id = $1', [studentId]);
-                const studentData = studentDataRes.rows[0];
-
-                if (studentData && studentData.email) {
-                    // 2. Get Institute Details
-                    const instDataRes = await db.query('SELECT institute_name, logo_url, address, state, district, pincode, affiliation FROM institutes WHERE id = $1', [instituteId]);
-                    const instData = instDataRes.rows[0];
-
-                    // 3. Fetch the newly updated fee record for the PDF
-                    let feeRecord;
-                    if (feeType === 'occasional') {
-                        const feeRes = await db.query('SELECT * FROM student_occasional_fees WHERE student_id = $1 AND payment_id = $2', [studentId, razorpay_payment_id]);
-                        // Combine occasional fees if it was a batch
-                        if (feeRes.rows.length > 0) {
-                            const first = feeRes.rows[0];
-                            const totalAmount = feeRes.rows.reduce((sum, row) => sum + parseFloat(row.amount), 0);
-                            const breakdown = {};
-                            feeRes.rows.forEach(row => { breakdown[row.description || 'Fee'] = row.amount; });
-                            feeRecord = {
-                                ...first,
-                                total_amount: totalAmount,
-                                breakdown,
-                                month_year: first.month_year || 'N/A',
-                                class: studentData.class,
-                                section: studentData.section,
-                                roll_no: studentData.roll_no
-                            };
-                        }
-                    } else {
-                        const feeRes = await db.query('SELECT * FROM student_monthly_fees WHERE id = $1', [studentFeeId.toString().startsWith('VIRTUAL_') ? null : studentFeeId]);
-                        // If it was virtual, we might need a different lookup, but the insertRes inside the if(virtual) block already happened.
-                        // For simplicity, let's fetch by payment_id if studentFeeId was virtual
-                        if (!feeRes.rows[0]) {
-                            const feeRes2 = await db.query('SELECT * FROM student_monthly_fees WHERE student_id = $1 AND payment_id = $2', [studentId, razorpay_payment_id]);
-                            feeRecord = feeRes2.rows[0];
-                        } else {
-                            feeRecord = feeRes.rows[0];
-                        }
-                        if (feeRecord) {
-                            feeRecord.class = studentData.class;
-                            feeRecord.section = studentData.section;
-                            feeRecord.roll_no = studentData.roll_no;
-                        }
-                    }
-
-                    if (feeRecord && instData) {
-                        console.log(`🚀 PAYMENT VERIFIED: Triggering email for ${studentData.name} (${studentData.email})`);
-                        // Use amount from req.body (available after my fix) or record total
-                        const finalAmount = amount || feeRecord.total_amount;
-
-                        // Async send (hande in background)
-                        sendFeeReceiptEmail(studentData.email, studentData.name, finalAmount, feeRecord, instData)
-                            .then(res => console.log(`✅ DISPATCHED: Email status for ${studentData.name}:`, res))
-                            .catch(err => console.error(`❌ DISPATCH FAILED for ${studentData.name}:`, err));
-                    } else {
-                        console.log('⚠️ MISSING DATA: Could not trigger email. feeRecord:', !!feeRecord, 'instData:', !!instData);
-                    }
-                } else {
-                    console.log(`⚠️ NO EMAIL: Student ${studentId} does not have an email address in the database.`);
+                if (tokens.length > 0) {
+                    const { sendPushNotification } = await import('../utils/pushNotification.js');
+                    await sendPushNotification(tokens, notifTitle, notifBody, { type: 'fee_payment' });
                 }
-            } catch (emailErr) {
-                console.error('CRITICAL Email Trigger Error:', emailErr);
+            } catch (notifErr) {
+                console.error('[VerifyFee] Notification logic failed:', notifErr);
+                // Don't return error, payment is already saved
             }
 
-            // --- Send Push Notification to Principal & Special Teachers ---
-            notifyFeePayment(studentId, instituteId, amount, feeType);
-
-            res.json({ success: true, message: "Fee payment verified successfully" });
+            return res.json({ success: true, message: 'Fee payment successful' });
         } else {
-            res.status(400).json({ success: false, message: "Invalid signature" });
+            return res.status(400).json({ error: 'Invalid payment signature' });
         }
     } catch (error) {
-        console.error('Fee Verify Error:', error);
-        res.status(500).json({ success: false, message: 'Fee verification failed' });
+        console.error('Fee Verification Error:', error);
+        res.status(500).json({ error: 'Failed to verify fee payment' });
+    }
+};
+
+// Fee Payment Order (One-Time)
+export const createOneTimeFeeOrder = async (req, res) => {
+    try {
+        const { amount, studentId, paymentId } = req.body;
+        if (!amount || !studentId || !paymentId) {
+            return res.status(400).json({ error: 'Missing required details' });
+        }
+
+        const options = {
+            amount: Math.round(amount * 100),
+            currency: 'INR',
+            receipt: `ot_receipt_${paymentId}_${Date.now()}`,
+            notes: { studentId, paymentId, type: 'one_time_fee' }
+        };
+
+        const order = await razorpay.orders.create(options);
+        res.json({
+            success: true,
+            order,
+            key_id: process.env.RAZORPAY_KEY_ID
+        });
+    } catch (error) {
+        console.error('OT Fee Order Error:', error);
+        res.status(500).json({ error: 'Failed to create order' });
+    }
+};
+
+// One-Time Fee Verification
+export const verifyOneTimeFeePayment = async (req, res) => {
+    try {
+        const {
+            razorpay_order_id,
+            razorpay_payment_id,
+            razorpay_signature,
+            studentId,
+            paymentId,
+            amount
+        } = req.body;
+
+        const body = razorpay_order_id + "|" + razorpay_payment_id;
+        const expectedSignature = crypto
+            .createHmac('sha256', process.env.RAZORPAY_KEY_SECRET || 'placeholder_secret')
+            .update(body.toString())
+            .digest('hex');
+
+        if (expectedSignature === razorpay_signature) {
+            const currentRes = await db.query('SELECT due_amount, paid_amount, reason FROM one_time_fee_payments p JOIN one_time_fee_groups g ON p.group_id = g.id WHERE p.id = $1', [paymentId]);
+            if (currentRes.rows.length === 0) return res.status(404).json({ error: 'Payment record not found' });
+
+            const { due_amount, paid_amount, reason } = currentRes.rows[0];
+            const newPaidAmount = parseFloat(paid_amount) + parseFloat(amount);
+            let status = 'partial';
+            if (newPaidAmount >= parseFloat(due_amount)) status = 'paid';
+
+            await db.query(
+                `UPDATE one_time_fee_payments SET paid_amount = $1, status = $2, updated_at = NOW() WHERE id = $3 AND student_id = $4`,
+                [newPaidAmount, status, paymentId, studentId]
+            );
+
+            await db.query(
+                `INSERT INTO one_time_fee_transactions (payment_id, amount, payment_method, transaction_id, collected_by)
+                 VALUES ($1, $2, 'Razorpay', $3, 'Online')`,
+                [paymentId, amount, razorpay_payment_id]
+            );
+
+            const studentRes = await db.query('SELECT institute_id, name FROM students WHERE id = $1', [studentId]);
+            const { institute_id, name } = studentRes.rows[0];
+
+            // 3. Notify Principal & Special Teachers
+            try {
+                const notifTitle = 'One-Time Fee Received';
+                const safeAmount = parseFloat(amount || 0).toLocaleString();
+                const notifBody = `₹${safeAmount} received from ${name} for ${reason || 'Fee'}.`;
+
+                emitToPrincipal(institute_id, 'fee_payment_received', {
+                    studentId,
+                    studentName: name,
+                    amount,
+                    paymentId: razorpay_payment_id,
+                    type: 'ONE-TIME',
+                    title: notifTitle,
+                    message: notifBody
+                });
+
+                // Notify Student
+                const studentPushTokenRes = await db.query('SELECT push_token FROM students WHERE id = $1', [studentId]);
+                const studentPushToken = studentPushTokenRes.rows[0]?.push_token;
+                const studentNotifTitle = 'One-Time Fee Success';
+                const studentNotifBody = `Your online payment for ${reason || 'Fee'} was successful.`;
+
+                emitToStudent(studentId, 'fee_payment_received', {
+                    title: studentNotifTitle,
+                    message: studentNotifBody,
+                    type: 'fees'
+                });
+
+                if (studentPushToken) {
+                    const { sendPushNotification } = await import('../utils/pushNotification.js');
+                    await sendPushNotification([studentPushToken], studentNotifTitle, studentNotifBody, { type: 'fee_payment' });
+                }
+
+                const principalPushToken = await db.query('SELECT push_token FROM institutes WHERE id = $1', [institute_id]);
+                const specialTeachers = await db.query('SELECT id, push_token FROM teachers WHERE institute_id = $1 AND special_permission = true', [institute_id]);
+                
+                const tokens = [];
+                if (principalPushToken.rows[0]?.push_token) tokens.push(principalPushToken.rows[0].push_token);
+                
+                specialTeachers.rows.forEach(t => {
+                    if (t.push_token) tokens.push(t.push_token);
+                    emitToSpecificTeacher(t.id, 'fee_payment_received', {
+                        title: notifTitle,
+                        message: notifBody,
+                        type: 'fees'
+                    });
+                });
+
+                if (tokens.length > 0) {
+                    const { sendPushNotification } = await import('../utils/pushNotification.js');
+                    await sendPushNotification(tokens, notifTitle, notifBody, { type: 'fee_payment' });
+                }
+            } catch (notifErr) {
+                console.error('[VerifyOT] Notification logic failed:', notifErr);
+            }
+
+            return res.json({ success: true, message: 'One-time fee payment successful' });
+        } else {
+            return res.status(400).json({ error: 'Invalid signature' });
+        }
+    } catch (error) {
+        console.error('OT Fee Verification Error:', error);
+        res.status(500).json({ error: 'Failed to verify payment' });
     }
 };

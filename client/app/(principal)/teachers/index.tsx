@@ -1,5 +1,5 @@
 import { useState, useEffect, useMemo } from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, FlatList, Image, ActivityIndicator, ScrollView, StatusBar } from 'react-native';
+import { View, Text, StyleSheet, TouchableOpacity, FlatList, Image, ActivityIndicator, ScrollView, StatusBar, Modal } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
 import axios from 'axios';
@@ -16,7 +16,9 @@ export default function TeacherList() {
     const [teachers, setTeachers] = useState<any[]>([]);
     const [subjects, setSubjects] = useState<string[]>([]);
     const [selectedSubject, setSelectedSubject] = useState<string>('All');
+    const [filterGender, setFilterGender] = useState<string>('');
     const [loading, setLoading] = useState(true);
+    const [showFilters, setShowFilters] = useState(false);
 
     useEffect(() => {
         fetchTeachers();
@@ -24,7 +26,7 @@ export default function TeacherList() {
 
     useEffect(() => {
         filterTeachers();
-    }, [selectedSubject, allTeachers]);
+    }, [selectedSubject, filterGender, allTeachers]);
 
     const fetchTeachers = async () => {
         try {
@@ -46,66 +48,131 @@ export default function TeacherList() {
     };
 
     const filterTeachers = () => {
-        if (selectedSubject === 'All') {
-            setTeachers(allTeachers);
-        } else {
-            setTeachers(allTeachers.filter(t => t.subject === selectedSubject));
+        let filtered = allTeachers;
+        
+        if (selectedSubject !== 'All') {
+            filtered = filtered.filter(t => t.subject === selectedSubject);
         }
+        
+        if (filterGender !== '') {
+            filtered = filtered.filter(t => (t.gender || '').toLowerCase() === filterGender.toLowerCase());
+        }
+        
+        setTeachers(filtered);
+    };
+
+    const resetFilters = () => {
+        setSelectedSubject('All');
+        setFilterGender('');
     };
 
     const styles = useMemo(() => StyleSheet.create({
         container: { flex: 1, backgroundColor: theme.background },
         header: {
-            backgroundColor: theme.card,
-            paddingTop: insets.top + 10,
-            paddingBottom: 15,
-            paddingHorizontal: 20,
             flexDirection: 'row',
             alignItems: 'center',
-            borderBottomWidth: 1,
-            borderBottomColor: theme.border,
-            zIndex: 10,
-            shadowColor: '#000',
-            shadowOffset: { width: 0, height: 2 },
-            shadowOpacity: isDark ? 0.2 : 0.05,
-            shadowRadius: 10,
-            elevation: 5,
+            justifyContent: 'space-between',
+            marginBottom: 20,
+            paddingHorizontal: 20,
         },
         backBtn: {
             padding: 8,
             borderRadius: 12,
-            backgroundColor: theme.background,
-            marginRight: 15
-        },
-        title: { fontSize: 20, fontWeight: '900', color: theme.text },
-
-        filterContainer: {
             backgroundColor: theme.card,
-            paddingVertical: 12,
-            borderBottomWidth: 1,
-            borderBottomColor: theme.border,
+            borderWidth: 1,
+            borderColor: theme.border,
         },
-        filterScroll: { paddingHorizontal: 20 },
-        filterChip: {
-            paddingHorizontal: 18,
+        title: { fontSize: 22, fontWeight: '900', color: theme.text },
+
+        filterIconBtn: {
+            width: 44,
+            height: 44,
+            borderRadius: 14,
+            backgroundColor: theme.card,
+            justifyContent: 'center',
+            alignItems: 'center',
+            borderWidth: 1,
+            borderColor: theme.border,
+        },
+
+        modalOverlay: {
+            flex: 1,
+            backgroundColor: 'rgba(0,0,0,0.5)',
+            justifyContent: 'flex-end',
+        },
+        bottomSheet: {
+            backgroundColor: theme.card,
+            borderTopLeftRadius: 32,
+            borderTopRightRadius: 32,
+            maxHeight: '80%',
+        },
+        sheetHeader: {
+            alignItems: 'center',
             paddingVertical: 10,
-            borderRadius: 15,
-            backgroundColor: theme.background,
+        },
+        sheetHandle: {
+            width: 40,
+            height: 5,
+            backgroundColor: theme.border,
+            borderRadius: 3,
+            marginTop: 10,
+            marginBottom: 5,
+        },
+        sheetTitle: {
+            fontSize: 20,
+            fontWeight: '900',
+            color: theme.text,
+        },
+        filterGroup: {
+            marginBottom: 20,
+        },
+        filterLabel: {
+            fontWeight: '900',
+            fontSize: 13,
+            color: theme.textLight,
+            marginBottom: 12,
+            textTransform: 'uppercase',
+            letterSpacing: 1,
+        },
+        filterChip: {
+            paddingHorizontal: 16,
+            paddingVertical: 10,
+            borderRadius: 14,
             marginRight: 10,
             borderWidth: 1,
             borderColor: theme.border,
+            backgroundColor: theme.background,
         },
         filterChipActive: {
             backgroundColor: theme.primary,
             borderColor: theme.primary,
+        },
+        filterText: {
+            fontSize: 14,
+            color: theme.text,
+            fontWeight: '700',
+        },
+        filterTextActive: {
+            color: '#fff',
+            fontWeight: '900',
+        },
+        applyBtn: {
+            backgroundColor: theme.primary,
+            paddingVertical: 18,
+            borderRadius: 18,
+            alignItems: 'center',
+            marginTop: 10,
             shadowColor: theme.primary,
             shadowOffset: { width: 0, height: 4 },
             shadowOpacity: 0.3,
             shadowRadius: 8,
             elevation: 4,
         },
-        filterText: { color: theme.textLight, fontWeight: '700', fontSize: 13 },
-        filterTextActive: { color: '#fff' },
+        applyBtnText: {
+            color: '#fff',
+            fontWeight: '900',
+            fontSize: 16,
+        },
 
         listContainer: { padding: 20, paddingBottom: 40 },
         card: {
@@ -145,67 +212,143 @@ export default function TeacherList() {
         </View>
     );
 
+    const isFiltered = selectedSubject !== 'All' || filterGender !== '';
+
     return (
         <View style={styles.container}>
-            <StatusBar barStyle={theme.statusBarStyle} backgroundColor={theme.card} translucent={true} />
-            <View style={styles.header}>
-                <TouchableOpacity onPress={() => router.back()} style={styles.backBtn}>
-                    <Ionicons name="chevron-back" size={24} color={theme.text} />
-                </TouchableOpacity>
-                <Text style={styles.title}>Faculty Directory</Text>
-            </View>
-
-            <View style={styles.filterContainer}>
-                <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.filterScroll}>
-                    {subjects.map((subj, index) => (
-                        <TouchableOpacity
-                            key={index}
-                            style={[styles.filterChip, selectedSubject === subj && styles.filterChipActive]}
-                            onPress={() => setSelectedSubject(subj)}
-                        >
-                            <Text style={[styles.filterText, selectedSubject === subj && styles.filterTextActive]}>
-                                {subj}
-                            </Text>
-                        </TouchableOpacity>
-                    ))}
-                </ScrollView>
-            </View>
-
-            <FlatList
-                data={teachers}
-                keyExtractor={(item) => item.id.toString()}
-                contentContainerStyle={styles.listContainer}
+            <StatusBar barStyle={theme.statusBarStyle} backgroundColor="transparent" translucent={true} />
+            
+            <ScrollView 
                 showsVerticalScrollIndicator={false}
-                ListEmptyComponent={
-                    <View style={styles.noDataContainer}>
-                        <Ionicons name="people-outline" size={60} color={theme.border} />
-                        <Text style={styles.noDataText}>No teachers found</Text>
-                    </View>
-                }
-                renderItem={({ item }) => (
-                    <TouchableOpacity
-                        style={styles.card}
-                        onPress={() => router.push(`/(principal)/teachers/details/${item.id}`)}
-                        activeOpacity={0.7}
-                    >
-                        <View style={styles.imageContainer}>
-                            {item.photo_url ? (
-                                <Image source={{ uri: item.photo_url }} style={styles.teacherImage} />
-                            ) : (
-                                <View style={styles.placeholderImage}>
-                                    <Ionicons name="person" size={28} color={theme.border} />
-                                </View>
-                            )}
-                        </View>
-                        <View style={styles.infoContainer}>
-                            <Text style={styles.nameText}>{item.name}</Text>
-                            <Text style={styles.subjectText}>{item.subject}</Text>
-                            <Text style={styles.qualText}>{item.qualification}</Text>
-                        </View>
-                        <Ionicons name="chevron-forward" size={20} color={theme.textLight} />
+                contentContainerStyle={{ paddingBottom: Math.max(40, insets.top + insets.bottom + 20), paddingTop: insets.top + 10 }}
+            >
+                {/* Free Flow Header */}
+                <View style={styles.header}>
+                    <TouchableOpacity onPress={() => router.back()} style={styles.backBtn}>
+                        <Ionicons name="chevron-back" size={24} color={theme.text} />
                     </TouchableOpacity>
-                )}
-            />
+                    <View style={{ flex: 1, marginLeft: 15 }}>
+                        <Text style={styles.title}>Faculty Directory</Text>
+                        <Text style={{ fontSize: 12, color: theme.primary, fontWeight: '800' }}>
+                            Total: {teachers.length} Teachers
+                        </Text>
+                    </View>
+                    <TouchableOpacity 
+                        style={[styles.filterIconBtn, isFiltered && { backgroundColor: theme.primary }]} 
+                        onPress={() => setShowFilters(true)}
+                    >
+                        <Ionicons name="filter" size={20} color={isFiltered ? "#fff" : theme.text} />
+                    </TouchableOpacity>
+                </View>
+
+                <View style={styles.listContainer}>
+                    {teachers.length === 0 ? (
+                        <View style={styles.noDataContainer}>
+                            <Ionicons name="people-outline" size={60} color={theme.border} />
+                            <Text style={styles.noDataText}>No teachers found</Text>
+                        </View>
+                    ) : (
+                        teachers.map((item) => (
+                            <TouchableOpacity
+                                key={item.id}
+                                style={styles.card}
+                                onPress={() => router.push(`/(principal)/teachers/details/${item.id}`)}
+                                activeOpacity={0.7}
+                            >
+                                <View style={styles.imageContainer}>
+                                    {item.photo_url ? (
+                                        <Image source={{ uri: item.photo_url }} style={styles.teacherImage} />
+                                    ) : (
+                                        <View style={styles.placeholderImage}>
+                                            <Ionicons name="person" size={28} color={theme.border} />
+                                        </View>
+                                    )}
+                                </View>
+                                <View style={styles.infoContainer}>
+                                    <Text style={styles.nameText}>{item.name}</Text>
+                                    <Text style={styles.subjectText}>{item.subject}</Text>
+                                    <Text style={styles.qualText}>{item.qualification}</Text>
+                                </View>
+                                <View style={{ alignItems: 'flex-end', marginRight: 10 }}>
+                                    <View style={{ backgroundColor: theme.primary + '10', paddingHorizontal: 8, paddingVertical: 4, borderRadius: 8 }}>
+                                        <Text style={{ fontSize: 10, color: theme.primary, fontWeight: '900' }}>{item.unique_code}</Text>
+                                    </View>
+                                </View>
+                                <Ionicons name="chevron-forward" size={20} color={theme.textLight} />
+                            </TouchableOpacity>
+                        ))
+                    )}
+                </View>
+            </ScrollView>
+
+            {/* Filter BottomSheet */}
+            <Modal
+                visible={showFilters}
+                transparent
+                animationType="slide"
+                onRequestClose={() => setShowFilters(false)}
+            >
+                <TouchableOpacity 
+                    style={styles.modalOverlay} 
+                    activeOpacity={1} 
+                    onPress={() => setShowFilters(false)}
+                >
+                    <TouchableOpacity 
+                        activeOpacity={1} 
+                        style={styles.bottomSheet}
+                    >
+                        <View style={styles.sheetHeader}>
+                            <View style={styles.sheetHandle} />
+                            <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', width: '100%', paddingHorizontal: 20, marginTop: 10 }}>
+                                <Text style={styles.sheetTitle}>Filter Faculty</Text>
+                                <TouchableOpacity onPress={resetFilters}>
+                                    <Text style={{ color: theme.primary, fontWeight: '900' }}>Reset All</Text>
+                                </TouchableOpacity>
+                            </View>
+                        </View>
+
+                        <ScrollView style={{ padding: 20 }}>
+                            <Text style={styles.filterLabel}>By Subject:</Text>
+                            <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 10, marginBottom: 20 }}>
+                                {subjects.map((subj, index) => (
+                                    <TouchableOpacity
+                                        key={index}
+                                        style={[styles.filterChip, selectedSubject === subj && styles.filterChipActive]}
+                                        onPress={() => setSelectedSubject(subj)}
+                                    >
+                                        <Text style={[styles.filterText, selectedSubject === subj && styles.filterTextActive]}>
+                                            {subj}
+                                        </Text>
+                                    </TouchableOpacity>
+                                ))}
+                            </View>
+
+                            <Text style={styles.filterLabel}>By Gender:</Text>
+                            <View style={{ flexDirection: 'row', gap: 10, marginBottom: 20 }}>
+                                {['Male', 'Female'].map(g => (
+                                    <TouchableOpacity
+                                        key={g}
+                                        style={[styles.filterChip, { flex: 1, marginRight: 0 }, filterGender.toLowerCase() === g.toLowerCase() && styles.filterChipActive]}
+                                        onPress={() => setFilterGender(filterGender.toLowerCase() === g.toLowerCase() ? '' : g)}
+                                    >
+                                        <Text style={[styles.filterText, filterGender.toLowerCase() === g.toLowerCase() && styles.filterTextActive, { textAlign: 'center' }]}>
+                                            {g}
+                                        </Text>
+                                    </TouchableOpacity>
+                                ))}
+                            </View>
+
+                            <TouchableOpacity 
+                                style={styles.applyBtn} 
+                                onPress={() => setShowFilters(false)}
+                            >
+                                <Text style={styles.applyBtnText}>Apply Filters</Text>
+                            </TouchableOpacity>
+                            <View style={{ height: 40 }} />
+                        </ScrollView>
+                    </TouchableOpacity>
+                </TouchableOpacity>
+            </Modal>
         </View>
     );
 }

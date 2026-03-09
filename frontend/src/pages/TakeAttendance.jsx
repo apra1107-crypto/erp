@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { useNavigate, useParams } from 'react-router-dom';
+import { useNavigate, useParams, useLocation } from 'react-router-dom';
 import axios from 'axios';
 import { toast } from 'react-toastify';
 import { API_ENDPOINTS } from '../config';
@@ -7,11 +7,22 @@ import './Attendance.css';
 
 const TakeAttendance = () => {
     const navigate = useNavigate();
+    const location = useLocation();
     const { class: className, section } = useParams();
     const userType = localStorage.getItem('userType');
     const dashboardPath = userType === 'teacher' ? '/teacher-dashboard' : '/dashboard';
 
-    const [selectedDate, setSelectedDate] = useState(new Date().toISOString().split('T')[0]);
+    // Get current IST date
+    const getISTDate = () => {
+        return new Intl.DateTimeFormat('en-CA', {
+            timeZone: 'Asia/Kolkata',
+            year: 'numeric',
+            month: '2-digit',
+            day: '2-digit'
+        }).format(new Date());
+    };
+
+    const [selectedDate, setSelectedDate] = useState(location.state?.date || getISTDate());
     const [students, setStudents] = useState([]);
     const [attendance, setAttendance] = useState({});
     const [absentRequests, setAbsentRequests] = useState([]);
@@ -46,7 +57,7 @@ const TakeAttendance = () => {
 
             // Fetch students
             const studentsRes = await axios.get(
-                `${API_ENDPOINTS.PRINCIPAL}/student/list?class=${className}&section=${section}`,
+                `${API_ENDPOINTS.PRINCIPAL}/student/list?class=${className}&section=${section}&date=${selectedDate}`,
                 { headers: { Authorization: `Bearer ${token}` } }
             );
 
@@ -172,9 +183,9 @@ const TakeAttendance = () => {
     }
 
     return (
-        <>
+        <div className="attendance-page-wrapper">
             {/* Header Top - Left side (Back + Text) | Right side (Date Selector) */}
-            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', margin: '0.5rem 0 2rem 0' }}>
+            <div className="take-attendance-header-modern">
                 {/* Left Side - Back Button + Text */}
                 <div style={{ display: 'flex', alignItems: 'center', gap: '0' }}>
                     <button className="back-btn-free" onClick={() => navigate(`${dashboardPath}/attendance`)}>
@@ -192,20 +203,14 @@ const TakeAttendance = () => {
 
                 {/* Right Side - Date Selector + Save Button */}
                 <div style={{ display: 'flex', alignItems: 'center', gap: '1rem' }}>
-                    <div className="date-selector-free">
-                        <label htmlFor="date-input">
-                            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
-                                <rect x="3" y="4" width="18" height="18" rx="2" ry="2" />
-                                <line x1="16" y1="2" x2="16" y2="6" /><line x1="8" y1="2" x2="8" y2="6" /><line x1="3" y1="10" x2="21" y2="10" />
-                            </svg>
-                        </label>
+                    <div className="premium-date-picker-mini">
                         <input
                             id="date-input"
                             type="date"
                             value={selectedDate}
                             onChange={(e) => setSelectedDate(e.target.value)}
-                            max={new Date().toISOString().split('T')[0]}
-                            className="date-input-minimal"
+                            max={getISTDate()}
+                            className="ist-date-input"
                         />
                     </div>
                     <button className="save-btn-free" onClick={handleSave} disabled={saving}>
@@ -228,169 +233,68 @@ const TakeAttendance = () => {
                 </div>
             </div>
 
-            {/* Stats Cards Row - Below Header */}
-            <div style={{ 
-                background: 'linear-gradient(135deg, rgba(0, 0, 0, 0.15) 0%, rgba(0, 0, 0, 0.08) 100%)',
-                padding: '2rem 1.5rem',
-                borderRadius: '16px',
-                marginBottom: '2rem',
-                display: 'flex',
-                justifyContent: 'center',
-                border: '1px solid rgba(255, 255, 255, 0.1)',
-                backdropFilter: 'blur(10px)'
-            }}>
-                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '1.5rem', width: '100%', maxWidth: '1100px' }}>
-                    {/* Total Enrollment Card */}
-                    <div style={{
-                        background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
-                        borderRadius: '14px',
-                        padding: '1.5rem',
-                        display: 'flex',
-                        flexDirection: 'column',
-                        alignItems: 'flex-start',
-                        justifyContent: 'space-between',
-                        boxShadow: '0 12px 24px rgba(102, 126, 234, 0.2), inset 0 1px 1px rgba(255, 255, 255, 0.2)',
-                        color: 'white',
-                        transition: 'all 0.3s ease',
-                        cursor: 'pointer',
-                        border: '1px solid rgba(255, 255, 255, 0.15)',
-                        minHeight: '140px',
-                        position: 'relative',
-                        overflow: 'hidden'
-                    }}>
-                        <div style={{ 
-                            position: 'absolute',
-                            top: '-20px',
-                            right: '-20px',
-                            width: '80px',
-                            height: '80px',
-                            background: 'rgba(255, 255, 255, 0.1)',
-                            borderRadius: '50%'
-                        }}></div>
-                        <div style={{ position: 'relative', zIndex: 1 }}>
-                            <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" style={{ marginBottom: '0.5rem' }}>
-                                <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2" />
-                                <circle cx="9" cy="7" r="4" />
-                                <path d="M23 21v-2a4 4 0 0 0-3-3.87" />
-                                <path d="M16 3.13a4 4 0 0 1 0 7.75" />
-                            </svg>
-                            <p style={{ fontSize: '0.75rem', fontWeight: 600, opacity: 0.85, margin: 0, letterSpacing: '0.5px', textTransform: 'uppercase' }}>Total Students</p>
-                        </div>
-                        <div style={{ fontSize: '2.2rem', fontWeight: 800, position: 'relative', zIndex: 1 }}>{stats.total}</div>
+            {/* Stats Cards Row - Compact Free Flow */}
+            <div className="attendance-stats-shelf">
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '1.25rem', width: '100%', maxWidth: '1200px' }}>
+                {/* Total Enrollment Card */}
+                <div className="att-stat-card enrollment">
+                    <div className="stat-icon-bg">
+                        <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                            <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2" />
+                            <circle cx="9" cy="7" r="4" />
+                            <path d="M23 21v-2a4 4 0 0 0-3-3.87" />
+                            <path d="M16 3.13a4 4 0 0 1 0 7.75" />
+                        </svg>
                     </div>
-
-                    {/* Present Today Card */}
-                    <div style={{
-                        background: 'linear-gradient(135deg, #f093fb 0%, #f5576c 100%)',
-                        borderRadius: '14px',
-                        padding: '1.5rem',
-                        display: 'flex',
-                        flexDirection: 'column',
-                        alignItems: 'flex-start',
-                        justifyContent: 'space-between',
-                        boxShadow: '0 12px 24px rgba(245, 87, 108, 0.2), inset 0 1px 1px rgba(255, 255, 255, 0.2)',
-                        color: 'white',
-                        transition: 'all 0.3s ease',
-                        cursor: 'pointer',
-                        border: '1px solid rgba(255, 255, 255, 0.15)',
-                        minHeight: '140px',
-                        position: 'relative',
-                        overflow: 'hidden'
-                    }}>
-                        <div style={{ 
-                            position: 'absolute',
-                            top: '-20px',
-                            right: '-20px',
-                            width: '80px',
-                            height: '80px',
-                            background: 'rgba(255, 255, 255, 0.1)',
-                            borderRadius: '50%'
-                        }}></div>
-                        <div style={{ position: 'relative', zIndex: 1 }}>
-                            <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" style={{ marginBottom: '0.5rem' }}>
-                                <polyline points="20 6 9 17 4 12" />
-                            </svg>
-                            <p style={{ fontSize: '0.75rem', fontWeight: 600, opacity: 0.85, margin: 0, letterSpacing: '0.5px', textTransform: 'uppercase' }}>Present Today</p>
-                        </div>
-                        <div style={{ fontSize: '2.2rem', fontWeight: 800, position: 'relative', zIndex: 1 }}>{stats.present}</div>
+                    <div className="stat-content">
+                        <p className="stat-label">Total Students</p>
+                        <h3 className="stat-value">{stats.total}</h3>
                     </div>
+                </div>
 
-                    {/* Absent Students Card */}
-                    <div style={{
-                        background: 'linear-gradient(135deg, #fa709a 0%, #fee140 100%)',
-                        borderRadius: '14px',
-                        padding: '1.5rem',
-                        display: 'flex',
-                        flexDirection: 'column',
-                        alignItems: 'flex-start',
-                        justifyContent: 'space-between',
-                        boxShadow: '0 12px 24px rgba(250, 112, 154, 0.2), inset 0 1px 1px rgba(255, 255, 255, 0.2)',
-                        color: 'white',
-                        transition: 'all 0.3s ease',
-                        cursor: 'pointer',
-                        border: '1px solid rgba(255, 255, 255, 0.15)',
-                        minHeight: '140px',
-                        position: 'relative',
-                        overflow: 'hidden'
-                    }}>
-                        <div style={{ 
-                            position: 'absolute',
-                            top: '-20px',
-                            right: '-20px',
-                            width: '80px',
-                            height: '80px',
-                            background: 'rgba(255, 255, 255, 0.1)',
-                            borderRadius: '50%'
-                        }}></div>
-                        <div style={{ position: 'relative', zIndex: 1 }}>
-                            <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" style={{ marginBottom: '0.5rem' }}>
-                                <circle cx="12" cy="12" r="10" />
-                                <line x1="15" y1="9" x2="9" y2="15" />
-                                <line x1="9" y1="9" x2="15" y2="15" />
-                            </svg>
-                            <p style={{ fontSize: '0.75rem', fontWeight: 600, opacity: 0.85, margin: 0, letterSpacing: '0.5px', textTransform: 'uppercase' }}>Absent</p>
-                        </div>
-                        <div style={{ fontSize: '2.2rem', fontWeight: 800, position: 'relative', zIndex: 1 }}>{stats.absent}</div>
+                {/* Present Today Card */}
+                <div className="att-stat-card present">
+                    <div className="stat-icon-bg">
+                        <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
+                            <polyline points="20 6 9 17 4 12" />
+                        </svg>
                     </div>
+                    <div className="stat-content">
+                        <p className="stat-label">Present Today</p>
+                        <h3 className="stat-value">{stats.present}</h3>
+                    </div>
+                </div>
 
-                    {/* Pending Action Card */}
-                    <div style={{
-                        background: 'linear-gradient(135deg, #a8edea 0%, #fed6e3 100%)',
-                        borderRadius: '14px',
-                        padding: '1.5rem',
-                        display: 'flex',
-                        flexDirection: 'column',
-                        alignItems: 'flex-start',
-                        justifyContent: 'space-between',
-                        boxShadow: '0 12px 24px rgba(168, 237, 234, 0.2), inset 0 1px 1px rgba(255, 255, 255, 0.3)',
-                        color: '#333',
-                        transition: 'all 0.3s ease',
-                        cursor: 'pointer',
-                        border: '1px solid rgba(255, 255, 255, 0.15)',
-                        minHeight: '140px',
-                        position: 'relative',
-                        overflow: 'hidden'
-                    }}>
-                        <div style={{ 
-                            position: 'absolute',
-                            top: '-20px',
-                            right: '-20px',
-                            width: '80px',
-                            height: '80px',
-                            background: 'rgba(255, 255, 255, 0.2)',
-                            borderRadius: '50%'
-                        }}></div>
-                        <div style={{ position: 'relative', zIndex: 1 }}>
-                            <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" style={{ marginBottom: '0.5rem' }}>
-                                <circle cx="12" cy="12" r="10" />
-                                <polyline points="12 6 12 12 16 14" />
-                            </svg>
-                            <p style={{ fontSize: '0.75rem', fontWeight: 600, opacity: 0.85, margin: 0, letterSpacing: '0.5px', textTransform: 'uppercase' }}>Unmarked</p>
-                        </div>
-                        <div style={{ fontSize: '2.2rem', fontWeight: 800, position: 'relative', zIndex: 1 }}>{stats.unmarked}</div>
+                {/* Absent Students Card */}
+                <div className="att-stat-card absent">
+                    <div className="stat-icon-bg">
+                        <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
+                            <circle cx="12" cy="12" r="10" />
+                            <line x1="15" y1="9" x2="9" y2="15" />
+                            <line x1="9" y1="9" x2="15" y2="15" />
+                        </svg>
+                    </div>
+                    <div className="stat-content">
+                        <p className="stat-label">Absent</p>
+                        <h3 className="stat-value">{stats.absent}</h3>
+                    </div>
+                </div>
+
+                {/* Pending Action Card */}
+                <div className="att-stat-card unmarked">
+                    <div className="stat-icon-bg">
+                        <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                            <circle cx="12" cy="12" r="10" />
+                            <polyline points="12 6 12 12 16 14" />
+                        </svg>
+                    </div>
+                    <div className="stat-content">
+                        <p className="stat-label">Unmarked</p>
+                        <h3 className="stat-value">{stats.unmarked}</h3>
                     </div>
                 </div>
             </div>
+        </div>
 
             {/* Stats Section */}
             <div className="attendance-content-area">
@@ -399,9 +303,9 @@ const TakeAttendance = () => {
             </div>
 
             {/* Main Content Area - Table and History Split View */}
-            <div style={{ display: 'flex', gap: '2rem', padding: '2rem 0', alignItems: 'flex-start' }}>
+            <div className="attendance-main-split">
                 {/* Left Side - Table */}
-                <div style={{ flex: 1, minWidth: 0 }}>
+                <div className="attendance-table-side">
                     <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.5rem', paddingBottom: '1rem', borderBottom: '2px solid var(--att-border)' }}>
                         <h2 style={{ fontSize: '1.3rem', fontWeight: 700, margin: 0, color: 'var(--att-text)' }}>
                             Student Attendance ({students.length})
@@ -562,7 +466,7 @@ const TakeAttendance = () => {
 
                 {/* Right Side - Update History */}
                 {logs.length > 0 && (
-                    <div style={{ flex: 1, minWidth: 0 }}>
+                    <div className="attendance-logs-side">
                         <h2 style={{ fontSize: '1.3rem', fontWeight: 700, margin: '0 0 1.5rem 0', paddingBottom: '1rem', borderBottom: '2px solid var(--att-border)', color: 'var(--att-text)' }}>
                             Update History
                         </h2>
@@ -757,7 +661,7 @@ const TakeAttendance = () => {
             )}
 
             {/* Absent Notes Modal */}
-        </>
+        </div>
     );
 };
 

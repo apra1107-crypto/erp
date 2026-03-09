@@ -132,48 +132,45 @@ export default function AddTeacher() {
       backgroundColor: theme.background,
     },
     header: {
-      backgroundColor: theme.card,
-      paddingTop: insets.top + 10,
-      paddingBottom: 15,
-      paddingHorizontal: 20,
       flexDirection: 'row',
       alignItems: 'center',
       justifyContent: 'space-between',
-      borderBottomWidth: 1,
-      borderBottomColor: theme.border,
-      zIndex: 10,
-      shadowColor: '#000',
-      shadowOffset: { width: 0, height: 2 },
-      shadowOpacity: isDark ? 0.2 : 0.05,
-      shadowRadius: 10,
-      elevation: 5,
+      marginBottom: 20,
+      paddingHorizontal: 20,
     },
     backButtonHeader: {
       padding: 8,
       borderRadius: 12,
-      backgroundColor: theme.background,
+      backgroundColor: theme.card,
+      borderWidth: 1,
+      borderColor: theme.border,
     },
     headerTitle: {
-      fontSize: 20,
+      fontSize: 22,
       fontWeight: '900',
       color: theme.text,
     },
     saveButtonHeader: {
-      paddingHorizontal: 16,
-      paddingVertical: 8,
-      borderRadius: 12,
+      paddingHorizontal: 20,
+      paddingVertical: 10,
+      borderRadius: 15,
       backgroundColor: theme.primary,
+      shadowColor: theme.primary,
+      shadowOffset: { width: 0, height: 4 },
+      shadowOpacity: 0.3,
+      shadowRadius: 8,
+      elevation: 4,
     },
     saveButtonText: {
       color: '#fff',
-      fontWeight: '800',
-      fontSize: 14,
+      fontWeight: '900',
+      fontSize: 15,
     },
     content: {
       flex: 1,
-      padding: 20,
     },
     section: {
+      paddingHorizontal: 20,
       marginBottom: 25,
     },
     sectionTitle: {
@@ -290,7 +287,8 @@ export default function AddTeacher() {
       borderRadius: 20,
       borderWidth: 1,
       borderColor: theme.border,
-      marginTop: 10,
+      marginHorizontal: 20,
+      marginBottom: 30,
     },
     switchLabel: {
       fontSize: 15,
@@ -300,6 +298,7 @@ export default function AddTeacher() {
     photoContainer: {
       alignItems: 'center',
       marginVertical: 20,
+      paddingHorizontal: 20,
     },
     photoButton: {
       width: 120,
@@ -330,28 +329,31 @@ export default function AddTeacher() {
 
   return (
     <View style={styles.container}>
-      <StatusBar barStyle={theme.statusBarStyle} backgroundColor={theme.card} translucent={true} />
+      <StatusBar barStyle={theme.statusBarStyle} backgroundColor="transparent" translucent={true} />
 
-      {/* Premium Header */}
-      <View style={styles.header}>
-        <TouchableOpacity style={styles.backButtonHeader} onPress={() => router.back()}>
-          <Ionicons name="chevron-back" size={24} color={theme.text} />
-        </TouchableOpacity>
-        <Text style={styles.headerTitle}>Add Teacher</Text>
-        <TouchableOpacity
-          style={[styles.saveButtonHeader, loading && { opacity: 0.7 }]}
-          onPress={handleSubmit}
-          disabled={loading}
-        >
-          {loading ? (
-            <ActivityIndicator size="small" color="#fff" />
-          ) : (
-            <Text style={styles.saveButtonText}>Save</Text>
-          )}
-        </TouchableOpacity>
-      </View>
-
-      <ScrollView style={styles.content} showsVerticalScrollIndicator={false} contentContainerStyle={{ paddingBottom: 40 }}>
+      <ScrollView 
+        style={styles.content} 
+        showsVerticalScrollIndicator={false} 
+        contentContainerStyle={{ paddingBottom: Math.max(40, insets.top + insets.bottom + 20), paddingTop: insets.top + 10 }}
+      >
+        {/* Free Flow Header */}
+        <View style={styles.header}>
+          <TouchableOpacity style={styles.backButtonHeader} onPress={() => router.back()}>
+            <Ionicons name="chevron-back" size={24} color={theme.text} />
+          </TouchableOpacity>
+          <Text style={styles.headerTitle}>Add Teacher</Text>
+          <TouchableOpacity
+            style={[styles.saveButtonHeader, loading && { opacity: 0.7 }]}
+            onPress={handleSubmit}
+            disabled={loading}
+          >
+            {loading ? (
+              <ActivityIndicator size="small" color="#fff" />
+            ) : (
+              <Text style={styles.saveButtonText}>Save</Text>
+            )}
+          </TouchableOpacity>
+        </View>
 
         <View style={styles.photoContainer}>
           <TouchableOpacity style={styles.photoButton} onPress={pickImage}>

@@ -28,7 +28,7 @@ const createAdminTable = async () => {
             // Create default admin with hashed password
             const salt = await bcrypt.genSalt(10);
             const hashedPassword = await bcrypt.hash('Atul1234567890', salt);
-
+j
             await pool.query(
                 'INSERT INTO admins (email, password, name) VALUES ($1, $2, $3)',
                 ['admin@klassin2023.com', hashedPassword, 'Super Admin']

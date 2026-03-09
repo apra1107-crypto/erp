@@ -2,7 +2,7 @@ import React, { useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import './Hero.css';
 
-const Hero = () => {
+const Hero = ({ onLoginClick }) => {
     const navigate = useNavigate();
 
     useEffect(() => {
@@ -28,11 +28,6 @@ const Hero = () => {
                 <div className="hero-grid">
                     {/* Left Content */}
                     <div className="hero-content-left">
-                        <div className="hero-eyebrow">
-                            <span className="eyebrow-dot"></span>
-                            <span>The New Standard in Education</span>
-                        </div>
-
                         <h1 className="hero-headline">
                             Manage your institute <br />
                             with <span className="headline-gradient">intelligent tools.</span>
@@ -44,8 +39,8 @@ const Hero = () => {
                         </p>
 
                         <div className="hero-cta-group">
-                            <button className="btn-primary">Start Free Trial</button>
-                            <button className="btn-secondary">View Demo</button>
+                            <button className="btn-primary" onClick={() => navigate('/register')}>Register</button>
+                            <button className="btn-secondary" onClick={onLoginClick}>Login</button>
                         </div>
                     </div>
 

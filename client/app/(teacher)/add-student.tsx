@@ -1,5 +1,5 @@
-import { useState, useMemo } from 'react';
-import { View, Text, StyleSheet, TextInput, TouchableOpacity, ScrollView, Switch, ActivityIndicator, Platform, StatusBar, Image, KeyboardAvoidingView } from 'react-native';
+import { useState, useMemo, useEffect } from 'react';
+import { View, Text, StyleSheet, TextInput, TouchableOpacity, ScrollView, ActivityIndicator, Platform, StatusBar, Image, KeyboardAvoidingView } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
 import * as ImagePicker from 'expo-image-picker';
@@ -10,6 +10,36 @@ import DateTimePicker from '@react-native-community/datetimepicker';
 import { Ionicons } from '@expo/vector-icons';
 import { useTheme } from '../../context/ThemeContext';
 import { API_ENDPOINTS } from '../../constants/Config';
+import Animated, { useSharedValue, useAnimatedStyle, withSpring, interpolateColor, withTiming } from 'react-native-reanimated';
+
+const ModernToggle = ({ value, onValueChange, activeColor }: { value: boolean, onValueChange: (v: boolean) => void, activeColor: string }) => {
+  const translateX = useSharedValue(value ? 20 : 0);
+  
+  useEffect(() => {
+    translateX.value = withSpring(value ? 22 : 2, { damping: 15, stiffness: 150 });
+  }, [value]);
+
+  const animatedThumbStyle = useAnimatedStyle(() => ({
+    transform: [{ translateX: translateX.value }]
+  }));
+
+  const animatedTrackStyle = useAnimatedStyle(() => {
+    const backgroundColor = interpolateColor(
+      translateX.value,
+      [2, 22],
+      ['#E9E9EB', activeColor]
+    );
+    return { backgroundColor };
+  });
+
+  return (
+    <TouchableOpacity activeOpacity={1} onPress={() => onValueChange(!value)}>
+      <Animated.View style={[{ width: 50, height: 28, borderRadius: 15, justifyContent: 'center', paddingHorizontal: 2 }, animatedTrackStyle]}>
+        <Animated.View style={[{ width: 24, height: 24, borderRadius: 12, backgroundColor: '#fff', elevation: 3, shadowColor: '#000', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.2, shadowRadius: 2 }, animatedThumbStyle]} />
+      </Animated.View>
+    </TouchableOpacity>
+  );
+};
 
 export default function AddStudent() {
   const router = useRouter();
@@ -30,6 +60,8 @@ export default function AddStudent() {
     email: '',
     address: '',
     transport_facility: false,
+    monthly_fees: '',
+    transport_fees: '',
   });
   const [photo, setPhoto] = useState<any>(null);
 
@@ -65,11 +97,12 @@ export default function AddStudent() {
   const handleSubmit = async () => {
     if (!formData.name || !formData.class || !formData.section || !formData.roll_no ||
       !formData.gender || !formData.father_name || !formData.mother_name ||
-      !formData.mobile || !formData.email || !formData.address) {
+      !formData.mobile || !formData.email || !formData.address || !formData.monthly_fees ||
+      (formData.transport_facility && !formData.transport_fees)) {
       Toast.show({
         type: 'error',
         text1: 'Error',
-        text2: 'Please fill all required fields',
+        text2: 'Please fill all required fields, including fees',
       });
       return;
     }
@@ -91,6 +124,8 @@ export default function AddStudent() {
       formDataToSend.append('email', formData.email);
       formDataToSend.append('address', formData.address);
       formDataToSend.append('transport_facility', String(formData.transport_facility));
+      formDataToSend.append('monthly_fees', formData.monthly_fees || '0');
+      formDataToSend.append('transport_fees', formData.transport_facility ? (formData.transport_fees || '0') : '0');
 
       if (photo) {
         const photoFile: any = {
@@ -139,42 +174,51 @@ export default function AddStudent() {
       backgroundColor: theme.background,
     },
     header: {
-      backgroundColor: theme.card,
       paddingTop: insets.top + 10,
-      paddingBottom: 15,
+      paddingBottom: 10,
       paddingHorizontal: 20,
       flexDirection: 'row',
       alignItems: 'center',
       justifyContent: 'space-between',
-      borderBottomWidth: 1,
-      borderBottomColor: theme.border,
       zIndex: 10,
-      shadowColor: '#000',
-      shadowOffset: { width: 0, height: 2 },
-      shadowOpacity: isDark ? 0.2 : 0.05,
-      shadowRadius: 10,
-      elevation: 5,
     },
     backButtonHeader: {
-      padding: 8,
-      borderRadius: 12,
-      backgroundColor: theme.background,
+      width: 40, 
+      height: 40, 
+      borderRadius: 20, 
+      backgroundColor: theme.card, 
+      justifyContent: 'center', 
+      alignItems: 'center', 
+      marginRight: 15,
+      elevation: 2,
+      shadowColor: '#000',
+      shadowOffset: { width: 0, height: 2 },
+      shadowOpacity: 0.1,
+      shadowRadius: 4,
     },
     headerTitle: {
-      fontSize: 20,
+      fontSize: 24,
       fontWeight: '900',
       color: theme.text,
+      letterSpacing: -0.5,
     },
     saveButtonHeader: {
-      paddingHorizontal: 16,
-      paddingVertical: 8,
-      borderRadius: 12,
+      paddingHorizontal: 20,
+      paddingVertical: 10,
+      borderRadius: 15,
       backgroundColor: theme.primary,
+      elevation: 4,
+      shadowColor: theme.primary,
+      shadowOffset: { width: 0, height: 4 },
+      shadowOpacity: 0.3,
+      shadowRadius: 8,
     },
     saveButtonText: {
       color: '#fff',
-      fontWeight: '800',
+      fontWeight: '900',
       fontSize: 14,
+      textTransform: 'uppercase',
+      letterSpacing: 0.5,
     },
     content: {
       flex: 1,
@@ -338,14 +382,16 @@ export default function AddStudent() {
 
   return (
     <View style={styles.container}>
-      <StatusBar barStyle={theme.statusBarStyle} backgroundColor={theme.card} translucent={true} />
+      <StatusBar barStyle={theme.statusBarStyle} backgroundColor="transparent" translucent={true} />
 
       {/* Premium Header */}
       <View style={styles.header}>
-        <TouchableOpacity style={styles.backButtonHeader} onPress={() => router.back()}>
-          <Ionicons name="chevron-back" size={24} color={theme.text} />
-        </TouchableOpacity>
-        <Text style={styles.headerTitle}>Add Student</Text>
+        <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+          <TouchableOpacity style={styles.backButtonHeader} onPress={() => router.back()}>
+            <Ionicons name="chevron-back" size={22} color={theme.text} />
+          </TouchableOpacity>
+          <Text style={styles.headerTitle}>Add Student</Text>
+        </View>
         <TouchableOpacity
           style={[styles.saveButtonHeader, loading && { opacity: 0.7 }]}
           onPress={handleSubmit}
@@ -560,13 +606,54 @@ export default function AddStudent() {
           </View>
 
           <View style={styles.switchContainer}>
-            <Text style={styles.switchLabel}>Transport Facility</Text>
-            <Switch
+            <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+              <View style={{ width: 36, height: 36, borderRadius: 10, backgroundColor: theme.primary + '10', justifyContent: 'center', alignItems: 'center', marginRight: 12 }}>
+                <Ionicons name="bus-outline" size={20} color={theme.primary} />
+              </View>
+              <Text style={styles.switchLabel}>Transport Facility</Text>
+            </View>
+            <ModernToggle
               value={formData.transport_facility}
               onValueChange={(value) => setFormData({ ...formData, transport_facility: value })}
-              trackColor={{ false: '#ddd', true: theme.primary }}
-              thumbColor={Platform.OS === 'ios' ? undefined : '#fff'}
+              activeColor={theme.primary}
             />
+          </View>
+
+          <View style={[styles.section, { marginTop: 25 }]}>
+            <Text style={styles.sectionTitle}>Fees Information</Text>
+            <View style={styles.inputCard}>
+              <View style={styles.inputGroup}>
+                <Text style={styles.label}>Monthly Tuition Fees *</Text>
+                <View style={styles.inputWrapper}>
+                  <Ionicons name="cash-outline" size={20} color={theme.primary} style={styles.inputIcon} />
+                  <TextInput
+                    style={styles.input}
+                    placeholder="e.g. 1500"
+                    placeholderTextColor={theme.textLight}
+                    keyboardType="numeric"
+                    value={formData.monthly_fees}
+                    onChangeText={(text) => setFormData({ ...formData, monthly_fees: text })}
+                  />
+                </View>
+              </View>
+
+              {formData.transport_facility && (
+                <View style={styles.inputGroup}>
+                  <Text style={styles.label}>Monthly Transport Fees *</Text>
+                  <View style={styles.inputWrapper}>
+                    <Ionicons name="bus-outline" size={20} color={theme.primary} style={styles.inputIcon} />
+                    <TextInput
+                      style={styles.input}
+                      placeholder="e.g. 500"
+                      placeholderTextColor={theme.textLight}
+                      keyboardType="numeric"
+                      value={formData.transport_fees}
+                      onChangeText={(text) => setFormData({ ...formData, transport_fees: text })}
+                    />
+                  </View>
+                </View>
+              )}
+            </View>
           </View>
 
           {showDatePicker && (

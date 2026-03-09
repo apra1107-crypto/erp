@@ -43,9 +43,10 @@ export default function PrincipalClassHomework() {
         try {
             setLoading(true);
             const token = await AsyncStorage.getItem('token');
+            const storedSessionId = await AsyncStorage.getItem('selectedSessionId');
             const data = await AsyncStorage.getItem('userData');
             const parsedData = data ? JSON.parse(data) : null;
-            const sessionId = parsedData?.current_session_id;
+            const sessionId = storedSessionId || (parsedData ? parsedData.current_session_id : null);
             const dateStr = selectedDate.toISOString().split('T')[0];
 
             const response = await axios.get(
@@ -81,9 +82,10 @@ export default function PrincipalClassHomework() {
         try {
             setSaving(true);
             const token = await AsyncStorage.getItem('token');
+            const storedSessionId = await AsyncStorage.getItem('selectedSessionId');
             const data = await AsyncStorage.getItem('userData');
             const parsedData = data ? JSON.parse(data) : null;
-            const sessionId = parsedData?.current_session_id;
+            const sessionId = storedSessionId || (parsedData ? parsedData.current_session_id : null);
 
             if (editingId) {
                 await axios.put(
@@ -180,7 +182,18 @@ export default function PrincipalClassHomework() {
         timeText: { fontSize: 11, color: theme.textLight, fontWeight: '700' },
         countBox: { flexDirection: 'row', alignItems: 'center', backgroundColor: theme.primary + '10', paddingVertical: 6, paddingHorizontal: 10, borderRadius: 10, gap: 5 },
         countText: { fontSize: 12, fontWeight: '900', color: theme.primary },
-        fab: { position: 'absolute', bottom: 30, right: 20, width: 60, height: 60, borderRadius: 30, backgroundColor: theme.primary, justifyContent: 'center', alignItems: 'center', elevation: 8 },
+        fab: { 
+            position: 'absolute', 
+            bottom: Math.max(30, insets.bottom + 10), 
+            right: 20, 
+            width: 60, 
+            height: 60, 
+            borderRadius: 30, 
+            backgroundColor: theme.primary, 
+            justifyContent: 'center', 
+            alignItems: 'center', 
+            elevation: 8 
+        },
         sheetOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.5)', justifyContent: 'flex-end' },
         sheetContent: { backgroundColor: theme.card, borderTopLeftRadius: 35, borderTopRightRadius: 35, height: SCREEN_HEIGHT * 0.7, padding: 20 },
         sheetHeader: { alignItems: 'center', marginBottom: 20 },
@@ -200,7 +213,14 @@ export default function PrincipalClassHomework() {
         studentRoll: { fontSize: 12, color: theme.textLight, fontWeight: '600', marginTop: 2 },
         doneTime: { fontSize: 10, color: theme.success, fontWeight: '700' },
         modalOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.5)', justifyContent: 'flex-end' },
-        modalContent: { backgroundColor: theme.card, borderTopLeftRadius: 35, borderTopRightRadius: 35, padding: 25, maxHeight: '80%' },
+        modalContent: { 
+            backgroundColor: theme.card, 
+            borderTopLeftRadius: 35, 
+            borderTopRightRadius: 35, 
+            padding: 25, 
+            paddingBottom: Math.max(25, insets.bottom + 10),
+            maxHeight: '80%' 
+        },
         input: { backgroundColor: theme.background, borderRadius: 15, padding: 15, color: theme.text, fontSize: 16, borderWidth: 1, borderColor: theme.border, marginBottom: 20 },
         saveBtn: { backgroundColor: theme.primary, height: 55, borderRadius: 18, justifyContent: 'center', alignItems: 'center' },
         emptyBox: { alignItems: 'center', marginTop: 80 },

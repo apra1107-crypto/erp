@@ -1,0 +1,218 @@
+.homework-hub-container {
+    padding: 1rem 2rem;
+    max-width: 100%;
+    margin: 0;
+    animation: hubFadeIn 0.5s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+@keyframes hubFadeIn {
+    from { opacity: 0; transform: translateY(10px); }
+    to { opacity: 1; transform: translateY(0); }
+}
+
+.hub-header {
+    margin-bottom: 2rem;
+    text-align: left;
+    border-bottom: 1px solid var(--border-color);
+    padding-bottom: 1rem;
+}
+
+.hub-header-top {
+    display: flex;
+    align-items: center;
+    gap: 1rem;
+    margin-bottom: 0.25rem;
+}
+
+.hub-back-btn {
+    background: transparent;
+    border: none;
+    color: var(--text-light);
+    width: 32px;
+    height: 32px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    transition: color 0.2s ease;
+    padding: 0;
+    margin-top: 12px;
+    box-shadow: none !important;
+    outline: none !important;
+    filter: none !important;
+}
+
+.hub-back-btn:hover {
+    color: var(--primary-color);
+}
+
+.hub-header h1 {
+    font-size: 1.75rem;
+    font-weight: 800;
+    color: #1e293b !important;
+    margin: 0;
+    letter-spacing: -0.5px;
+}
+
+.theme-dark .hub-header h1 {
+    color: #f8fafc !important;
+}
+
+.hub-header p {
+    font-size: 0.9rem;
+    color: var(--text-light);
+    font-weight: 600;
+    margin-left: 3rem;
+}
+
+.class-grid-hub {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
+    gap: 1.5rem;
+}
+
+.hub-class-card {
+    background: var(--card-bg);
+    border: 1px solid var(--border-color);
+    border-radius: 24px;
+    padding: 1.5rem;
+    transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+    box-shadow: var(--shadow-sm);
+    display: flex;
+    flex-direction: column;
+    gap: 1.5rem;
+}
+
+.hub-class-card:hover {
+    transform: translateY(-5px);
+    box-shadow: var(--shadow-md);
+    border-color: var(--primary-color);
+}
+
+.hub-card-header {
+    display: flex;
+    align-items: center;
+    gap: 1rem;
+}
+
+.hub-class-badge {
+    width: 48px;
+    height: 48px;
+    background: rgba(59, 130, 246, 0.1);
+    border-radius: 14px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 1.3rem;
+    font-weight: 900;
+    color: var(--primary-color);
+    transition: all 0.3s ease;
+}
+
+.hub-class-card:hover .hub-class-badge {
+    background: var(--primary-color);
+    color: white;
+}
+
+.hub-card-header h3 {
+    font-size: 1.25rem;
+    font-weight: 800;
+    color: var(--text-color);
+}
+
+.hub-sections-row {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(100px, 1fr));
+    gap: 0.8rem;
+}
+
+.hub-section-btn {
+    padding: 0.7rem;
+    background: var(--bg-color);
+    border: 1px solid var(--border-color);
+    border-radius: 12px;
+    color: var(--text-color);
+    font-weight: 700;
+    font-size: 0.9rem;
+    cursor: pointer;
+    transition: all 0.2s;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.hub-section-btn:hover {
+    background: var(--primary-color);
+    color: white;
+    border-color: var(--primary-color);
+}
+
+@media (min-width: 1400px) {
+    .class-grid-hub {
+        grid-template-columns: repeat(4, 1fr);
+    }
+}
+
+@media (min-width: 1800px) {
+    .class-grid-hub {
+        grid-template-columns: repeat(5, 1fr);
+    }
+}
+
+.hub-empty-state {
+    grid-column: 1 / -1;
+    text-align: center;
+    padding: 5rem 2rem;
+    background: var(--card-bg);
+    border: 2px dashed var(--border-color);
+    border-radius: 28px;
+}
+
+.empty-icon {
+    font-size: 4.5rem;
+    margin-bottom: 1.5rem;
+}
+
+.hub-empty-state h3 {
+    font-size: 1.8rem;
+    font-weight: 800;
+    color: var(--text-color);
+    margin-bottom: 0.8rem;
+}
+
+.hub-empty-state p {
+    font-size: 1.1rem;
+    color: var(--text-light);
+    font-weight: 600;
+}
+
+.homework-loading {
+    height: 100%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 1.2rem;
+    font-weight: 700;
+    color: var(--primary-color);
+    animation: pulse 1.5s infinite;
+}
+
+@keyframes pulse {
+    0% { opacity: 0.6; }
+    50% { opacity: 1; }
+    100% { opacity: 0.6; }
+}
+
+@media (max-width: 640px) {
+    .homework-hub-container {
+        padding: 1.5rem;
+    }
+    
+    .hub-header h1 {
+        font-size: 1.8rem;
+    }
+    
+    .class-grid-hub {
+        grid-template-columns: 1fr;
+    }
+}

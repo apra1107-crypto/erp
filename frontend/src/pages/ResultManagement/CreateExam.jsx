@@ -1,11 +1,16 @@
 import React, { useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useLocation } from 'react-router-dom';
 import axios from 'axios';
 import { toast } from 'react-toastify';
+import { BASE_URL } from '../../config';
 import './ResultDashboard.css';
 
 const CreateExam = () => {
     const navigate = useNavigate();
+    const location = useLocation();
+    const isTeacher = location.pathname.startsWith('/teacher-dashboard');
+    const basePath = isTeacher ? '/teacher-dashboard' : '/dashboard';
+
     const [formData, setFormData] = useState({
         name: '',
         session: new Date().getFullYear().toString(),
@@ -51,12 +56,12 @@ const CreateExam = () => {
                 manual_stats: { class_topper_name: '', class_topper_marks: '', section_topper_name: '', section_topper_marks: '' }
             };
 
-            await axios.post('http://localhost:5000/api/exam/create', payload, {
+            await axios.post(`${BASE_URL}/api/exam/create`, payload, {
                 headers: { Authorization: `Bearer ${token}` }
             });
 
             toast.success('Marksheet Blueprint Created!');
-            navigate('/dashboard/results');
+            navigate(`${basePath}/results`);
         } catch (error) {
             console.error(error);
             toast.error('Failed to create blueprint');
@@ -67,7 +72,7 @@ const CreateExam = () => {
         <div className="result-dashboard">
             <div className="rd-header">
                 <h2>Create New Marksheet Blueprint</h2>
-                <button className="btn-view" onClick={() => navigate('/dashboard/results')}>Cancel</button>
+                <button className="btn-view" onClick={() => navigate(`${basePath}/results`)}>Cancel</button>
             </div>
 
             <form onSubmit={handleSubmit} style={{ background: 'white', padding: '30px', borderRadius: '12px', maxWidth: '800px', margin: '0 auto' }}>

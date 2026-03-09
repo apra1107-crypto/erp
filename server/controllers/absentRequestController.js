@@ -188,9 +188,19 @@ const approveRequest = async (req, res) => {
 
         const { id } = req.params;
 
-        // Get teacher name
-        const teacherResult = await pool.query('SELECT name FROM teachers WHERE id = $1', [teacherId]);
-        const teacherName = teacherResult.rows[0]?.name || 'Unknown';
+        // Get approver name and ID
+        let approverName = 'Unknown';
+        let approverTeacherId = teacherId;
+
+        if (req.user.role === 'principal' || !req.user.institute_id) {
+            const principalResult = await pool.query('SELECT principal_name FROM institutes WHERE id = $1', [instituteId]);
+            approverName = principalResult.rows[0]?.principal_name || 'Principal';
+            approverTeacherId = null;
+        } else {
+            const teacherResult = await pool.query('SELECT name FROM teachers WHERE id = $1', [teacherId]);
+            approverName = teacherResult.rows[0]?.name || 'Unknown';
+            approverTeacherId = teacherId;
+        }
 
         // Get request details
         const requestResult = await pool.query(
@@ -213,7 +223,7 @@ const approveRequest = async (req, res) => {
             `UPDATE absent_requests 
        SET status = 'approved', approved_by_teacher_id = $1, approved_by_teacher_name = $2, approved_at = NOW() 
        WHERE id = $3 AND session_id = $4`,
-            [teacherId, teacherName, id, sessionId]
+            [approverTeacherId, approverName, id, sessionId]
         );
 
         // Mark student absent in attendance table
@@ -222,7 +232,7 @@ const approveRequest = async (req, res) => {
        VALUES ($1, $2, $3, $4, $5, $6, 'absent', NOW(), $7)
        ON CONFLICT (student_id, date, session_id) 
        DO UPDATE SET status = 'absent', teacher_id = $2, updated_at = NOW()`,
-            [instituteId, teacherId, request.student_id, request.class, request.section, request.date, sessionId]
+            [instituteId, approverTeacherId, request.student_id, request.class, request.section, request.date, sessionId]
         );
 
         res.status(200).json({ message: 'Request approved and student marked absent' });

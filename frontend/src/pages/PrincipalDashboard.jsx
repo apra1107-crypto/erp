@@ -12,31 +12,157 @@ import DashboardOverview from './DashboardOverview';
 import Attendance from './Attendance';
 import TakeAttendance from './TakeAttendance';
 import SubscriptionPage from './SubscriptionPage';
-import Fees from './Fees';
+import Stats from './Stats';
 import Routine from './Routine';
 import AdmitCard from './AdmitCard';
 import IDCardView from './IDCardView';
+import Fees from './Fees';
+import Transport from './Transport';
+import RouteManagement from './RouteManagement';
+import LiveTracking from './LiveTracking';
+import HomeworkHub from './HomeworkHub';
+import ClassHomework from './ClassHomework';
 import ResultDashboard from './ResultManagement/ResultDashboard';
 import CreateExam from './ResultManagement/CreateExam';
 import DataEntryGrid from './ResultManagement/DataEntryGrid';
 import ReportCardPage from './ResultManagement/ReportCardPage';
 import { useTheme } from '../context/ThemeContext';
 
+// Import Icons
+import studentIcon from '../assets/icons/student.png';
+import dashboardIcon from '../assets/icons/layout.png';
+import teacherIcon from '../assets/icons/teacher.png';
+import attendanceIcon from '../assets/icons/attendance.png';
+import admitCardIcon from '../assets/icons/id-card (1).png';
+import idCardIcon from '../assets/icons/id-card.png';
+import feesIcon from '../assets/icons/rupee.png';
+import resultsIcon from '../assets/icons/results.png';
+import subscriptionIcon from '../assets/icons/cash-payment.png';
+import statsIcon from '../assets/icons/statistics.png';
+import transportIcon from '../assets/icons/school-bus.png';
+
 const PrincipalDashboard = () => {
     const navigate = useNavigate();
     const location = useLocation();
 
     // State Management
-    const [subStatus, setSubStatus] = useState('active');
+    const [subStatus, setSubStatus] = useState('loading');
     const [subData, setSubData] = useState(null);
     const [isLoadingSub, setIsLoadingSub] = useState(true);
     const [userData, setUserData] = useState(null);
     const [profileData, setProfileData] = useState(null);
-    const [isSidebarOpen, setIsSidebarOpen] = useState(false);
+    const [isCollapsed, setIsCollapsed] = useState(false);
     const [showProfilePopup, setShowProfilePopup] = useState(false);
     const [showProfileModal, setShowProfileModal] = useState(false);
+    
+    // Session States
+    const [sessions, setSessions] = useState([]);
+    const [selectedSessionId, setSelectedSessionId] = useState(null);
+    const [isAddingSession, setIsAddingSession] = useState(false);
+    const [newSessionName, setNewSessionName] = useState('');
+    const [editingSessionId, setEditingSessionId] = useState(null);
+
     const { theme, toggleTheme } = useTheme();
     const profilePopupRef = useRef(null);
+    const sidebarRef = useRef(null);
+
+    const fetchSessions = async () => {
+        try {
+            const token = localStorage.getItem('token');
+            const storedSessionId = localStorage.getItem('selectedSessionId');
+            const headers = { Authorization: `Bearer ${token}` };
+            if (storedSessionId) headers['x-academic-session-id'] = storedSessionId;
+
+            const response = await axios.get(API_ENDPOINTS.ACADEMIC_SESSIONS, { headers });
+            setSessions(response.data);
+            if (storedSessionId) {
+                setSelectedSessionId(Number(storedSessionId));
+            } else {
+                const active = response.data.find(s => s.is_active);
+                if (active) {
+                    setSelectedSessionId(active.id);
+                    localStorage.setItem('selectedSessionId', active.id);
+                }
+            }
+        } catch (error) {
+            console.error('Error fetching sessions:', error);
+        }
+    };
+
+    const handleAddSession = async () => {
+        if (!newSessionName.trim()) return;
+        try {
+            const token = localStorage.getItem('token');
+            const storedSessionId = localStorage.getItem('selectedSessionId');
+            const headers = { Authorization: `Bearer ${token}` };
+            if (storedSessionId) headers['x-academic-session-id'] = storedSessionId;
+
+            await axios.post(API_ENDPOINTS.ACADEMIC_SESSIONS, { name: newSessionName }, { headers });
+            setNewSessionName('');
+            setIsAddingSession(false);
+            fetchSessions();
+            toast.success('New session added successfully');
+        } catch (error) {
+            toast.error('Failed to add session');
+        }
+    };
+
+    const handleUpdateSession = async (id, name, isActive = false) => {
+        try {
+            const token = localStorage.getItem('token');
+            await axios.put(`${API_ENDPOINTS.ACADEMIC_SESSIONS}/${id}`, { name, is_active: isActive }, {
+                headers: { 
+                    Authorization: `Bearer ${token}`,
+                    'x-academic-session-id': id.toString()
+                }
+            });
+            localStorage.setItem('selectedSessionId', id);
+            setSelectedSessionId(id);
+            setEditingSessionId(null);
+            toast.success('Session updated');
+            window.location.reload(); // Reload to refresh all data with new session header
+        } catch (error) {
+            toast.error('Failed to update session');
+        }
+    };
+
+    const handleDeleteSession = async (id, name) => {
+        if (!window.confirm(`Are you sure you want to delete session "${name}"?`)) return;
+        try {
+            const token = localStorage.getItem('token');
+            await axios.delete(`${API_ENDPOINTS.ACADEMIC_SESSIONS}/${id}`, {
+                headers: { Authorization: `Bearer ${token}` }
+            });
+            fetchSessions();
+            toast.success('Session deleted');
+        } catch (error) {
+            toast.error('Failed to delete session');
+        }
+    };
+    
+    // Refs to avoid stale closures in socket listener
+    const subStatusRef = useRef(subStatus);
+    const locationRef = useRef(location);
+
+    useEffect(() => {
+        subStatusRef.current = subStatus;
+        locationRef.current = location;
+    }, [subStatus, location]);
+
+    // Handle Click Outside Sidebar to Collapse
+    // Handle Click Outside Sidebar to Collapse
+    useEffect(() => {
+        const handleClickOutsideSidebar = (event) => {
+            if (!isCollapsed && sidebarRef.current && !sidebarRef.current.contains(event.target)) {
+                setIsCollapsed(true);
+            }
+        };
+
+        document.addEventListener('mousedown', handleClickOutsideSidebar);
+        return () => {
+            document.removeEventListener('mousedown', handleClickOutsideSidebar);
+        };
+    }, [isCollapsed]);
 
     // Handle Click Outside Profile Popup
     useEffect(() => {
@@ -76,6 +202,15 @@ const PrincipalDashboard = () => {
             const userType = localStorage.getItem('userType');
             if (userType !== 'principal') {
                 navigate('/');
+                return;
+            }
+
+            // Fetch latest data once we have the ID from storage
+            if (parsedData.id) {
+                checkSubscription(parsedData.id);
+                joinInstituteRoom(parsedData.id);
+                fetchProfile();
+                fetchSessions();
             }
         } catch (error) {
             console.error('Error loading user data:', error);
@@ -89,76 +224,94 @@ const PrincipalDashboard = () => {
     }, []);
 
     const fetchProfile = async () => {
+        console.log("DEBUG: Fetching Principal Profile...");
         try {
             const token = localStorage.getItem('token');
-            const response = await axios.get(`${API_ENDPOINTS.PRINCIPAL}/profile`, {
-                headers: { Authorization: `Bearer ${token}` }
-            });
+            const storedSessionId = localStorage.getItem('selectedSessionId');
+            const headers = { Authorization: `Bearer ${token}` };
+            if (storedSessionId) headers['x-academic-session-id'] = storedSessionId;
+
+            const response = await axios.get(`${API_ENDPOINTS.PRINCIPAL}/profile`, { headers });
+            console.log("DEBUG: Profile response received");
             setProfileData(response.data.profile);
-            setUserData(response.data.profile);
+            // DO NOT call setUserData(response.data.profile) here if it triggers an effect
+            // Instead, just update storage and profileData
             localStorage.setItem('userData', JSON.stringify(response.data.profile));
         } catch (error) {
-            console.error('Fetch profile error:', error);
+            console.error('DEBUG: Fetch profile error:', error);
         }
     };
 
     useEffect(() => {
-        if (userData?.id) {
-            checkSubscription(userData.id);
+        if (!userData?.id) return;
+
+        const handleJoinRoom = () => {
+            console.log("DEBUG: Joining institute room:", userData.id);
             joinInstituteRoom(userData.id);
-            fetchProfile();
-        }
+        };
 
-        // Re-join on reconnect
-        socket.on('connect', () => {
-            if (userData?.id) joinInstituteRoom(userData.id);
-        });
+        if (socket.connected) handleJoinRoom();
+        socket.on('connect', handleJoinRoom);
 
-        // Listen for real-time subscription updates
         socket.on('subscription_update', (data) => {
-            console.log('Real-time sub update:', data);
-            setSubStatus(data.status);
-            if (data.settings) {
-                setSubData(prev => ({ ...prev, ...data.settings, status: data.status }));
-            }
+            console.log('Real-time sync received:', data);
+            if (data.status) {
+                const currentStatus = subStatusRef.current;
+                const wasLocked = currentStatus === 'expired' || currentStatus === 'disabled' || currentStatus === 'loading';
+                const isNowLocked = data.status === 'expired' || data.status === 'disabled';
+                
+                // Update State
+                setSubStatus(data.status);
+                if (data.settings) {
+                    setSubData(prev => ({ ...prev, ...data.settings, status: data.status }));
+                }
 
-            if (data.status === 'disabled') {
-                toast.error('Your institute access has been revoked by the administrator.');
-            } else if (data.status === 'active') {
-                toast.success('Your subscription is now Active!');
-            } else if (data.status === 'grant') {
-                toast.success('Special Access Granted by Admin!');
-            } else if (data.status === 'expired') {
-                toast.warning('Subscription Expired.');
+                // Immediate Transitions & Feedback
+                if (wasLocked && !isNowLocked) {
+                    toast.success(data.status === 'grant' ? 'Special Access Granted!' : 'Subscription Activated!');
+                    // Redirect if on restricted view
+                    const currentPath = locationRef.current.pathname;
+                    if (currentPath === '/dashboard/subscription' || currentPath === '/dashboard') {
+                        navigate('/dashboard');
+                    }
+                } else if (!wasLocked && isNowLocked) {
+                    toast.warning(data.status === 'disabled' ? 'Account Disabled by Admin' : 'Subscription Expired');
+                    // Only redirect if NOT on an already allowed path (like the dashboard)
+                    if (!allowedPaths.includes(locationRef.current.pathname)) {
+                        navigate('/dashboard/subscription');
+                    }
+                } else if (data.status === 'grant' && currentStatus === 'active') {
+                    toast.info('Switched to Special Access mode');
+                } else if (data.status === 'active' && currentStatus === 'grant') {
+                    toast.success('Subscription plan is now active');
+                }
             }
         });
 
         return () => {
-            socket.off('connect');
+            socket.off('connect', handleJoinRoom);
             socket.off('subscription_update');
         };
-    }, [userData]);
+    }, [userData?.id]);
 
-    const checkSubscription = async (instituteId) => {
+    const checkSubscription = async (instId) => {
+        const idToUse = instId || userData?.id || localStorage.getItem('instituteId');
+        if (!idToUse) {
+            setIsLoadingSub(false);
+            return;
+        }
+        console.log("DEBUG: Force Refreshing Subscription for:", idToUse);
         try {
             const token = localStorage.getItem('token');
-            const response = await axios.get(`${API_ENDPOINTS.SUBSCRIPTION}/${instituteId}/status`, {
+            const response = await axios.get(`${API_ENDPOINTS.SUBSCRIPTION}/${idToUse}/status`, {
                 headers: { Authorization: `Bearer ${token}` }
             });
-            // Status response includes ss.* and calculated status
+            console.log("DEBUG: Refresh response:", response.data.status);
             setSubStatus(response.data.status);
             setSubData(response.data);
-
-            // If disabled/expired, confirm we are not on permitted pages
-            const status = response.data.status;
-            if (status === 'disabled' || status === 'expired') {
-                if (location.pathname !== '/dashboard/subscription' && location.pathname !== '/dashboard') {
-                    // Optional: redirect to subscription immediately?
-                    // navigate('/dashboard/subscription'); // Let's not force redirect abruptly, just show locks
-                }
-            }
+            return response.data;
         } catch (error) {
-            console.error('Error checking subscription:', error);
+            console.error('DEBUG: Error checking subscription:', error);
         } finally {
             setIsLoadingSub(false);
         }
@@ -201,59 +354,46 @@ const PrincipalDashboard = () => {
         localStorage.setItem('userData', JSON.stringify(newUserData));
     };
 
-    const isLocked = subStatus === 'expired' || subStatus === 'disabled';
+    const isLocked = subStatus === 'expired' || subStatus === 'disabled' || subStatus === 'loading';
+
+    console.log("RENDER: PrincipalDashboard", { subStatus, subData, userData, profileData, isLocked, path: location.pathname });
 
     // Define what is allowed when locked
     const allowedPaths = ['/dashboard', '/dashboard/subscription'];
 
     const handleNavClick = (path) => {
-        if (isLocked && path !== '/dashboard/subscription') {
+        if (isLocked && !allowedPaths.includes(path)) {
             toast.warning(subStatus === 'disabled'
                 ? 'Institute account disabled. Please contact admin.'
-                : 'Subscription expired. Redirecting to billing...');
-            navigate('/dashboard/subscription');
+                : 'Subscription expired. Please renew to access this feature.');
+            if (location.pathname !== '/dashboard/subscription') {
+                navigate('/dashboard/subscription');
+            }
         } else {
             navigate(path);
-        }
-        if (window.innerWidth <= 1024) {
-            setIsSidebarOpen(false);
         }
     };
 
     const navigationItems = [
-        { name: 'Dashboard', path: '/dashboard', icon: <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><rect x="3" y="3" width="7" height="7" /><rect x="14" y="3" width="7" height="7" /><rect x="14" y="14" width="7" height="7" /><rect x="3" y="14" width="7" height="7" /></svg> },
-        { name: 'Students', path: '/dashboard/students', icon: <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2" /><circle cx="9" cy="7" r="4" /><path d="M23 21v-2a4 4 0 0 0-3-3.87" /><path d="M16 3.13a4 4 0 0 1 0 7.75" /></svg> },
-        { name: 'Teachers', path: '/dashboard/teachers', icon: <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M16 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2" /><circle cx="8.5" cy="7" r="4" /><line x1="18" y1="8" x2="23" y2="13" /><line x1="23" y1="8" x2="18" y2="13" /></svg> },
-        { name: 'Attendance', path: '/dashboard/attendance', icon: <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14" /><polyline points="22 4 12 14.01 9 11.01" /></svg> },
-        { name: 'Fees', path: '/dashboard/fees', icon: <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><rect x="2" y="5" width="20" height="14" rx="2" /><line x1="2" y1="10" x2="22" y2="10" /></svg> },
-        { name: 'Transport', path: '/dashboard/transport', icon: <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><rect x="3" y="11" width="18" height="6" rx="2" /><circle cx="7" cy="17" r="2" /><circle cx="17" cy="17" r="2" /><path d="M4 11V6a2 2 0 0 1 2-2h12a2 2 0 0 1 2 2v5" /></svg> },
-        { name: 'Certificates', path: '/dashboard/certificates', icon: <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20" /><path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z" /></svg> },
-        { name: 'Admit Card', path: '/dashboard/admit-card', icon: <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><rect x="3" y="4" width="18" height="16" rx="2" /><line x1="7" y1="8" x2="17" y2="8" /><line x1="7" y1="12" x2="17" y2="12" /><line x1="7" y1="16" x2="13" y2="16" /></svg> },
-        { name: 'Identity Card', path: '/dashboard/id-card', icon: <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><rect x="3" y="4" width="18" height="16" rx="2" /><path d="M7 21v-2a4 4 0 0 1 4-4h2a4 4 0 0 1 4 4v2" /><circle cx="12" cy="7" r="4" /></svg> },
-        { name: 'Results', path: '/dashboard/results', icon: <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path><polyline points="14 2 14 8 20 8"></polyline><line x1="16" y1="13" x2="8" y2="13"></line><line x1="16" y1="17" x2="8" y2="17"></line><polyline points="10 9 9 9 8 9"></polyline></svg> },
-        { name: 'Routine', path: '/dashboard/routine', icon: <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><rect x="3" y="4" width="18" height="18" rx="2" ry="2" /><line x1="16" y1="2" x2="16" y2="6" /><line x1="8" y1="2" x2="8" y2="6" /><line x1="3" y1="10" x2="21" y2="10" /></svg> },
-        { name: 'Subscription', path: '/dashboard/subscription', icon: <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5" /></svg> }
+        { name: 'Dashboard', path: '/dashboard', color: '#3b82f6', icon: dashboardIcon },
+        { name: 'Students', path: '/dashboard/students', color: '#10b981', icon: studentIcon },
+        { name: 'Subscription', path: '/dashboard/subscription', color: '#f59e0b', icon: subscriptionIcon },
+        { name: 'Teachers', path: '/dashboard/teachers', color: '#f59e0b', icon: teacherIcon },
+        { name: 'Attendance', path: '/dashboard/attendance', color: '#8b5cf6', icon: attendanceIcon },
+        { name: 'Transport', path: '/dashboard/transport', color: '#06b6d4', icon: transportIcon },
+        { name: 'Admit Card', path: '/dashboard/admit-card', color: '#f97316', icon: admitCardIcon },
+        { name: 'Identity Card', path: '/dashboard/id-card', color: '#6366f1', icon: idCardIcon },
+        { name: 'Fees', path: '/dashboard/fees', color: '#10b981', icon: feesIcon },
+        { name: 'Results', path: '/dashboard/results', color: '#ef4444', icon: resultsIcon },
+        { name: 'Routine', path: '/dashboard/routine', color: '#8b5cf6', icon: "https://cdn-icons-png.flaticon.com/512/2693/2693507.png" },
+        { name: 'Stats', path: '/dashboard/stats', color: '#10b981', icon: statsIcon }
     ];
 
     return (
-        <div className={`principal-dashboard theme-${theme} ${isSidebarOpen ? 'sidebar-visible' : ''}`}>
-            {/* Transparent Overlay to handle clicking outside to close */}
-            {isSidebarOpen && (
-                <div
-                    className="sidebar-overlay-transparent"
-                    onClick={() => setIsSidebarOpen(false)}
-                ></div>
-            )}
+        <div className={`principal-dashboard theme-${theme} ${isCollapsed ? 'sidebar-collapsed' : ''}`}>
             {/* Navigation Sidebar */}
-            <aside className={`dashboard-sidebar ${isSidebarOpen ? 'open' : ''}`}>
-                <div className="sidebar-header">
-                    <div className="sidebar-logo-group">
-                        <div className="sidebar-logo">
-                            {profileData?.logo_url ? <img src={profileData.logo_url} alt="Logo" /> : <span>{userData?.institute_name?.charAt(0)}</span>}
-                        </div>
-                    </div>
-                </div>
-
+            <aside ref={sidebarRef} className={`dashboard-sidebar ${isCollapsed ? 'collapsed' : ''}`}>
+                <div className="sidebar-header-spacer"></div>
                 <nav className="sidebar-nav">
                     {navigationItems.map(item => {
                         const locked = isLocked && !allowedPaths.includes(item.path);
@@ -262,8 +402,12 @@ const PrincipalDashboard = () => {
                                 key={item.path}
                                 className={`sidebar-nav-btn ${location.pathname === item.path ? 'active' : ''} ${locked ? 'locked' : ''}`}
                                 onClick={() => handleNavClick(item.path)}
+                                title={isCollapsed ? item.name : ''}
+                                style={{ '--accent-color': item.color }}
                             >
-                                <span className="nav-icon">{item.icon}</span>
+                                <span className="nav-icon">
+                                    <img src={item.icon} alt={item.name} className="sidebar-png-icon" />
+                                </span>
                                 <span className="nav-text">{item.name}</span>
                                 {locked && (
                                     <span className="lock-icon">
@@ -274,58 +418,70 @@ const PrincipalDashboard = () => {
                         );
                     })}
                 </nav>
+
+                <div className="sidebar-footer">
+                    <button
+                        className="collapse-toggle-btn"
+                        onClick={() => setIsCollapsed(!isCollapsed)}
+                        title={isCollapsed ? "Expand Sidebar" : "Collapse Sidebar"}
+                    >
+                        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" style={{ transform: isCollapsed ? 'rotate(180deg)' : 'rotate(0deg)', transition: 'transform 0.3s' }}>
+                            <polyline points="15 18 9 12 15 6" />
+                        </svg>
+                        {!isCollapsed && <span className="collapse-text">Collapse Menu</span>}
+                    </button>
+                </div>
             </aside>
 
             {/* Main Content Area */}
-            < div className="dashboard-main-container" >
+            <div className="dashboard-main-container">
                 <header className="dashboard-header-modern">
-                    <div className="header-left-group">
-                        {!isSidebarOpen && (
-                            <button
-                                className={`menu-toggle-btn ${isSidebarOpen ? 'active' : ''}`}
-                                onClick={() => setIsSidebarOpen(!isSidebarOpen)}
-                                aria-label="Toggle Menu"
-                            >
-                                <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-                                    <line x1="3" y1="12" x2="21" y2="12" />
-                                    <line x1="3" y1="6" x2="21" y2="6" />
-                                    <line x1="3" y1="18" x2="21" y2="18" />
-                                </svg>
-                            </button>
-                        )}
+                    <div className="header-left-section">
+                        {/* Empty spacer to keep center truly centered */}
                     </div>
 
-                    <div className="header-center-group">
-                        <div className="inst-meta">
-                            <div className="inst-logo-modern">
-                                {profileData?.logo_url ? <img src={profileData.logo_url} alt="Logo" /> : <span>{userData?.institute_name?.charAt(0)}</span>}
-                            </div>
-                            <h1 className="inst-name-modern uppercase">{(userData?.institute_name || '').toUpperCase()}</h1>
+                    <div className="header-center-section">
+                        <div className="inst-meta-inline-centered">
+                            {profileData?.logo_url ? (
+                                <img src={profileData.logo_url} alt="Logo" className="inst-logo-raw" />
+                            ) : (
+                                <div className="inst-logo-placeholder-raw">{userData?.institute_name?.charAt(0)}</div>
+                            )}
+                            <h1 className="inst-name-raw uppercase">{(userData?.institute_name || '').toUpperCase()}</h1>
                         </div>
                     </div>
 
-                    <div className="header-right-group">
-                        <div className="header-profile-trigger" ref={profilePopupRef}>
+                    <div className="header-right-section">
+                        <div className="header-profile-trigger-premium" ref={profilePopupRef} onClick={() => setShowProfilePopup(!showProfilePopup)}>
+                            <div className="header-user-info-group">
+                                <span className="profile-name-text-premium">{userData?.principal_name || 'Principal'}</span>
+                                {selectedSessionId && (
+                                    <div className="header-session-badge">
+                                        <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3"><rect x="3" y="4" width="18" height="18" rx="2" ry="2" /><line x1="16" y1="2" x2="16" y2="6" /><line x1="8" y1="2" x2="8" y2="6" /><line x1="3" y1="10" x2="21" y2="10" /></svg>
+                                        <span>{sessions.find(s => s.id === selectedSessionId)?.name || 'Session'}</span>
+                                    </div>
+                                )}
+                            </div>
                             <img
                                 src={profileData?.principal_photo_url || 'https://via.placeholder.com/40'}
                                 alt="Profile"
-                                className="header-avatar"
-                                onClick={() => setShowProfilePopup(!showProfilePopup)}
+                                className="header-avatar-premium"
+                                onError={(e) => { e.target.src = 'https://via.placeholder.com/40'; }}
                             />
-                            {showProfilePopup && (
+                            {showProfilePopup && userData && (
                                 <div className="profile-popup">
                                     <div className="popup-header-premium">
                                         <div className="popup-user-details">
-                                            <h3>{userData?.principal_name}</h3>
-                                            <span className="badge-principal">Principal</span>
+                                            <h3>{userData?.principal_name || 'Principal'}</h3>
+                                            <span className="badge-principal">Principal Account</span>
                                             <div className="popup-quick-contact">
                                                 <div className="quick-row">
                                                     <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z" /><polyline points="22,6 12,13 2,6" /></svg>
-                                                    <span>{userData?.email}</span>
+                                                    <span>{userData?.email || 'N/A'}</span>
                                                 </div>
                                                 <div className="quick-row">
                                                     <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72 12.84 12.84 0 0 0 .7 2.81 2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45 12.84 12.84 0 0 0 2.81.7A2 2 0 0 1 22 16.92z" /></svg>
-                                                    <span>{userData?.mobile}</span>
+                                                    <span>{userData?.mobile || 'N/A'}</span>
                                                 </div>
                                             </div>
                                         </div>
@@ -340,6 +496,85 @@ const PrincipalDashboard = () => {
                                             <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><rect x="1" y="4" width="22" height="16" rx="2" ry="2" /><line x1="1" y1="10" x2="23" y2="10" /></svg>
                                             Subscription
                                         </button>
+
+                                        {/* Academic Session Management - Flyout Menu */}
+                                        <div className="popup-item has-flyout">
+                                            <div className="item-content-row">
+                                                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><rect x="3" y="4" width="18" height="18" rx="2" ry="2" /><line x1="16" y1="2" x2="16" y2="6" /><line x1="8" y1="2" x2="8" y2="6" /><line x1="3" y1="10" x2="21" y2="10" /></svg>
+                                                <span>Academic Session</span>
+                                                <svg className="chevron-left-icon" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><polyline points="15 18 9 12 15 6" /></svg>
+                                            </div>
+
+                                            <div className="session-flyout-menu">
+                                                <div className="flyout-header">
+                                                    <span>Switch Session</span>
+                                                </div>
+                                                <div className="session-list-scrollable">
+                                                    {sessions.map(session => (
+                                                        <div key={session.id} className={`flyout-session-item ${selectedSessionId === session.id ? 'active' : ''}`}>
+                                                            {editingSessionId === session.id ? (
+                                                                <div className="session-edit-row">
+                                                                    <input 
+                                                                        type="text" 
+                                                                        value={newSessionName} 
+                                                                        onChange={(e) => setNewSessionName(e.target.value)}
+                                                                        autoFocus
+                                                                        onClick={(e) => e.stopPropagation()}
+                                                                    />
+                                                                    <button onClick={(e) => { e.stopPropagation(); handleUpdateSession(session.id, newSessionName, session.is_active); }}>
+                                                                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3"><polyline points="20 6 9 17 4 12" /></svg>
+                                                                    </button>
+                                                                </div>
+                                                            ) : (
+                                                                <div className="session-view-row" onClick={() => handleUpdateSession(session.id, session.name, true)}>
+                                                                    <div className="session-info">
+                                                                        <span className="session-name">{session.name}</span>
+                                                                        {selectedSessionId === session.id && <div className="active-dot" />}
+                                                                    </div>
+                                                                    <div className="session-actions">
+                                                                        <button onClick={(e) => { e.stopPropagation(); setEditingSessionId(session.id); setNewSessionName(session.name); }} title="Edit">
+                                                                            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7" /><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z" /></svg>
+                                                                        </button>
+                                                                        {!session.is_active && (
+                                                                            <button onClick={(e) => { e.stopPropagation(); handleDeleteSession(session.id, session.name); }} title="Delete">
+                                                                                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><polyline points="3 6 5 6 21 6" /><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2" /></svg>
+                                                                            </button>
+                                                                        )}
+                                                                    </div>
+                                                                </div>
+                                                            )}
+                                                        </div>
+                                                    ))}
+                                                </div>
+                                                
+                                                <div className="flyout-footer">
+                                                    {isAddingSession ? (
+                                                        <div className="session-add-row">
+                                                            <input 
+                                                                type="text" 
+                                                                placeholder="2025-26"
+                                                                value={newSessionName}
+                                                                onChange={(e) => setNewSessionName(e.target.value)}
+                                                                autoFocus
+                                                                onClick={(e) => e.stopPropagation()}
+                                                            />
+                                                            <button onClick={(e) => { e.stopPropagation(); handleAddSession(); }}>
+                                                                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3"><line x1="12" y1="5" x2="12" y2="19" /><line x1="5" y1="12" x2="19" y2="12" /></svg>
+                                                            </button>
+                                                            <button className="cancel-btn" onClick={(e) => { e.stopPropagation(); setIsAddingSession(false); }}>
+                                                                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3"><line x1="18" y1="6" x2="6" y2="18" /><line x1="6" y1="6" x2="18" y2="18" /></svg>
+                                                            </button>
+                                                        </div>
+                                                    ) : (
+                                                        <button className="add-session-inline-btn" onClick={(e) => { e.stopPropagation(); setIsAddingSession(true); }}>
+                                                            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><line x1="12" y1="5" x2="12" y2="19" /><line x1="5" y1="12" x2="19" y2="12" /></svg>
+                                                            New Session
+                                                        </button>
+                                                    )}
+                                                </div>
+                                            </div>
+                                        </div>
+
                                         <button className="popup-item" onClick={toggleTheme}>
                                             {theme === 'light' ? (
                                                 <><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z" /></svg> Dark Mode</>
@@ -360,40 +595,57 @@ const PrincipalDashboard = () => {
                 </header>
 
                 <main className="dashboard-view-content">
-                    {/* Locked View for Overview */}
-                    {isLocked && location.pathname === '/dashboard' ? (
-                        <div className="dashboard-locked-overlay">
-                            <div className="locked-card">
-                                <div className="locked-icon-pulse">
-                                    <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><rect x="3" y="11" width="18" height="11" rx="2" ry="2" /><path d="M7 11V7a5 5 0 0 1 10 0v4" /></svg>
+                    {/* Locked View for All Restricted Pages */}
+                    {isLocked && !allowedPaths.includes(location.pathname) ? (
+                        <div className="dashboard-view-content">
+                            <div className="dashboard-locked-overlay">
+                                <div className="locked-card">
+                                    <div className="locked-icon-pulse">
+                                        <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><rect x="3" y="11" width="18" height="11" rx="2" ry="2" /><path d="M7 11V7a5 5 0 0 1 10 0v4" /></svg>
+                                    </div>
+                                    <h2>Access restricted</h2>
+                                    <p>
+                                        {subStatus === 'loading'
+                                            ? 'Verifying subscription status...'
+                                            : subStatus === 'disabled'
+                                                ? 'Your institute account has been disabled by the administrator. Please contact support to restore access.'
+                                                : 'Your subscription has expired. Please renew your plan to continue using the ERP features.'}
+                                    </p>
+                                    {subStatus !== 'loading' && (
+                                        <button className="go-to-sub-btn" onClick={() => navigate('/dashboard/subscription')}>
+                                            Go to Subscription Management
+                                        </button>
+                                    )}
                                 </div>
-                                <h2>Access restricted</h2>
-                                <p>
-                                    {subStatus === 'disabled'
-                                        ? 'Your institute account has been disabled by the administrator. Please contact support to restore access.'
-                                        : 'Your subscription has expired. Please renew your plan to continue using the ERP features.'}
-                                </p>
-                                <button className="go-to-sub-btn" onClick={() => navigate('/dashboard/subscription')}>
-                                    Go to Subscription Management
-                                </button>
                             </div>
                         </div>
                     ) : (
                         <Routes>
-                            <Route path="/" element={<DashboardOverview userData={userData} profileData={profileData} subData={subData} />} />
-                            <Route path="/students" element={<Students />} />
-                            <Route path="/teachers" element={<Teachers />} />
-                            <Route path="/attendance" element={<Attendance />} />
-                            <Route path="/attendance/:class/:section" element={<TakeAttendance />} />
-                            <Route path="/subscription" element={<SubscriptionPage />} />
-                            <Route path="/fees" element={<Fees />} />
-                            <Route path="/routine" element={<Routine />} />
-                            <Route path="/admit-card" element={<AdmitCard />} />
-                            <Route path="/id-card" element={<IDCardView userData={userData} />} />
+                            {/* Result Flow: Container Free */}
                             <Route path="/results" element={<ResultDashboard />} />
                             <Route path="/results/create" element={<CreateExam />} />
                             <Route path="/results/:id" element={<DataEntryGrid />} />
                             <Route path="/results/:examId/view/:studentId" element={<ReportCardPage />} />
+
+                            {/* Standard Content: Padded Container */}
+                            <Route path="/" element={<DashboardOverview userData={userData} profileData={profileData} subData={subData} />} />
+                            <Route path="/students" element={<Students />} />
+                            <Route path="/students/:id" element={<Students />} />
+                            <Route path="/teachers" element={<Teachers />} />
+                            <Route path="/teachers/:id" element={<Teachers />} />
+                            <Route path="/attendance" element={<Attendance />} />
+                            <Route path="/attendance/:class/:section" element={<TakeAttendance />} />
+                            <Route path="/subscription" element={<SubscriptionPage onRefreshStatus={checkSubscription} />} />
+                            <Route path="/stats" element={<Stats />} />
+                            <Route path="/routine" element={<Routine />} />
+                            <Route path="/admit-card" element={<AdmitCard />} />
+                            <Route path="/id-card" element={<IDCardView userData={userData} />} />
+                            <Route path="/fees" element={<Fees />} />
+                            <Route path="/transport" element={<Transport />} />
+                            <Route path="/transport/route/:id" element={<RouteManagement />} />
+                            <Route path="/transport/live/:id" element={<LiveTracking />} />
+                            <Route path="/homework" element={<HomeworkHub />} />
+                            <Route path="/homework/:className/:section" element={<ClassHomework />} />
                             <Route path="*" element={<div className="coming-soon-card"><h3>Feature Coming Soon</h3><p>We're working hard to bring this feature to you.</p></div>} />
                         </Routes>
                     )}

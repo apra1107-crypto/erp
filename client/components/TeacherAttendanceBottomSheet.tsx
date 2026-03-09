@@ -35,6 +35,7 @@ const TeacherAttendanceBottomSheet = ({ visible, onClose, teacher, role = 'princ
         setLoading(true);
         try {
             const token = await AsyncStorage.getItem(role === 'teacher' ? 'teacherToken' : 'token');
+            const storedSessionId = await AsyncStorage.getItem('selectedSessionId');
             const month = attendanceMonth.getMonth() + 1;
             const year = attendanceMonth.getFullYear();
 
@@ -42,8 +43,12 @@ const TeacherAttendanceBottomSheet = ({ visible, onClose, teacher, role = 'princ
                 ? `${API_ENDPOINTS.TEACHER_ATTENDANCE}/history?month=${month}&year=${year}`
                 : `${API_ENDPOINTS.TEACHER_ATTENDANCE}/teacher/${teacher?.id}/history?month=${month}&year=${year}`;
 
-            const res = await axios.get(url, { headers: { Authorization: `Bearer ${token}` } }
-            );
+            const res = await axios.get(url, { 
+                headers: { 
+                    Authorization: `Bearer ${token}`,
+                    'x-academic-session-id': storedSessionId?.toString()
+                } 
+            });
             setAttendanceData(res.data || []);
         } catch (error) {
             console.error('Error fetching teacher attendance history:', error);

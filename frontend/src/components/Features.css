@@ -1,0 +1,102 @@
+.features-section {
+    padding: 100px 0;
+    position: relative;
+    background: #0B0F19 !important;
+    overflow: hidden;
+    display: block !important;
+}
+
+.features-header {
+    text-align: center;
+    max-width: 900px;
+    margin: 0 auto 80px;
+    position: relative;
+    z-index: 10;
+    display: block !important;
+}
+
+.features-section .features-section-title {
+    font-size: clamp(2.2rem, 5vw, 3.5rem) !important;
+    font-weight: 800 !important;
+    line-height: 1.2 !important;
+    margin-bottom: 24px !important;
+    letter-spacing: -0.03em !important;
+    color: #FFFFFF !important;
+    display: block !important;
+}
+
+.features-section .features-section-subtitle {
+    font-size: clamp(1.1rem, 2vw, 1.3rem) !important;
+    color: #94A3B8 !important;
+    line-height: 1.6 !important;
+    max-width: 700px !important;
+    margin: 0 auto !important;
+    font-weight: 400 !important;
+    display: block !important;
+}
+
+.features-grid {
+    display: grid !important;
+    grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+    gap: 24px;
+    position: relative;
+    z-index: 10;
+}
+
+.feature-card {
+    background: #151B2B !important;
+    border: 1px solid rgba(255, 255, 255, 0.08) !important;
+    border-radius: 20px !important;
+    padding: 32px !important;
+    transition: all 0.3s ease !important;
+    display: flex !important;
+    flex-direction: column !important;
+    gap: 16px !important;
+}
+
+.feature-card:hover {
+    transform: translateY(-8px) !important;
+    border-color: rgba(59, 130, 246, 0.4) !important;
+    background: #1E2538 !important;
+    box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.2) !important;
+}
+
+.feature-icon-wrapper {
+    width: 48px !important;
+    height: 48px !important;
+    background: rgba(59, 130, 246, 0.1) !important;
+    border-radius: 12px !important;
+    display: flex !important;
+    align-items: center !important;
+    justify-content: center !important;
+    color: #3B82F6 !important;
+}
+
+.feature-card:hover .feature-icon-wrapper {
+    background: #3B82F6 !important;
+    color: #FFFFFF !important;
+}
+
+.feature-title {
+    font-size: 1.25rem !important;
+    font-weight: 700 !important;
+    color: #FFFFFF !important;
+    margin: 0 !important;
+}
+
+.feature-description {
+    font-size: 0.95rem !important;
+    color: #94A3B8 !important;
+    line-height: 1.6 !important;
+    margin: 0 !important;
+}
+
+@media (max-width: 768px) {
+    .features-section {
+        padding: 60px 0 !important;
+    }
+    
+    .features-grid {
+        grid-template-columns: 1fr !important;
+    }
+}

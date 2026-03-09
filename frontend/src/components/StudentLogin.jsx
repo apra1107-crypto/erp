@@ -5,7 +5,7 @@ import { toast } from 'react-toastify';
 import { API_ENDPOINTS } from '../config';
 import './AuthForms.css';
 
-const StudentLogin = ({ onBack, onClose }) => {
+const StudentLogin = ({ onBack, onClose, isSplitView }) => {
     const navigate = useNavigate();
     const [loading, setLoading] = useState(false);
     const [step, setStep] = useState(1); // 1: phone, 2: institute, 3: student, 4: code
@@ -101,7 +101,7 @@ const StudentLogin = ({ onBack, onClose }) => {
 
     const handleBack = () => {
         if (step === 1) {
-            onBack();
+            if (!isSplitView) onBack();
         } else if (step === 2) {
             setStep(1);
             setInstitutes([]);
@@ -117,28 +117,44 @@ const StudentLogin = ({ onBack, onClose }) => {
 
     return (
         <div className="auth-step-container">
-            <button className="step-back-btn" onClick={handleBack}>
-                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
-                    <path d="M19 12H5M12 19l-7-7 7-7" />
-                </svg>
-                Back
-            </button>
-
-            <div className="auth-view-header">
-                <div className="auth-view-icon blue">
-                    <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
-                        <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2" />
-                        <circle cx="12" cy="7" r="4" />
-                    </svg>
+            {isSplitView && (
+                <div className="split-view-header">
+                    <div className="auth-view-icon pink">
+                        <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
+                            <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2" />
+                            <circle cx="12" cy="7" r="4" />
+                        </svg>
+                    </div>
+                    <h2 className="auth-view-title">Student Portal</h2>
+                    <p className="auth-view-subtitle">Access your learning dashboard</p>
                 </div>
-                <h2 className="auth-view-title">Student Portal</h2>
-                <p className="auth-view-subtitle">
-                    {step === 1 && 'Enter your registered mobile number'}
-                    {step === 2 && 'Select your institute'}
-                    {step === 3 && 'Select your profile'}
-                    {step === 4 && 'Enter your access code'}
-                </p>
-            </div>
+            )}
+            {!isSplitView && (
+                <div className="auth-view-header">
+                    <div className="auth-view-icon pink">
+                        <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
+                            <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2" />
+                            <circle cx="12" cy="7" r="4" />
+                        </svg>
+                    </div>
+                    <h2 className="auth-view-title">Student Portal</h2>
+                    <p className="auth-view-subtitle">
+                        {step === 1 && 'Enter your registered mobile number'}
+                        {step === 2 && 'Select your institute'}
+                        {step === 3 && 'Select your profile'}
+                        {step === 4 && 'Enter your access code'}
+                    </p>
+                </div>
+            )}
+
+            {step !== 1 && (
+                <button className="step-back-btn" style={{ display: 'flex' }} onClick={handleBack}>
+                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
+                        <path d="M19 12H5M12 19l-7-7 7-7" />
+                    </svg>
+                    Back
+                </button>
+            )}
 
             {step === 1 && (
                 <form onSubmit={handleVerifyPhone} className="auth-view-form">
@@ -171,57 +187,61 @@ const StudentLogin = ({ onBack, onClose }) => {
 
             {step === 2 && (
                 <div className="auth-view-form">
-                    {institutes.map((institute) => (
-                        <div
-                            key={institute.id}
-                            className="selection-card modern-card"
-                            onClick={() => handleSelectInstitute(institute)}
-                        >
-                            <div className="selection-logo modern-logo">
-                                {institute.logo_url ? (
-                                    <img src={institute.logo_url} alt={institute.institute_name} />
-                                ) : (
-                                    <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                                        <path d="M3 21h18M3 7l9-4 9 4M5 21V10M19 21V10M9 21v-6h6v6" />
-                                    </svg>
-                                )}
+                    <div className="selection-list-container">
+                        {institutes.map((institute) => (
+                            <div
+                                key={institute.id}
+                                className="selection-card modern-card"
+                                onClick={() => handleSelectInstitute(institute)}
+                            >
+                                <div className="selection-logo modern-logo">
+                                    {institute.logo_url ? (
+                                        <img src={institute.logo_url} alt={institute.institute_name} />
+                                    ) : (
+                                        <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                                            <path d="M3 21h18M3 7l9-4 9 4M5 21V10M19 21V10M9 21v-6h6v6" />
+                                        </svg>
+                                    )}
+                                </div>
+                                <div className="selection-info">
+                                    <h3>{institute.institute_name}</h3>
+                                    <p>{institute.address}</p>
+                                </div>
+                                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" style={{ opacity: 0.5 }}>
+                                    <path d="M9 18l6-6-6-6" />
+                                </svg>
                             </div>
-                            <div className="selection-info">
-                                <h3>{institute.institute_name}</h3>
-                                <p>{institute.address}</p>
-                            </div>
-                            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                                <path d="M9 18l6-6-6-6" />
-                            </svg>
-                        </div>
-                    ))}
+                        ))}
+                    </div>
                 </div>
             )}
 
             {step === 3 && (
                 <div className="auth-view-form">
-                    {students.map((student) => (
-                        <div
-                            key={student.id}
-                            className="selection-card modern-card"
-                            onClick={() => handleSelectStudent(student)}
-                        >
-                            <div className="selection-logo modern-logo">
-                                {student.photo_url ? (
-                                    <img src={student.photo_url} alt={student.name} className="round-photo" />
-                                ) : (
-                                    <div className="placeholder-avatar student-avatar">{student.name.charAt(0)}</div>
-                                )}
+                    <div className="selection-list-container">
+                        {students.map((student) => (
+                            <div
+                                key={student.id}
+                                className="selection-card modern-card"
+                                onClick={() => handleSelectStudent(student)}
+                            >
+                                <div className="selection-logo modern-logo">
+                                    {student.photo_url ? (
+                                        <img src={student.photo_url} alt={student.name} className="round-photo" />
+                                    ) : (
+                                        <div className="placeholder-avatar student-avatar" style={{ fontSize: '14px' }}>{student.name.charAt(0)}</div>
+                                    )}
+                                </div>
+                                <div className="selection-info">
+                                    <h3>{student.name}</h3>
+                                    <p>Class {student.class} - {student.section} | Roll No: {student.roll_no}</p>
+                                </div>
+                                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" style={{ opacity: 0.5 }}>
+                                    <path d="M9 18l6-6-6-6" />
+                                </svg>
                             </div>
-                            <div className="selection-info">
-                                <h3>{student.name}</h3>
-                                <p>Class {student.class} - {student.section} | Roll No: {student.roll_no}</p>
-                            </div>
-                            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                                <path d="M9 18l6-6-6-6" />
-                            </svg>
-                        </div>
-                    ))}
+                        ))}
+                    </div>
                 </div>
             )}
 

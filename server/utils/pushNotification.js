@@ -79,48 +79,6 @@ export const sendMulticastPushNotification = async (messages) => {
 };
 
 /**
- * Sends a notification to the Principal and Teachers with special_permission
- * whenever a student pays their fees online.
- */
-export const notifyFeePayment = async (studentId, instituteId, amount, feeType) => {
-    try {
-        // 1. Get Student Details
-        const studentRes = await pool.query('SELECT name, class, section, roll_no FROM students WHERE id = $1', [studentId]);
-        const student = studentRes.rows[0];
-
-        if (!student) return;
-
-        // 2. Fetch Principal Token
-        const principalRes = await pool.query('SELECT push_token FROM institutes WHERE id = $1', [instituteId]);
-        
-        // 3. Fetch Special Teachers' Tokens
-        const teachersRes = await pool.query(
-            'SELECT push_token FROM teachers WHERE institute_id = $1 AND special_permission = true AND push_token IS NOT NULL AND push_token != $2', 
-            [instituteId, '']
-        );
-
-        const allTokens = [];
-        if (principalRes.rows[0]?.push_token) allTokens.push(principalRes.rows[0].push_token);
-        teachersRes.rows.forEach(t => {
-            if (t.push_token) allTokens.push(t.push_token);
-        });
-
-        const uniqueTokens = [...new Set(allTokens)];
-
-        if (uniqueTokens.length > 0) {
-            const feeLabel = feeType === 'monthly' ? 'Monthly' : 'Occasional';
-            const title = "Fee Payment Received 💰";
-            const body = `${student.name} (Cl: ${student.class}-${student.section}, Roll: ${student.roll_no || 'N/A'}) paid ${feeLabel} fee of ₹${amount}.`;
-            const data = { type: 'fee_received', studentId, feeType };
-
-            await sendPushNotification(uniqueTokens, title, body, data);
-        }
-    } catch (error) {
-        console.error('Error in notifyFeePayment utility:', error);
-    }
-};
-
-/**
  * Broadcasts a notification to all students, teachers, and the principal of a specific institute.
  */
 export const broadcastInstituteNotification = async (instituteId, title, body, data = {}) => {

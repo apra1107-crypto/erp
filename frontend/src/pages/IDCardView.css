@@ -28,71 +28,216 @@
     font-size: 1.1rem;
 }
 
-/* Step 1: Flashcards (Minimalist/Free) */
-.id-section-list {
-    display: flex;
-    flex-wrap: wrap;
-    gap: 3rem;
+/* Step 1: Flashcards (Modern Horizontal) */
+.id-section-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+    gap: 1.5rem;
     margin-top: 2rem;
 }
 
-.id-section-item {
+.id-section-flashcard {
+    background: white;
+    padding: 1.5rem;
+    border-radius: 24px;
     display: flex;
-    flex-direction: column;
+    align-items: center;
+    gap: 1.25rem;
+    border: 1.5px solid #e2e8f0;
     cursor: pointer;
-    transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
-    min-width: 150px;
+    transition: all 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275);
     position: relative;
-    padding: 1rem 0;
+    overflow: hidden;
 }
 
-.id-section-item:hover {
+.theme-dark .id-section-flashcard {
+    background: #1e293b;
+    border-color: rgba(255, 255, 255, 0.05);
+}
+
+.id-section-flashcard:hover {
     transform: translateY(-5px);
+    border-color: #6366f1;
+    box-shadow: 0 12px 24px rgba(99, 102, 241, 0.1);
 }
 
-.id-section-item:hover .section-name {
+.flash-icon {
+    width: 52px;
+    height: 52px;
+    background: rgba(99, 102, 241, 0.1);
     color: #6366f1;
+    border-radius: 16px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
 }
 
-.section-icon {
-    font-size: 2.5rem;
-    margin-bottom: 1rem;
-    opacity: 0.7;
+.flash-content {
+    flex: 1;
 }
 
-.section-info-label {
-    font-size: 0.75rem;
+.student-count-tag {
+    font-size: 0.7rem;
     font-weight: 800;
-    color: #94a3b8;
-    letter-spacing: 0.1em;
     text-transform: uppercase;
-}
-
-.section-name {
-    font-size: 1.5rem;
-    font-weight: 900;
-    margin: 0.25rem 0;
-    transition: color 0.3s;
-}
-
-.section-count {
-    font-size: 0.85rem;
-    color: #64748b;
-}
-
-.section-arrow {
-    position: absolute;
-    right: -1rem;
-    top: 50%;
-    transform: translateY(-50%);
-    opacity: 0;
     color: #6366f1;
+    background: rgba(99, 102, 241, 0.05);
+    padding: 2px 10px;
+    border-radius: 100px;
+}
+
+.flash-content h3 {
+    margin: 4px 0 2px 0;
+    font-size: 1.15rem;
+    font-weight: 800;
+    color: var(--text-light);
+}
+
+.theme-dark .flash-content h3 {
+    color: var(--text-dark);
+}
+
+.flash-content p {
+    margin: 0;
+    font-size: 0.8rem;
+    color: #64748b;
+    font-weight: 600;
+}
+
+.flash-arrow {
+    color: #cbd5e1;
     transition: all 0.3s;
 }
 
-.id-section-item:hover .section-arrow {
-    opacity: 1;
-    right: -1.5rem;
+.id-section-flashcard:hover .flash-arrow {
+    color: #6366f1;
+    transform: translateX(5px);
+}
+
+/* Student List Grid */
+.id-student-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
+    gap: 1.25rem;
+    margin-top: 1rem;
+}
+
+.id-student-card {
+    background: white;
+    padding: 1rem;
+    border-radius: 20px;
+    display: flex;
+    align-items: center;
+    gap: 1rem;
+    border: 1.5px solid #e2e8f0;
+    cursor: pointer;
+    transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+    position: relative;
+}
+
+.theme-dark .id-student-card {
+    background: #1e293b;
+    border-color: rgba(255, 255, 255, 0.05);
+}
+
+.id-student-card:hover {
+    transform: translateY(-3px);
+    border-color: #6366f1;
+    box-shadow: 0 8px 20px rgba(0, 0, 0, 0.05);
+}
+
+.id-student-card.selected {
+    background: rgba(99, 102, 241, 0.05);
+    border-color: #6366f1;
+    border-width: 2px;
+}
+
+.card-checkbox-corner {
+    position: absolute;
+    top: 10px;
+    right: 10px;
+    width: 20px;
+    height: 20px;
+    background: #6366f1;
+    border-radius: 6px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 5;
+}
+
+.id-student-avatar {
+    width: 52px;
+    height: 52px;
+    border-radius: 14px;
+    background: #f1f5f9;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    overflow: hidden;
+    flex-shrink: 0;
+    border: 1px solid #e2e8f0;
+}
+
+.theme-dark .id-student-avatar {
+    background: #0f172a;
+    border-color: #334155;
+}
+
+.id-student-avatar img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+}
+
+.id-student-avatar span {
+    font-size: 1.2rem;
+    font-weight: 800;
+    color: #6366f1;
+}
+
+.id-student-info {
+    flex: 1;
+}
+
+.id-student-info h3 {
+    margin: 0;
+    font-size: 1rem;
+    font-weight: 800;
+    color: var(--text-light);
+}
+
+.theme-dark .id-student-info h3 {
+    color: var(--text-dark);
+}
+
+.id-student-info p {
+    margin: 2px 0 0;
+    font-size: 0.8rem;
+    color: #64748b;
+    font-weight: 600;
+}
+
+.id-student-action {
+    color: #cbd5e1;
+    display: flex;
+    align-items: center;
+}
+
+.id-student-card:hover .id-student-action {
+    color: #6366f1;
+}
+
+.select-label {
+    font-size: 0.7rem;
+    font-weight: 800;
+    text-transform: uppercase;
+    color: #94a3b8;
+}
+
+.select-label.active {
+    color: #6366f1;
 }
 
 /* Step 2: Student Selection Page */

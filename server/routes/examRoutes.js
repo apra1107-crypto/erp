@@ -9,24 +9,29 @@ import {
     saveStudentMarks,
     getStudentMarksheet,
     getClassStudents,
+    togglePublishExam,
+    getPublishedExams,
 } from '../controllers/examController.js';
-import { protect, principalOnly } from '../middlewares/auth.js';
+import { protect, staffOnly, studentOnly } from '../middlewares/auth.js';
 
 const router = express.Router();
 
-// All routes require Principal access for now
 router.use(protect);
-router.use(principalOnly);
 
-router.get('/students/search-class', getClassStudents); // Helper route
-router.post('/create', createExam);
-router.get('/list', getExams);
-router.delete('/:id', deleteExam);
-router.get('/:id', getExamById);
-router.put('/:id/stats', updateExamStats);
-router.get('/:id/grid', getExamStudents);
-router.post('/:exam_id/student/save', saveStudentMarks);
-router.get('/:exam_id/marksheet/:student_id', getStudentMarksheet);
+// Student Routes
+router.get('/student/published', studentOnly, getPublishedExams);
+router.get('/:exam_id/marksheet/:student_id', getStudentMarksheet); // Accessible by both staff and student
+
+// Staff Routes (Principal/Teacher)
+router.get('/students/search-class', staffOnly, getClassStudents);
+router.post('/create', staffOnly, createExam);
+router.get('/list', staffOnly, getExams);
+router.delete('/:id', staffOnly, deleteExam);
+router.get('/:id', staffOnly, getExamById);
+router.put('/:id/stats', staffOnly, updateExamStats);
+router.get('/:id/grid', staffOnly, getExamStudents);
+router.post('/:exam_id/student/save', staffOnly, saveStudentMarks);
+router.patch('/:id/toggle-publish', staffOnly, togglePublishExam);
 
 export default router;
 

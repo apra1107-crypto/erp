@@ -1,5 +1,6 @@
 import pool from '../config/db.js';
 import { uploadToS3, deleteFromS3, generateUniqueCode, sendStudentCredentials, sendTeacherCredentials } from '../utils/aws.js';
+import { sendWhatsAppMessage } from '../utils/whatsapp.js';
 import { formatIndianDate, getTodayIST } from '../utils/date.js';
 import { emitToAllStudents } from '../utils/socket.js';
 
@@ -283,6 +284,16 @@ const addStudent = async (req, res) => {
       console.error('Failed to send student email:', err);
     });
 
+    // Send WhatsApp Welcome Message
+    sendWhatsAppMessage(mobile, 'student_welcome_msg', [
+      name,
+      instituteName,
+      roll_no,
+      uniqueCode
+    ]).catch(err => {
+      console.error('Failed to send WhatsApp student welcome message:', err);
+    });
+
     res.status(201).json({
       message: 'Student added successfully',
       student: {
@@ -524,6 +535,17 @@ const addTeacher = async (req, res) => {
 
     sendTeacherCredentials(email, name, uniqueCode, instituteName, teacherDetails).catch(err => {
       console.error('Failed to send teacher email:', err);
+    });
+
+    // Send WhatsApp Welcome Message
+    sendWhatsAppMessage(mobile, 'teacher_welcome_detailed', [
+      name,
+      subject,
+      instituteName,
+      mobile,
+      uniqueCode
+    ]).catch(err => {
+      console.error('Failed to send WhatsApp teacher welcome message:', err);
     });
 
     res.status(201).json({

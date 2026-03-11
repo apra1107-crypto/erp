@@ -33,10 +33,15 @@ export default function MonthlyTransactionBottomSheet({ isOpen, onClose, data }:
 
     useEffect(() => {
         if (isOpen && studentId) {
-            fetchHistory();
+            if (data?.payments || data?.activated_months || data?.one_time_fees) {
+                setHistoryData(data);
+                setLoading(false);
+            } else {
+                fetchHistory();
+            }
             loadTeacherData();
         }
-    }, [isOpen, studentId]);
+    }, [isOpen, studentId, data]);
 
     const loadTeacherData = async () => {
         try {
@@ -48,7 +53,10 @@ export default function MonthlyTransactionBottomSheet({ isOpen, onClose, data }:
     const fetchHistory = async () => {
         setLoading(true);
         try {
-            const token = await AsyncStorage.getItem('teacherToken');
+            const teacherToken = await AsyncStorage.getItem('teacherToken');
+            const principalToken = await AsyncStorage.getItem('token');
+            const token = teacherToken || principalToken;
+
             const response = await axios.get(`${API_ENDPOINTS.PRINCIPAL}/student/${studentId}/fees-full`, {
                 headers: { Authorization: `Bearer ${token}` }
             });

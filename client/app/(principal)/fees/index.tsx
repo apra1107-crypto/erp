@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useMemo, useCallback } from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, ScrollView, FlatList, TextInput, ActivityIndicator, RefreshControl, Dimensions, LayoutAnimation, Platform, UIManager, Alert } from 'react-native';
+import { View, Text, StyleSheet, TouchableOpacity, ScrollView, FlatList, TextInput, ActivityIndicator, RefreshControl, Dimensions, LayoutAnimation, Platform, UIManager, Alert, Image } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
@@ -217,8 +217,12 @@ export default function Fees() {
             >
                 <View style={styles.cardHeader}>
                     <View style={styles.studentInfo}>
-                        <View style={[styles.avatar, { backgroundColor: theme.primary + '20' }]}>
-                            <Text style={[styles.avatarText, { color: theme.primary }]}>{item.name?.charAt(0)}</Text>
+                        <View style={[styles.avatar, { backgroundColor: theme.primary + '20', overflow: 'hidden' }]}>
+                            {item.photo_url ? (
+                                <Image source={{ uri: item.photo_url }} style={{ width: '100%', height: '100%' }} />
+                            ) : (
+                                <Text style={[styles.avatarText, { color: theme.primary }]}>{item.name?.charAt(0)}</Text>
+                            )}
                         </View>
                         <View>
                             <Text style={[styles.studentName, { color: theme.text }]}>{item.name}</Text>

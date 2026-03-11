@@ -118,6 +118,7 @@ export default function StudentDetails() {
                 setFormData({
                     ...student,
                     dob: parseDate(student.dob),
+                    admission_date: parseDate(student.admission_date),
                     is_active: !!student.is_active,
                     transport_facility: !!student.transport_facility
                 });
@@ -474,7 +475,7 @@ export default function StudentDetails() {
                         ) : (
                             <>
                                 <DetailItem icon="person-outline" label="Full Name" value={originalData?.name} />
-                                <DetailItem icon="calendar-outline" label="Date of Birth" value={originalData?.dob} />
+                                <DetailItem icon="calendar-outline" label="Date of Birth" value={formatDate(parseDate(originalData?.dob))} />
                                 <DetailItem icon="male-female-outline" label="Gender" value={originalData?.gender} />
                                 <DetailItem icon="call-outline" label="Mobile" value={originalData?.mobile} />
                                 <DetailItem icon="mail-outline" label="Email" value={originalData?.email || 'N/A'} />
@@ -498,7 +499,7 @@ export default function StudentDetails() {
                                 <DetailItem icon="school-outline" label="Class" value={originalData?.class} />
                                 <DetailItem icon="grid-outline" label="Section" value={originalData?.section} />
                                 <DetailItem icon="list-outline" label="Roll Number" value={originalData?.roll_no} />
-                                <DetailItem icon="calendar-outline" label="Admission Date" value={originalData?.admission_date} />
+                                <DetailItem icon="calendar-outline" label="Admission Date" value={formatDate(parseDate(originalData?.admission_date))} />
                             </>
                         )}
                     </View>

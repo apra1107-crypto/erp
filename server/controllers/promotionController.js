@@ -1,5 +1,6 @@
 import pool from '../config/db.js';
 import { sendPromotionEmail } from '../utils/aws.js';
+import { sendWhatsAppMessage } from '../utils/whatsapp.js';
 import { emitToStudent } from '../utils/socket.js';
 
 // Promote Student
@@ -20,6 +21,7 @@ export const promoteStudent = async (req, res) => {
         }
 
         const student = originalStudent.rows[0];
+        const oldClass = student.class;
 
         // 2. Check if student already promoted to this session
         const promotionCheck = await pool.query(
@@ -60,7 +62,7 @@ export const promoteStudent = async (req, res) => {
                 student.mobile, 
                 student.email, 
                 student.address, 
-                transportFacility !== undefined ? transportFacility : student.transport_facility, 
+                transportFacility !== undefined ? (transportFacility === true || transportFacility === 'true') : student.transport_facility, 
                 student.photo_url, 
                 targetSessionId,
                 parseFloat(monthlyFees || student.monthly_fees || 0),
@@ -80,6 +82,23 @@ export const promoteStudent = async (req, res) => {
                 promotedBy
             ).catch(err => console.error('Failed to send promotion email:', err));
         }
+
+        // Send WhatsApp Promotion Message
+        const finalMonthlyFees = parseFloat(monthlyFees || student.monthly_fees || 0);
+        const isTransportActive = transportFacility !== undefined ? (transportFacility === true || transportFacility === 'true') : student.transport_facility;
+
+        sendWhatsAppMessage(student.mobile, 'student_promotion_full_details', [
+            student.name,
+            instituteName,
+            oldClass,
+            newClass,
+            newSection,
+            newRollNo,
+            finalMonthlyFees,
+            isTransportActive ? 'Active' : 'Not Subscribed'
+        ]).catch(err => {
+            console.error('Failed to send WhatsApp promotion message:', err);
+        });
 
         // 7. Emit Socket for In-App Banner
         emitToStudent(student.id, 'student_promoted', {

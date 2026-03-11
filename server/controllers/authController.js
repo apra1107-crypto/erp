@@ -2,6 +2,7 @@ import bcrypt from 'bcryptjs';
 import jwt from 'jsonwebtoken';
 import pool from '../config/db.js';
 import { sendWelcomeEmail, generateOTP, sendPasswordResetOTP } from '../utils/aws.js';
+import { sendWhatsAppMessage } from '../utils/whatsapp.js';
 import fs from 'fs';
 import path from 'path';
 
@@ -55,14 +56,24 @@ const registerInstitute = async (req, res) => {
       [institute_name, principal_name, email, mobile, state, district, landmark, pincode, address, hashedPassword]
     );
 
+    const registeredInstitute = result.rows[0];
+
     // Send welcome email (don't wait for it, send in background)
     sendWelcomeEmail(email, institute_name, principal_name).catch(err => {
       console.error('Failed to send welcome email, but registration succeeded:', err);
     });
 
+    // Send WhatsApp Welcome Message
+    sendWhatsAppMessage(mobile, 'principal_welcome_erp', [
+      principal_name,
+      institute_name
+    ]).catch(err => {
+      console.error('Failed to send WhatsApp welcome message:', err);
+    });
+
     res.status(201).json({
       message: 'Institute registered successfully',
-      institute: result.rows[0],
+      institute: registeredInstitute,
     });
   } catch (error) {
     console.error('Registration error:', error);

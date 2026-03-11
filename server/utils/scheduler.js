@@ -2,6 +2,7 @@ import cron from 'node-cron';
 import pool from '../config/db.js';
 import { broadcastInstituteNotification } from './pushNotification.js';
 import { emitToPrincipal, emitToTeacher, emitToAllStudents } from './socket.js';
+import { sendWhatsAppMessage } from './whatsapp.js';
 
 /**
  * Checks for academic calendar events scheduled for today and notifies everyone.
@@ -54,8 +55,53 @@ export const triggerDailyEvents = async () => {
     }
 };
 
+/**
+ * Checks for subscription expirations and sends WhatsApp reminders.
+ */
+export const checkSubscriptionExpirations = async () => {
+    console.log('[Scheduler] Checking subscription expirations...');
+    try {
+        // 1. Check for 1-day reminders
+        const reminderResult = await pool.query(
+            `SELECT i.mobile, i.principal_name, i.institute_name, ss.subscription_end_date 
+             FROM subscription_settings ss 
+             JOIN institutes i ON i.id = ss.institute_id 
+             WHERE ss.subscription_end_date::date = (CURRENT_DATE + INTERVAL '1 day')::date`
+        );
+
+        for (const row of reminderResult.rows) {
+            // template: sub_expiry_reminder body: "Urgent: Hello {{1}}, your subscription for {{2}} ends tomorrow. ⏳ To avoid any disruption in classes or management, please renew today. Click here to pay: {{3}}"
+            sendWhatsAppMessage(row.mobile, 'sub_expiry_reminder', [
+                row.principal_name,
+                row.institute_name,
+                'https://klassin.com/billing' // Assuming your URL
+            ]).catch(err => console.error(`Failed to send 1-day expiry reminder to ${row.mobile}:`, err));
+        }
+
+        // 2. Check for already expired (e.g., expired today)
+        const expiredResult = await pool.query(
+            `SELECT i.mobile, i.principal_name, i.institute_name, ss.monthly_price
+             FROM subscription_settings ss 
+             JOIN institutes i ON i.id = ss.institute_id 
+             WHERE ss.subscription_end_date::date = CURRENT_DATE::date`
+        );
+
+        for (const row of expiredResult.rows) {
+            // template: sub_expired_request body: "Notice: Hi {{1}}, your subscription for {{2}} has expired. ❌ Access to your dashboard is now limited. Please make a payment of ₹{{3}} to restore full access. We value your partnership!"
+            sendWhatsAppMessage(row.mobile, 'sub_expired_request', [
+                row.principal_name,
+                row.institute_name,
+                row.monthly_price
+            ]).catch(err => console.error(`Failed to send expiry notification to ${row.mobile}:`, err));
+        }
+
+    } catch (error) {
+        console.error('[Scheduler] Error in checkSubscriptionExpirations:', error);
+    }
+};
+
 export const startScheduler = () => {
-    // Run every day at 8:00 AM
+    // Run daily events check every day at 8:00 AM
     cron.schedule('0 8 * * *', async () => {
         await triggerDailyEvents();
     }, {
@@ -63,5 +109,14 @@ export const startScheduler = () => {
         timezone: "Asia/Kolkata"
     });
 
-    console.log('⏰ Scheduler initialized (Daily at 8:00 AM IST)');
+    // Run subscription check every day at 9:00 AM
+    cron.schedule('0 9 * * *', async () => {
+        await checkSubscriptionExpirations();
+    }, {
+        scheduled: true,
+        timezone: "Asia/Kolkata"
+    });
+
+    console.log('⏰ Scheduler initialized (Events at 8AM, Subscriptions at 9AM IST)');
 };
+

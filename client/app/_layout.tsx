@@ -10,6 +10,7 @@ import Toast, { BaseToast, ErrorToast } from 'react-native-toast-message';
 import { View, Text, TouchableOpacity } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
+import UpdateModal from '../components/UpdateModal';
 
 export const toastConfig = {
   success: (props: any) => (
@@ -331,6 +332,7 @@ export default function RootLayout() {
             topOffset={80}
             visibilityTime={5000}
           />
+          <UpdateModal />
         </SocketProvider>
       </ThemeProvider>
     </SafeAreaProvider>

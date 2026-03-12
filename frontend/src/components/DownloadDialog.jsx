@@ -25,12 +25,9 @@ const DownloadDialog = ({ isOpen, onClose }) => {
     const handleDownload = async () => {
         setLoading(true);
         try {
-            // Increment count on server
-            await axios.post(`${API_ENDPOINTS.STATS}/increment-download`);
-            
-            // Trigger actual download
+            // Trigger actual download from E2E Storage
             const link = document.createElement('a');
-            link.href = '/school-app.apk'; // This matches the file in public folder
+            link.href = 'https://YOUR_E2E_STORAGE_URL/klassin.apk'; 
             link.download = 'Klassin-School-ERP.apk';
             document.body.appendChild(link);
             link.click();

@@ -27,21 +27,18 @@ const DownloadDialog = ({ isOpen, onClose }) => {
         try {
             // Trigger actual download from E2E Storage
             const link = document.createElement('a');
-            link.href = 'https://YOUR_E2E_STORAGE_URL/klassin.apk'; 
-            link.download = 'Klassin-School-ERP.apk';
+            link.href = 'https://klassin.co.in/downloads/klassin.apk'; 
+            link.download = 'Klassin-ERP.apk';
             document.body.appendChild(link);
             link.click();
             document.body.removeChild(link);
-            
-            // Refresh count
-            fetchDownloadCount();
-        } catch (error) {
+         } catch (error) {
             console.error('Error during download process:', error);
-        } finally {
-            setLoading(false);
-        }
-    };
-
+           } finally {
+             setLoading(false);
+         }
+      };
+      
     if (!isOpen) return null;
 
     return (

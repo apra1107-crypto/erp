@@ -72,13 +72,12 @@ const DownloadDialog = ({ isOpen, onClose }) => {
                     <p><strong>Note:</strong> Since this is a direct APK download, you may need to enable "Install from Unknown Sources" in your phone's settings.</p>
                 </div>
 
-                <button 
-                    className="btn-download-primary" 
-                    onClick={handleDownload}
-                    disabled={loading}
-                >
-                    {loading ? 'Starting Download...' : 'Download APK for Android'}
-                </button>
+                <a
+                  href="https://klassin.co.in/downloads/klassin.apk"
+                    className="btn-download-primary"
+                 style={{ textDecoration: 'none', display: 'flex', justifyContent:'center', alignItems: 'center' }} 
+                 download
+               >Download APK for Android</a>
             </div>
         </div>
     );

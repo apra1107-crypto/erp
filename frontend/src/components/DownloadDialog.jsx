@@ -27,7 +27,7 @@ const DownloadDialog = ({ isOpen, onClose }) => {
         try {
             // Trigger actual download from E2E Storage
             const link = document.createElement('a');
-            link.href = 'https://klassin.co.in/downloads/klassin.apk'; 
+            link.href = `https://klassin.co.in/downloads/klassin.apk?v=${Date.now()}`; 
             link.download = 'Klassin-ERP.apk';
             document.body.appendChild(link);
             link.click();

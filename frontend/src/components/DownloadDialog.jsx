@@ -50,7 +50,7 @@ const DownloadDialog = ({ isOpen, onClose }) => {
                     <div className="app-icon-preview">K</div>
                 </div>
                 
-                <h2 className="dialog-title">Get the Klassin App</h2>
+                <h2 className="dialog-title">Get the NEW Klassin App</h2>
                 <p className="dialog-subtitle">Manage your school on the go with our Android application.</p>
                 
                 <div className="app-details-grid">

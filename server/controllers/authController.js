@@ -135,7 +135,7 @@ const loginInstitute = async (req, res) => {
         institute_id: institute.id,
       },
       process.env.JWT_SECRET,
-      { expiresIn: process.env.JWT_EXPIRE }
+      { expiresIn: process.env.JWT_EXPIRE || '7d' }
     );
 
     // Remove password from response

@@ -1,9 +1,6 @@
 import { Platform } from 'react-native';
 
-const MACHINE_IP = '10.56.70.252'; 
-const PORT = '5000';
-
-export const BASE_URL = `http://${MACHINE_IP}:${PORT}`;
+export const BASE_URL = `https://klassin.co.in`;
 
 export const API_ENDPOINTS = {
     AUTH: {

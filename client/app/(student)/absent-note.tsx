@@ -115,13 +115,13 @@ export default function AbsentNote() {
             setAttendanceLoading(false);
             setAttendanceRefreshing(false);
         }
-    }, [attendanceMonth]);
+    }, []);
 
     useFocusEffect(
         useCallback(() => {
             fetchRequests();
             fetchAttendanceData();
-        }, [fetchRequests, fetchAttendanceData])
+        }, [])
     );
 
     const onRefresh = () => {

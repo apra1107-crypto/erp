@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { Modal, View, Text, TouchableOpacity, StyleSheet, Platform, ProgressBarAndroid, ActivityIndicator } from 'react-native';
 import * as FileSystem from 'expo-file-system';
+import { Paths } from 'expo-file-system';
 import * as IntentLauncher from 'expo-intent-launcher';
 import * as Sharing from 'expo-sharing';
 import Constants from 'expo-constants';
@@ -50,7 +51,7 @@ const UpdateModal = () => {
         if (!updateInfo?.url) return;
 
         setIsDownloading(true);
-        const fileUri = `${FileSystem.cacheDirectory}klassin-update.apk`;
+        const fileUri = new FileSystem.File(Paths.cache, 'klassin-update.apk').uri;
 
         try {
             const downloadResumable = FileSystem.createDownloadResumable(
@@ -131,7 +132,7 @@ const UpdateModal = () => {
                             </TouchableOpacity>
                         </View>
                     )}
-                </div>
+                </View>
             </View>
         </Modal>
     );

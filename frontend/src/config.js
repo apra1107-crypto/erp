@@ -1,6 +1,4 @@
-const IP_ADDRESS = '10.56.70.252';
-const PORT = '5000';
-export const BASE_URL = `http://${IP_ADDRESS}:${PORT}`;
+export const BASE_URL = `https://klassin.co.in`;
 
 export const API_ENDPOINTS = {
     AUTH: {

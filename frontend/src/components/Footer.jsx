@@ -45,10 +45,10 @@ const Footer = () => {
                     <div className="footer-links-group">
                         <h4 className="footer-title">Company</h4>
                         <ul className="footer-links">
-                            <li><a href="#">About s</a></li>
-                            <li><a href="#">Contacts</a></li>
+                            <li><a href="#">About us</a></li>
+                            <li><a href="#">Contact us</a></li>
                             <li><a href="#">Privacy Policy</a></li>
-                            <li><a href="#">TOS</a></li>
+                            <li><a href="#">Terms Of Services</a></li>
                         </ul>
                     </div>
 

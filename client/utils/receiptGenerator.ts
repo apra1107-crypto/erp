@@ -13,6 +13,13 @@ interface ReceiptData {
     months?: string[];
 }
 
+interface Transaction {
+    created_at: string;
+    payment_method: string;
+    collected_by?: string;
+    amount: string | number;
+}
+
 export const generateReceiptPDF = async (data: ReceiptData) => {
     const { institute, student, payment, breakage, type, months } = data;
 
@@ -144,7 +151,7 @@ export const generateReceiptPDF = async (data: ReceiptData) => {
                     </tr>
                 </thead>
                 <tbody>
-                    ${safeTransactions.map(t => {
+                    ${safeTransactions.map((t: Transaction) => {
                         const tDate = new Date(t.created_at);
                         return `
                         <tr>

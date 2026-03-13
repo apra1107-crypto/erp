@@ -1,7 +1,7 @@
 import Razorpay from 'razorpay';
 import crypto from 'crypto';
 import db from '../config/db.js';
-import { emitToPrincipal, emitToAdmin, emitToTeacher, emitToSpecificTeacher } from '../utils/socket.js';
+import { emitToPrincipal, emitToAdmin, emitToTeacher, emitToSpecificTeacher, emitToStudent } from '../utils/socket.js';
 
 const razorpay = new Razorpay({
     key_id: process.env.RAZORPAY_KEY_ID || 'rzp_test_placeholder',

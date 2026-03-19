@@ -1,5 +1,5 @@
 import { useState, useEffect, useMemo, useRef, useCallback } from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, ActivityIndicator, TextInput, FlatList, Image, ScrollView, RefreshControl, Modal, StatusBar, Platform, Dimensions, LayoutAnimation, UIManager, Alert, TouchableWithoutFeedback, Keyboard } from 'react-native';
+import { View, Text, StyleSheet, TouchableOpacity, ActivityIndicator, TextInput, FlatList, Image, ScrollView, RefreshControl, Modal, StatusBar, Platform, Dimensions, LayoutAnimation, UIManager, Alert, TouchableWithoutFeedback, Keyboard, Pressable, KeyboardAvoidingView } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useTheme } from '../../context/ThemeContext';
 import { useSocket } from '../../context/SocketContext';
@@ -7,7 +7,7 @@ import axios from 'axios';
 import { useRouter, useFocusEffect } from 'expo-router';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import Toast from 'react-native-toast-message';
-import { Ionicons } from '@expo/vector-icons';
+import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 import Animated, { useSharedValue, useAnimatedStyle, withTiming, withSpring, Easing, useAnimatedScrollHandler, interpolateColor, interpolate, Extrapolate, withRepeat, withSequence } from 'react-native-reanimated';
 
@@ -124,7 +124,7 @@ export default function PrincipalDashboard() {
     { title: 'Teachers', icon: 'people', color: '#AF52DE', bgDark: '#2D1B36', bgLight: '#F3E5F5', path: '/(principal)/teachers' },
     { title: 'Attendance', icon: 'checkmark-done', color: '#9C27B0', bgDark: '#2E1A47', bgLight: '#F3E5F5', path: '/(principal)/attendance' },
     { title: 'Salary', icon: 'wallet-outline', color: '#795548', bgDark: '#3E2723', bgLight: '#EFEBE9', path: '/(principal)/salary' },
-    { title: 'Fees', icon: 'cash-outline', color: '#4CAF50', bgDark: '#223825', bgLight: '#E8F5E9', path: '/(principal)/fees' },
+    { title: 'Fees', icon: 'currency-inr', iconType: 'material', color: '#4CAF50', bgDark: '#223825', bgLight: '#E8F5E9', path: '/(principal)/fees' },
     { title: 'Homework', icon: 'book-outline', color: '#F39C12', bgDark: '#3D2B1B', bgLight: '#FFF3E0', path: '/(principal)/homework' },
     { title: 'Results', icon: 'trophy-outline', color: '#E91E63', bgDark: '#3E1A23', bgLight: '#FCE4EC', path: '/(principal)/results' },
     { title: 'Promotion', icon: 'trending-up-outline', color: '#E91E63', bgDark: '#3E1A23', bgLight: '#FCE4EC', path: '/(principal)/promotion' },
@@ -192,23 +192,33 @@ export default function PrincipalDashboard() {
     
     const addNotif = (notif: any) => {
         LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
-        setNotifications(prev => [{ id: Math.random().toString(36).substr(2, 9), time: new Date().toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit' }), ...notif }, ...prev]);
+        setNotifications(prev => {
+            if (notif.id && prev.some(n => n.id === notif.id)) return prev;
+            const uniqueId = notif.id || Math.random().toString(36).substr(2, 9);
+            return [{ id: uniqueId, time: new Date().toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit' }), ...notif }, ...prev];
+        });
     };
 
-    socket.on('absent_request', (data) => addNotif({ title: 'Absent Request', message: `New request from Roll ${data.roll_no}`, type: 'request' }));
-    socket.on('teacher_attendance', (data) => addNotif({ title: 'Teacher Attendance', message: `${data.teacher_name} marked himself ${data.status.toUpperCase()} today`, type: 'attendance' }));
-    socket.on('new_notice', (data) => addNotif({ title: data.isUpdate ? `Notice Updated: ${data.topic}` : `Notice: ${data.topic}`, message: `By ${data.creator_name}`, type: 'notice' }));
-    socket.on('fee_payment_received', (data) => addNotif({ 
+    const handleAbsentReq = (data: any) => addNotif({ id: `absent_${data.id || Math.random()}`, title: 'Absent Request', message: `New request from Roll ${data.roll_no}`, type: 'request' });
+    const handleTeacherAtt = (data: any) => addNotif({ id: `att_${data.id || Math.random()}`, title: 'Teacher Attendance', message: `${data.teacher_name} marked himself ${data.status.toUpperCase()} today`, type: 'attendance' });
+    const handleNewNotice = (data: any) => addNotif({ id: `notice_${data.id}`, title: data.isUpdate ? `Notice Updated: ${data.topic}` : `Notice: ${data.topic}`, message: `By ${data.creator_name}`, type: 'notice' });
+    const handleFeePayment = (data: any) => addNotif({ 
+        id: `fee_${data.paymentId || Math.random()}`,
         title: data.title || 'Fee Payment', 
         message: data.message || `₹${data.amount} received from ${data.studentName}`, 
         type: 'fees' 
-    }));
+    });
+
+    socket.on('absent_request', handleAbsentReq);
+    socket.on('teacher_attendance', handleTeacherAtt);
+    socket.on('new_notice', handleNewNotice);
+    socket.on('fee_payment_received', handleFeePayment);
+
     return () => { 
-        socket.off('subscription_update');
-        socket.off('absent_request'); 
-        socket.off('teacher_attendance'); 
-        socket.off('new_notice'); 
-        socket.off('fee_payment_received');
+        socket.off('absent_request', handleAbsentReq); 
+        socket.off('teacher_attendance', handleTeacherAtt); 
+        socket.off('new_notice', handleNewNotice); 
+        socket.off('fee_payment_received', handleFeePayment);
     };
   }, [socket, userData?.id]);
 
@@ -233,6 +243,10 @@ export default function PrincipalDashboard() {
   const [profileData, setProfileData] = useState<any>(null);
   const [showAccountMenu, setShowAccountMenu] = useState(false);
   const [savedAccounts, setSavedAccounts] = useState<any[]>([]);
+  const [showAddAccountModal, setShowAddAccountModal] = useState(false);
+  const [loginEmail, setLoginEmail] = useState('');
+  const [loginPassword, setLoginPassword] = useState('');
+  const [addingAccount, setAddingAccount] = useState(false);
   const [isActionsExpanded, setIsActionsExpanded] = useState(false);
   
   // Session States
@@ -557,6 +571,12 @@ export default function PrincipalDashboard() {
         
         setProfileData(profile);
         setUserData(profile);
+
+        // Load saved principal accounts
+        const accountsStr = await AsyncStorage.getItem('savedPrincipalAccounts');
+        if (accountsStr) {
+            setSavedAccounts(JSON.parse(accountsStr));
+        }
         
         await Promise.all([
             fetchDashboardData(forcedId), 
@@ -583,12 +603,74 @@ export default function PrincipalDashboard() {
     } catch (e) {} finally { setIsSearching(false); }
   };
 
-  const handleCreateResult = (item: any) => { 
-    dismissSearch();
-    router.push(item.type === 'student' ? `/(principal)/students/details/${item.id}` : `/(principal)/teachers/details/${item.id}`); 
+  const handleAddNewAccount = async () => {
+    if (!loginEmail || !loginPassword) {
+        Toast.show({ type: 'error', text1: 'Required', text2: 'Please enter email and password' });
+        return;
+    }
+
+    setAddingAccount(true);
+    try {
+        const res = await axios.post(`${API_ENDPOINTS.AUTH.INSTITUTE}/login`, {
+            email: loginEmail,
+            password: loginPassword
+        });
+
+        const { token, institute } = res.data;
+        
+        // 1. Prepare new account object
+        const newAccount = {
+            token,
+            email: loginEmail,
+            logo_url: institute.logo_url,
+            userData: {
+                ...institute,
+                principal_name: institute.principal_name,
+                institute_name: institute.institute_name
+            }
+        };
+
+        // 2. Update local list and filter duplicates
+        const updatedAccounts = [...savedAccounts.filter(a => a.email !== loginEmail), newAccount];
+        setSavedAccounts(updatedAccounts);
+        await AsyncStorage.setItem('savedPrincipalAccounts', JSON.stringify(updatedAccounts));
+
+        // 3. Switch to this account
+        await AsyncStorage.setItem('token', token);
+        await AsyncStorage.setItem('userData', JSON.stringify(newAccount.userData));
+        
+        Toast.show({ type: 'success', text1: 'Account Added', text2: `Logged into ${institute.institute_name}` });
+        
+        // 4. Cleanup UI
+        setShowAddAccountModal(false);
+        setShowAccountMenu(false);
+        setLoginEmail('');
+        setLoginPassword('');
+        
+        onRefresh();
+    } catch (error: any) {
+        Toast.show({ type: 'error', text1: 'Login Failed', text2: error.response?.data?.message || 'Invalid credentials' });
+    } finally {
+        setAddingAccount(false);
+    }
   };
-  const switchAccount = async (acc: any) => { await AsyncStorage.setItem('token', acc.token); await AsyncStorage.setItem('userData', JSON.stringify(acc.userData)); onRefresh(); setShowAccountMenu(false); };
-  const handleLogout = async () => { await AsyncStorage.clear(); router.replace('/(auth)/institute-login'); };
+
+  const switchAccount = async (acc: any) => { 
+    await AsyncStorage.setItem('token', acc.token); 
+    await AsyncStorage.setItem('userData', JSON.stringify(acc.userData)); 
+    // Close menu and refresh
+    setShowAccountMenu(false);
+    onRefresh(); 
+    Toast.show({ type: 'success', text1: 'Switched!', text2: `Now managing ${acc.userData?.institute_name}` });
+  };
+
+  const handleLogout = async () => { 
+    // Only remove current session data, preserve the saved accounts list
+    await AsyncStorage.removeItem('token');
+    await AsyncStorage.removeItem('userData');
+    await AsyncStorage.removeItem('selectedSessionId');
+    router.replace('/(auth)/institute-login'); 
+  };
 
   const styles = useMemo(() => StyleSheet.create({
     container: { flex: 1, backgroundColor: theme.background },
@@ -795,7 +877,11 @@ export default function PrincipalDashboard() {
                     onPress={() => router.push(action.path as any)}
                   >
                     <View style={[styles.actionIconCircle, { backgroundColor: isDark ? action.bgDark : action.bgLight }]}>
-                      <Ionicons name={action.icon as any} size={24} color={action.color} />
+                      {(action as any).iconType === 'material' ? (
+                        <MaterialCommunityIcons name={action.icon as any} size={24} color={action.color} />
+                      ) : (
+                        <Ionicons name={action.icon as any} size={24} color={action.color} />
+                      )}
                     </View>
                     <Text style={styles.actionText}>{action.title}</Text>
                   </TouchableOpacity>
@@ -906,8 +992,115 @@ export default function PrincipalDashboard() {
 </TouchableOpacity>
 </Modal>
 
-      <Modal visible={showNotifList} transparent animationType="fade" onRequestClose={() => setShowNotifList(false)}><TouchableOpacity style={styles.notifModalOverlay} activeOpacity={1} onPress={() => setShowNotifList(false)}><View style={styles.notifDropdown}><View style={{ flexDirection: 'row', justifyContent: 'space-between', marginBottom: 15 }}><Text style={{ fontWeight: '800', fontSize: 16, color: theme.text }}>Recent Updates</Text><TouchableOpacity onPress={clearAllNotifications}><Text style={{ color: '#ef4444', fontWeight: '700' }}>Clear All</Text></TouchableOpacity></View><ScrollView style={{ maxHeight: 400 }}>{notifications.map((item) => (<View key={item.id} style={styles.notifItem}><View style={[styles.notifItemDot, { backgroundColor: '#f59e0b' }]} /><View style={{ flex: 1 }}><Text style={{ fontWeight: '800', color: theme.text }}>{item.title}</Text><Text style={{ fontSize: 12, color: theme.textLight }}>{item.message}</Text></View><Text style={{ fontSize: 10, color: theme.textLight }}>{item.time}</Text></View>))}</ScrollView></View></TouchableOpacity></Modal>
-      {showAccountMenu && <TouchableOpacity style={styles.modalOverlay} activeOpacity={1} onPress={() => setShowAccountMenu(false)}><View style={styles.accountMenu}><Text style={{ fontSize: 12, fontWeight: '800', color: theme.textLight, marginBottom: 15, textTransform: 'uppercase' }}>Switch Account</Text>{savedAccounts.map((acc, index) => (<TouchableOpacity key={index} style={[styles.accountItem, userData?.email === acc.email && { backgroundColor: theme.primary + '10' }]} onPress={() => switchAccount(acc)}><Image source={acc.logo_url ? { uri: acc.logo_url } : require('../../assets/images/react-logo.png')} style={styles.accountLogo} /><View style={{ flex: 1 }}><Text style={{ fontSize: 15, fontWeight: '700', color: theme.text }}>{acc.userData?.institute_name || 'Institute'}</Text><Text style={{ fontSize: 12, color: theme.textLight }}>{acc.email}</Text></View>{userData?.email === acc.email && <Ionicons name="checkmark-circle" size={20} color="#27AE60" />}</TouchableOpacity>))}<TouchableOpacity style={{ flexDirection: 'row', alignItems: 'center', padding: 15, marginTop: 10, borderWidth: 1, borderStyle: 'dashed', borderColor: theme.primary, borderRadius: 15 }} onPress={() => { setShowAccountMenu(false); router.replace('/(auth)/institute-login'); }}><Ionicons name="add-circle-outline" size={24} color={theme.primary} /><Text style={{ marginLeft: 12, color: theme.primary, fontWeight: '800' }}>Login to another account</Text></TouchableOpacity></View></TouchableOpacity>}
+      <Modal 
+        visible={showNotifList} 
+        transparent 
+        animationType="fade" 
+        onRequestClose={() => setShowNotifList(false)}
+      >
+        <View style={styles.notifModalOverlay}>
+            <Pressable 
+                style={StyleSheet.absoluteFill} 
+                onPress={() => setShowNotifList(false)} 
+            />
+            
+            <View style={[styles.notifDropdown, { maxHeight: 400, padding: 0, overflow: 'hidden' }]}>
+                <FlatList
+                    data={notifications}
+                    keyExtractor={(item) => item.id}
+                    showsVerticalScrollIndicator={true}
+                    contentContainerStyle={{ padding: 20 }}
+                    stickyHeaderIndices={[0]}
+                    scrollEnabled={true}
+                    onStartShouldSetResponder={() => true}
+                    ListHeaderComponent={
+                        <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginBottom: 15, backgroundColor: theme.card, paddingBottom: 5 }}>
+                            <Text style={{ fontWeight: '800', fontSize: 16, color: theme.text }}>Recent Updates</Text>
+                            <TouchableOpacity onPress={clearAllNotifications}>
+                                <Text style={{ color: '#ef4444', fontWeight: '700' }}>Clear All</Text>
+                            </TouchableOpacity>
+                        </View>
+                    }
+                    ListEmptyComponent={
+                        <View style={{ padding: 40, alignItems: 'center' }}>
+                            <Ionicons name="notifications-off-outline" size={40} color={theme.textLight} />
+                            <Text style={{ color: theme.textLight, marginTop: 10, fontWeight: '600' }}>No recent updates</Text>
+                        </View>
+                    }
+                    renderItem={({ item }) => (
+                        <View style={styles.notifItem}>
+                            <View style={[styles.notifItemDot, { backgroundColor: item.type === 'fees' ? theme.success : item.type === 'request' ? '#f59e0b' : theme.primary }]} />
+                            <View style={{ flex: 1 }}>
+                                <Text style={styles.notifItemTitle}>{item.title}</Text>
+                                <Text style={styles.notifItemMsg}>{item.message}</Text>
+                            </View>
+                            <Text style={styles.notifItemTime}>{item.time}</Text>
+                        </View>
+                    )}
+                />
+            </View>
+        </View>
+      </Modal>
+      {showAccountMenu && <TouchableOpacity style={styles.modalOverlay} activeOpacity={1} onPress={() => setShowAccountMenu(false)}><View style={styles.accountMenu}><Text style={{ fontSize: 12, fontWeight: '800', color: theme.textLight, marginBottom: 15, textTransform: 'uppercase' }}>Switch Account</Text>{savedAccounts.map((acc, index) => (<TouchableOpacity key={index} style={[styles.accountItem, userData?.email === acc.email && { backgroundColor: theme.primary + '10' }]} onPress={() => switchAccount(acc)}><Image source={acc.logo_url ? { uri: acc.logo_url } : require('../../assets/images/react-logo.png')} style={styles.accountLogo} /><View style={{ flex: 1 }}><Text style={{ fontSize: 15, fontWeight: '700', color: theme.text }}>{acc.userData?.institute_name || 'Institute'}</Text><Text style={{ fontSize: 12, color: theme.textLight }}>{acc.email}</Text></View>{userData?.email === acc.email && <Ionicons name="checkmark-circle" size={20} color="#27AE60" />}</TouchableOpacity>))}<TouchableOpacity style={{ flexDirection: 'row', alignItems: 'center', padding: 15, marginTop: 10, borderWidth: 1, borderStyle: 'dashed', borderColor: theme.primary, borderRadius: 15 }} onPress={() => { setShowAddAccountModal(true); }}><Ionicons name="add-circle-outline" size={24} color={theme.primary} /><Text style={{ marginLeft: 12, color: theme.primary, fontWeight: '800' }}>Add another account</Text></TouchableOpacity></View></TouchableOpacity>}
+
+      {/* ADD ACCOUNT MODAL */}
+      <Modal
+        visible={showAddAccountModal}
+        transparent
+        animationType="slide"
+        onRequestClose={() => setShowAddAccountModal(false)}
+      >
+        <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : 'height'} style={{ flex: 1 }}>
+            <View style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.6)', justifyContent: 'center', padding: 20 }}>
+                <View style={{ backgroundColor: theme.card, borderRadius: 30, padding: 25, elevation: 10 }}>
+                    <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 25 }}>
+                        <View>
+                            <Text style={{ fontSize: 22, fontWeight: '900', color: theme.text }}>Add Account</Text>
+                            <Text style={{ fontSize: 13, color: theme.textLight, marginTop: 4 }}>Enter credentials for the school</Text>
+                        </View>
+                        <TouchableOpacity onPress={() => setShowAddAccountModal(false)}>
+                            <Ionicons name="close-circle" size={30} color={theme.textLight} />
+                        </TouchableOpacity>
+                    </View>
+
+                    <View style={{ gap: 15 }}>
+                        <View>
+                            <Text style={{ fontSize: 14, fontWeight: '700', color: theme.text, marginBottom: 8 }}>Email Address</Text>
+                            <TextInput
+                                style={{ backgroundColor: isDark ? '#1a1a1a' : '#f5f5f5', borderRadius: 15, padding: 15, color: theme.text, borderWidth: 1, borderColor: theme.border }}
+                                placeholder="principal@school.com"
+                                placeholderTextColor={theme.textLight}
+                                keyboardType="email-address"
+                                autoCapitalize="none"
+                                value={loginEmail}
+                                onChangeText={setLoginEmail}
+                            />
+                        </View>
+
+                        <View>
+                            <Text style={{ fontSize: 14, fontWeight: '700', color: theme.text, marginBottom: 8 }}>Password</Text>
+                            <TextInput
+                                style={{ backgroundColor: isDark ? '#1a1a1a' : '#f5f5f5', borderRadius: 15, padding: 15, color: theme.text, borderWidth: 1, borderColor: theme.border }}
+                                placeholder="Enter Password"
+                                placeholderTextColor={theme.textLight}
+                                secureTextEntry
+                                value={loginPassword}
+                                onChangeText={setLoginPassword}
+                            />
+                        </View>
+
+                        <TouchableOpacity 
+                            style={{ backgroundColor: theme.primary, height: 55, borderRadius: 15, justifyContent: 'center', alignItems: 'center', marginTop: 10, elevation: 5, shadowColor: theme.primary, shadowOpacity: 0.3, shadowRadius: 10 }}
+                            onPress={handleAddNewAccount}
+                            disabled={addingAccount}
+                        >
+                            {addingAccount ? <ActivityIndicator color="#fff" /> : <Text style={{ color: '#fff', fontSize: 16, fontWeight: '800' }}>Verify & Link Account</Text>}
+                        </TouchableOpacity>
+                    </View>
+                </View>
+            </View>
+        </KeyboardAvoidingView>
+      </Modal>
     </View>
     </TouchableWithoutFeedback>
   );

@@ -36,10 +36,17 @@ export default function StudentTransport() {
             
             const sessionId = storedSessionId || parsedStudent.current_session_id;
 
+            if (!sessionId) {
+                console.warn('[Transport] Session ID missing, skipping fetch');
+                setLoading(false);
+                setRefreshing(false);
+                return;
+            }
+
             const response = await axios.get(`${API_ENDPOINTS.TRANSPORT}/list`, {
                 headers: { 
                     Authorization: `Bearer ${token}`,
-                    'x-academic-session-id': sessionId?.toString()
+                    'x-academic-session-id': sessionId.toString()
                 }
             });
             

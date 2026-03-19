@@ -47,6 +47,12 @@ export default function TeacherRouteConfiguration() {
             const teacher = data ? JSON.parse(data) : null;
             const sessionId = storedSessionId || (teacher ? teacher.current_session_id : null);
 
+            if (!sessionId) {
+                console.warn('[TransportConfig] Session ID missing, skipping fetch');
+                setLoading(false);
+                return;
+            }
+
             const headers = { 
                 Authorization: `Bearer ${token}`,
                 'x-academic-session-id': sessionId?.toString()
@@ -135,6 +141,12 @@ export default function TeacherRouteConfiguration() {
             const data = await AsyncStorage.getItem('teacherData');
             const teacher = data ? JSON.parse(data) : null;
             const sessionId = storedSessionId || (teacher ? teacher.current_session_id : null);
+
+            if (!sessionId) {
+                Toast.show({ type: 'error', text1: 'Error', text2: 'Academic session missing. Please refresh dashboard.' });
+                setSaving(false);
+                return;
+            }
 
             await axios.post(`${API_ENDPOINTS.TRANSPORT}/sync-manifest/${id}`, {
                 startPoint,

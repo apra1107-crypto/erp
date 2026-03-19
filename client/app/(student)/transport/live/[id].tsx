@@ -37,9 +37,16 @@ export default function StudentLiveTracking() {
             const student = studentStr ? JSON.parse(studentStr) : null;
             const sessionId = storedSessionId || (student ? student.current_session_id : null);
 
-            const headers = { 
+            if (!sessionId) {
+                console.warn('[LiveTracking] Session ID missing, skipping fetch');
+                setLoading(false);
+                setRefreshing(false);
+                return;
+            }
+
+            const headers: any = { 
                 Authorization: `Bearer ${token}`,
-                'x-academic-session-id': sessionId?.toString()
+                'x-academic-session-id': sessionId.toString()
             };
 
             const [busRes, logsRes] = await Promise.all([

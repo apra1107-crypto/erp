@@ -5,7 +5,7 @@ import { useRouter, useFocusEffect } from 'expo-router';
 import axios from 'axios';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import Toast from 'react-native-toast-message';
-import { Ionicons } from '@expo/vector-icons';
+import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
 import { BlurView } from 'expo-blur';
 import { LinearGradient } from 'expo-linear-gradient';
 import Animated, { useSharedValue, useAnimatedStyle, withTiming, withSpring, withRepeat, withSequence } from 'react-native-reanimated';
@@ -163,6 +163,7 @@ export default function TeacherDashboard() {
     const DAYS = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'];
 
     const [allAccounts, setAllAccounts] = useState<any[]>([]);
+    const [savedCodes, setSavedCodes] = useState<Record<string, string>>({});
     const [fetchingAccounts, setFetchingAccounts] = useState(false);
     const [switchCode, setSwitchCode] = useState('');
     const [selectedSwitchAccount, setSelectedSwitchAccount] = useState<any>(null);
@@ -191,7 +192,9 @@ export default function TeacherDashboard() {
         const joinRooms = () => {
             socket.emit('join_room', `teacher-${teacherData.institute_id}`);
             socket.emit('join_room', `teacher-${teacherData.id}`);
-            socket.emit('join_room', `principal-${teacherData.institute_id}`);
+            if (teacherData.special_permission) {
+                socket.emit('join_room', `principal-${teacherData.institute_id}`);
+            }
             checkSubscription(teacherData.institute_id);
         };
         joinRooms();
@@ -201,19 +204,35 @@ export default function TeacherDashboard() {
             socket.off('connect', joinRooms);
             socket.off('subscription_update', handleSubUpdate);
         };
-    }, [socket, teacherData?.institute_id, teacherData?.id]);
+    }, [socket, teacherData?.institute_id, teacherData?.id, teacherData?.special_permission]);
 
     useEffect(() => {
         if (!socket || !teacherData?.id) return;
         const addNotif = (notif: any) => {
             LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
-            setNotifications(prev => [{ id: Math.random().toString(36).substr(2, 9), time: new Date().toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit' }), ...notif }, ...prev]);
+            setNotifications(prev => {
+                // If notification has a unique ID (e.g. notice ID, fee payment ID), prevent duplicates
+                if (notif.id && prev.some(n => n.id === notif.id)) return prev;
+                // Otherwise use a unique ID for this instance
+                const uniqueId = notif.id || Math.random().toString(36).substr(2, 9);
+                return [{ id: uniqueId, time: new Date().toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit' }), ...notif }, ...prev];
+            });
         };
-        socket.on('absent_request', (data) => addNotif({ title: 'Absent Request', message: `New request from Roll ${data.roll_no}`, type: 'request' }));
-        socket.on('new_notice', (data) => addNotif({ title: data.isUpdate ? `Notice Updated: ${data.topic}` : `Notice: ${data.topic}`, message: `By ${data.creator_name}`, type: 'notice' }));
+        socket.on('absent_request', (data) => addNotif({ id: `absent_${data.id || Math.random()}`, title: 'Absent Request', message: `New request from Roll ${data.roll_no}`, type: 'request' }));
+        socket.on('new_notice', (data) => addNotif({ id: `notice_${data.id}`, title: data.isUpdate ? `Notice Updated: ${data.topic}` : `Notice: ${data.topic}`, message: `By ${data.creator_name}`, type: 'notice' }));
         socket.on('fee_payment_received', (data) => {
             if (teacherData?.special_permission) {
-                addNotif({ title: data.title || 'Fee Payment', message: data.message || `₹${data.amount} received from ${data.studentName}`, type: 'fees' });
+                const notif = { id: `fee_${data.paymentId || Math.random()}`, title: data.title || 'Fee Payment', message: data.message || `₹${data.amount} received from ${data.studentName}`, type: 'fees' };
+                addNotif(notif);
+                
+                // Add banner notification for special teachers
+                Toast.show({
+                    type: 'success',
+                    text1: notif.title,
+                    text2: notif.message,
+                    position: 'top',
+                    topOffset: 60
+                });
             }
         });
         return () => {
@@ -308,6 +327,10 @@ export default function TeacherDashboard() {
             }
             const storedSession = await AsyncStorage.getItem('selectedSessionId');
             if (storedSession) setSelectedSessionId(Number(storedSession));
+
+            // Load saved access codes for fast switching
+            const saved = await AsyncStorage.getItem('saved_teacher_codes');
+            if (saved) setSavedCodes(JSON.parse(saved));
         } catch (e) {}
     };
 
@@ -319,6 +342,52 @@ export default function TeacherDashboard() {
             setAllAccounts(response.data.accounts || []);
         } catch (error) {
             console.error('Error fetching accounts:', error);
+        } finally {
+            setFetchingAccounts(false);
+        }
+    };
+
+    const handleSwitchAction = async (account: any) => {
+        // Check if we have a saved code for this teacher_id
+        const savedCode = savedCodes[account.id.toString()];
+        if (savedCode) {
+            handleFastSwitch(account, savedCode);
+        } else {
+            setSelectedSwitchAccount(account);
+            setSwitchCode('');
+        }
+    };
+
+    const handleFastSwitch = async (account: any, code: string) => {
+        setFetchingAccounts(true);
+        try {
+            const response = await axios.post(`${API_ENDPOINTS.AUTH.TEACHER}/verify-code`, {
+                teacher_id: account.id,
+                access_code: code
+            });
+
+            const { token, teacher } = response.data;
+            await AsyncStorage.setItem('teacherToken', token);
+            await AsyncStorage.setItem('teacherData', JSON.stringify(teacher));
+            
+            Toast.show({ type: 'success', text1: 'Switched!', text2: `Logged into ${teacher.institute_name}` });
+            setShowAccountModal(false);
+            setSelectedSwitchAccount(null);
+            setSwitchCode('');
+            
+            // Refresh Dashboard
+            onRefresh();
+        } catch (error: any) {
+            // If saved code fails (e.g., changed on server), reset it
+            const newSaved = { ...savedCodes };
+            delete newSaved[account.id.toString()];
+            setSavedCodes(newSaved);
+            await AsyncStorage.setItem('saved_teacher_codes', JSON.stringify(newSaved));
+            
+            // Show manual input instead
+            setSelectedSwitchAccount(account);
+            setSwitchCode('');
+            Toast.show({ type: 'info', text1: 'Code Reset', text2: 'Saved code is invalid, please enter it again.' });
         } finally {
             setFetchingAccounts(false);
         }
@@ -340,6 +409,11 @@ export default function TeacherDashboard() {
             const { token, teacher } = response.data;
             await AsyncStorage.setItem('teacherToken', token);
             await AsyncStorage.setItem('teacherData', JSON.stringify(teacher));
+
+            // Save the code locally for next time
+            const newSaved = { ...savedCodes, [selectedSwitchAccount.id.toString()]: switchCode };
+            setSavedCodes(newSaved);
+            await AsyncStorage.setItem('saved_teacher_codes', JSON.stringify(newSaved));
             
             Toast.show({ type: 'success', text1: 'Switched!', text2: `Logged into ${teacher.institute_name}` });
             setShowAccountModal(false);
@@ -403,7 +477,10 @@ export default function TeacherDashboard() {
             setSessions(response.data);
             if (!selectedSessionId) {
                 const active = response.data.find((s: any) => s.is_active);
-                if (active) setSelectedSessionId(active.id);
+                if (active) {
+                    setSelectedSessionId(active.id);
+                    await AsyncStorage.setItem('selectedSessionId', String(active.id));
+                }
             }
         } catch (error) {}
     };
@@ -455,6 +532,7 @@ export default function TeacherDashboard() {
             const profileRes = await axios.get(`${API_ENDPOINTS.AUTH.TEACHER}/profile`, { headers: { Authorization: `Bearer ${token}` } });
             const profile = profileRes.data.teacher;
             setTeacherData(profile);
+            await AsyncStorage.setItem('teacherData', JSON.stringify(profile));
             await Promise.all([
                 fetchSessions(), 
                 fetchTodayAttendance(forcedSessionId), 
@@ -582,18 +660,18 @@ export default function TeacherDashboard() {
             if (marked) {
                 gradientColors = GRADIENTS.teacher; iconName = 'school';
                 if (teacherData?.special_permission) { 
-                    title = 'Staff Attendance'; 
+                    title = 'Attendance'; 
                     mainText = `${item.data.stats?.present || 0} / ${item.data.stats?.total || 0}`; 
                     bottomText = fullDateTimeStr; 
                 }
                 else { 
-                    title = 'My Attendance'; 
+                    title = 'Attendance'; 
                     mainText = `${selfStatus?.toUpperCase()}${markedTime ? ' at ' + markedTime : ''}`; 
                     bottomText = `Marked on ${dateDayStr}`; 
                 }
                 extraContent = (<View style={styles.cardActionOverlay}><Text style={styles.cardStatusText}>MY STATUS: {selfStatus?.toUpperCase()} {markedTime && '@ ' + markedTime}</Text><TouchableOpacity onPress={() => handleMarkSelfAttendance(selfStatus === 'present' ? 'absent' : 'present')} style={styles.cardUpdateBtn}><Text style={styles.cardUpdateBtnText}>CHANGE</Text></TouchableOpacity></View>);
             } else {
-                gradientColors = ['#00b09b', '#96c93d']; iconName = 'checkmark-circle'; title = 'My Attendance'; isInteractive = true; mainText = 'NOT MARKED'; bottomText = fullDateTimeStr;
+                gradientColors = ['#00b09b', '#96c93d']; iconName = 'checkmark-circle'; title = 'Attendance'; isInteractive = true; mainText = 'NOT MARKED'; bottomText = fullDateTimeStr;
                 extraContent = (<View style={styles.markingButtons}><TouchableOpacity style={styles.mBtnPresent} onPress={() => handleMarkSelfAttendance('present')}><Text style={styles.mBtnTextPresent}>PRESENT</Text></TouchableOpacity><TouchableOpacity style={styles.mBtnAbsent} onPress={() => setAbsentReasonModalVisible(true)}><Text style={styles.mBtnTextAbsent}>ABSENT</Text></TouchableOpacity></View>);
             }
         }
@@ -633,7 +711,24 @@ export default function TeacherDashboard() {
                 }} 
                 style={[styles.cardContainer, isLocked && item.type !== 'greeting' && item.type !== 'event' && { opacity: 0.6 }]}
             >
-                <LinearGradient colors={gradientColors as any} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={styles.cardGradient}><View style={styles.cardHeader}><View><Text style={styles.cardTitle}>{title}</Text><Text style={styles.cardSub}>{item.type === 'greeting' ? 'Institute Connect' : (teacherData?.special_permission ? 'Live Updates' : dateDayStr)}</Text></View><View style={styles.cardIconBg}><Ionicons name={isLocked && item.type !== 'greeting' && item.type !== 'event' ? "lock-closed" : iconName} size={22} color="#fff" /></View></View><View><Text style={{ fontSize: item.type === 'greeting' || item.type === 'revenue' ? 36 : 28, fontWeight: '900', color: '#fff' }} numberOfLines={2}>{mainText}</Text><Text style={styles.cardBottomText}>{bottomText}</Text>{extraContent}</View></LinearGradient>
+                <LinearGradient colors={gradientColors as any} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={styles.cardGradient}>
+                    <View style={styles.cardHeader}>
+                        <View>
+                            {item.type !== 'attendance_merged' ? (
+                                <>
+                                    <Text style={styles.cardTitle}>{title}</Text>
+                                    <Text style={styles.cardSub}>{item.type === 'greeting' ? 'Institute Connect' : dateDayStr}</Text>
+                                </>
+                            ) : (
+                                <View style={{ height: 10 }} />
+                            )}
+                        </View>
+                        <View style={styles.cardIconBg}><Ionicons name={isLocked && item.type !== 'greeting' && item.type !== 'event' ? "lock-closed" : iconName} size={22} color="#fff" /></View>
+                    </View>
+                    <View style={item.type === 'attendance_merged' ? { marginTop: -20 } : null}>
+                        <View><Text style={{ fontSize: item.type === 'greeting' || item.type === 'revenue' ? 36 : 28, fontWeight: '900', color: '#fff' }} numberOfLines={2}>{mainText}</Text><Text style={styles.cardBottomText}>{bottomText}</Text>{extraContent}</View>
+                    </View>
+                </LinearGradient>
             </TouchableOpacity>
         );
     };
@@ -649,7 +744,7 @@ export default function TeacherDashboard() {
             { title: 'Add Student', icon: 'person-add', color: '#27AE60', bgDark: '#1B2C1B', bgLight: '#E8F5E9', path: '/(teacher)/add-student' },
             { title: 'Promotion', icon: 'trending-up-outline', color: '#6366f1', bgDark: '#1B1B2C', bgLight: '#EEF2FF', path: '/(teacher)/promotion' },
             { title: 'Homework', icon: 'book', color: '#F39C12', bgDark: '#3D2B1B', bgLight: '#FFF3E0', path: '/(teacher)/homework' },
-            { title: 'Fees', icon: 'cash-outline', color: '#10b981', bgDark: '#1B2C1B', bgLight: '#E8F5E9', path: '/(teacher)/fees', restricted: true },
+            { title: 'Fees', icon: 'currency-inr', iconType: 'material', color: '#10b981', bgDark: '#1B2C1B', bgLight: '#E8F5E9', path: '/(teacher)/fees', restricted: true },
             { title: 'Transport', icon: 'bus-outline', color: '#06b6d4', bgDark: '#1B2E33', bgLight: '#E0F7FA', path: '/(teacher)/transport' },
             { title: 'ID Card', icon: 'person-circle-outline', color: '#009688', bgDark: '#1B2E2A', bgLight: '#E0F2F1', path: '/(teacher)/id-card' },
             { title: 'Admit Card', icon: 'card-outline', color: '#6366f1', bgDark: '#2D1B36', bgLight: '#F3E5F5', path: '/(teacher)/admit-card' },
@@ -986,7 +1081,22 @@ export default function TeacherDashboard() {
 
                 <View style={styles.actionsContainer}>
                     <View style={styles.actionsBox}>
-                        {actions.map((action, index) => (<TouchableOpacity key={index} style={styles.actionCard} onPress={() => router.push(action.path as any)}><View style={[styles.actionIconCircle, { backgroundColor: isDark ? action.bgDark : action.bgLight }]}><Ionicons name={action.icon as any} size={24} color={action.color} /></View><Text style={styles.actionText}>{action.title}</Text></TouchableOpacity>))}
+                        {actions.map((action, index) => (
+                            <TouchableOpacity 
+                                key={index} 
+                                style={styles.actionCard} 
+                                onPress={() => router.push(action.path as any)}
+                            >
+                                <View style={[styles.actionIconCircle, { backgroundColor: isDark ? action.bgDark : action.bgLight }]}>
+                                    {(action as any).iconType === 'material' ? (
+                                        <MaterialCommunityIcons name={action.icon as any} size={24} color={action.color} />
+                                    ) : (
+                                        <Ionicons name={action.icon as any} size={24} color={action.color} />
+                                    )}
+                                </View>
+                                <Text style={styles.actionText}>{action.title}</Text>
+                            </TouchableOpacity>
+                        ))}
                     </View>
                 </View>
             </ScrollView>
@@ -1078,6 +1188,7 @@ export default function TeacherDashboard() {
                         <TouchableOpacity style={{ flexDirection: 'row', alignItems: 'center', paddingVertical: 12 }} onPress={async () => {
                             await AsyncStorage.removeItem('teacherToken');
                             await AsyncStorage.removeItem('teacherData');
+                            await AsyncStorage.removeItem('saved_teacher_codes');
                             router.replace('/(auth)/teacher-login');
                         }}>
                             <Ionicons name="log-out-outline" size={20} color={theme.danger} />
@@ -1381,7 +1492,7 @@ export default function TeacherDashboard() {
                                                     borderWidth: 1,
                                                     borderColor: theme.border
                                                 }}
-                                                onPress={() => setSelectedSwitchAccount(acc)}
+                                                onPress={() => handleSwitchAction(acc)}
                                             >
                                                 <View style={{ width: 50, height: 50, borderRadius: 15, backgroundColor: theme.primary + '15', justifyContent: 'center', alignItems: 'center', marginRight: 15 }}>
                                                     {acc.institute_logo ? (
@@ -1394,6 +1505,9 @@ export default function TeacherDashboard() {
                                                     <Text style={{ fontSize: 16, fontWeight: '800', color: theme.text }}>{acc.institute_name}</Text>
                                                     <Text style={{ fontSize: 12, color: theme.textLight, marginTop: 2 }}>{acc.name} • {acc.subject}</Text>
                                                 </View>
+                                                {savedCodes[acc.id.toString()] && (
+                                                    <Ionicons name="flash" size={16} color={theme.primary} style={{ marginRight: 5 }} />
+                                                )}
                                                 <Ionicons name="chevron-forward" size={18} color={theme.border} />
                                             </TouchableOpacity>
                                         ))

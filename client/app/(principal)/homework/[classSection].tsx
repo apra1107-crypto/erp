@@ -303,8 +303,21 @@ export default function PrincipalClassHomework() {
                     <TouchableOpacity style={{ flex: 1 }} onPress={() => setModalVisible(false)} />
                     <View style={styles.modalContent}>
                         <Text style={[styles.sheetTitle, { marginBottom: 20 }]}>{editingId ? 'Edit Homework' : 'Add Homework'}</Text>
-                        <TextInput style={styles.input} placeholder="Subject Name" value={subject} onChangeText={setSubject} />
-                        <TextInput style={[styles.input, { height: 120 }]} multiline placeholder="Homework details..." value={content} onChangeText={setContent} />
+                        <TextInput 
+                            style={styles.input} 
+                            placeholder="Subject Name" 
+                            placeholderTextColor={theme.textLight}
+                            value={subject} 
+                            onChangeText={setSubject} 
+                        />
+                        <TextInput 
+                            style={[styles.input, { height: 120 }]} 
+                            multiline 
+                            placeholder="Homework details..." 
+                            placeholderTextColor={theme.textLight}
+                            value={content} 
+                            onChangeText={setContent} 
+                        />
                         <TouchableOpacity style={styles.saveBtn} onPress={handleSaveHomework} disabled={saving}>{saving ? <ActivityIndicator color="#fff" /> : <Text style={{ color: '#fff', fontWeight: '800' }}>{editingId ? 'Update' : 'Post'}</Text>}</TouchableOpacity>
                     </View>
                 </KeyboardAvoidingView>

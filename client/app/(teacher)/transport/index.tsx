@@ -37,6 +37,12 @@ export default function TeacherTransportDashboard() {
             if (teacher) setTeacherData(teacher);
             const sessionId = storedSessionId || (teacher ? teacher.current_session_id : null);
 
+            if (!sessionId) {
+                console.warn('[Transport] Session ID missing, skipping fetch');
+                setLoading(false);
+                return;
+            }
+
             const response = await axios.get(`${API_ENDPOINTS.TRANSPORT}/list`, {
                 headers: { 
                     Authorization: `Bearer ${token}`,
@@ -96,6 +102,11 @@ export default function TeacherTransportDashboard() {
             const teacher = data ? JSON.parse(data) : null;
             const sessionId = storedSessionId || (teacher ? teacher.current_session_id : null);
 
+            if (!sessionId) {
+                Toast.show({ type: 'error', text1: 'Error', text2: 'Academic session missing. Please refresh dashboard.' });
+                return;
+            }
+
             const headers = { 
                 Authorization: `Bearer ${token}`,
                 'x-academic-session-id': sessionId?.toString()
@@ -132,6 +143,11 @@ export default function TeacherTransportDashboard() {
                         const data = await AsyncStorage.getItem('teacherData');
                         const teacher = data ? JSON.parse(data) : null;
                         const sessionId = storedSessionId || (teacher ? teacher.current_session_id : null);
+
+                        if (!sessionId) {
+                            Toast.show({ type: 'error', text1: 'Error', text2: 'Academic session missing.' });
+                            return;
+                        }
 
                         await axios.delete(`${API_ENDPOINTS.TRANSPORT}/delete/${id}`, {
                             headers: { 

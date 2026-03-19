@@ -264,7 +264,14 @@ export default function ClassHomework() {
 
         // Bottom Sheet Modal
         sheetOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.5)', justifyContent: 'flex-end' },
-        sheetContent: { backgroundColor: theme.card, borderTopLeftRadius: 35, borderTopRightRadius: 35, height: SCREEN_HEIGHT * 0.7, padding: 20 },
+        sheetContent: { 
+            backgroundColor: theme.card, 
+            borderTopLeftRadius: 35, 
+            borderTopRightRadius: 35, 
+            height: SCREEN_HEIGHT * 0.7, 
+            padding: 20,
+            paddingBottom: Math.max(20, insets.bottom + 10)
+        },
         sheetHeader: { alignItems: 'center', marginBottom: 20 },
         sheetHandle: { width: 40, height: 5, backgroundColor: theme.border, borderRadius: 3, marginBottom: 15 },
         sheetTitle: { fontSize: 18, fontWeight: '900', color: theme.text },
@@ -285,7 +292,14 @@ export default function ClassHomework() {
         doneTime: { fontSize: 10, color: theme.success, fontWeight: '700' },
 
         modalOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.5)', justifyContent: 'flex-end' },
-        modalContent: { backgroundColor: theme.card, borderTopLeftRadius: 35, borderTopRightRadius: 35, padding: 25, maxHeight: '80%' },
+        modalContent: { 
+            backgroundColor: theme.card, 
+            borderTopLeftRadius: 35, 
+            borderTopRightRadius: 35, 
+            padding: 25, 
+            paddingBottom: Math.max(25, insets.bottom + 15),
+            maxHeight: '80%' 
+        },
         input: { backgroundColor: theme.background, borderRadius: 15, padding: 15, color: theme.text, fontSize: 16, borderWidth: 1, borderColor: theme.border, marginBottom: 20 },
         saveBtn: { backgroundColor: theme.primary, height: 55, borderRadius: 18, justifyContent: 'center', alignItems: 'center' },
         emptyBox: { alignItems: 'center', marginTop: 80 },

@@ -1,5 +1,5 @@
 import { useState, useEffect, useMemo } from 'react';
-import { View, Text, StyleSheet, TextInput, TouchableOpacity, ActivityIndicator, Image, ScrollView, Modal, StatusBar, Platform } from 'react-native';
+import { View, Text, StyleSheet, TextInput, TouchableOpacity, ActivityIndicator, Image, ScrollView, Modal, StatusBar, Platform, KeyboardAvoidingView } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
 import axios from 'axios';
@@ -34,7 +34,7 @@ export default function StudentLogin() {
   const router = useRouter();
   const { theme, isDark } = useTheme();
 
-  const [step, setStep] = useState('phone'); // phone, institutes, students, code
+  const [step, setStep] = useState('checking'); // checking, phone, institutes, students, code
   const [phone, setPhone] = useState('');
   const [institutes, setInstitutes] = useState<Institute[]>([]);
   const [selectedInstitute, setSelectedInstitute] = useState<Institute | null>(null);
@@ -54,9 +54,12 @@ export default function StudentLogin() {
       const userData = await AsyncStorage.getItem('studentData');
       if (token && userData) {
         router.replace('/(student)/dashboard');
+      } else {
+        setStep('phone');
       }
     } catch (error) {
       console.error('Session check error:', error);
+      setStep('phone');
     }
   };
 
@@ -105,13 +108,9 @@ export default function StudentLogin() {
     }
   };
 
-  const handleSelectStudent = (student: Student) => {
+  const handleSelectStudent = async (student: Student) => {
     setSelectedStudent(student);
-    if (student.code_used) {
-      handleDirectLogin(student.id);
-    } else {
-      setStep('code');
-    }
+    setStep('code');
   };
 
   const handleVerifyCode = async () => {
@@ -126,22 +125,11 @@ export default function StudentLogin() {
         student_id: selectedStudent.id,
         access_code: code
       });
+      await AsyncStorage.removeItem('loggedOut');
       await saveSessionAndNavigate(response.data.token, response.data.student);
     } catch (err: any) {
       setError(err.response?.data?.message || 'Invalid access code');
     } finally {
-      setLoading(false);
-    }
-  };
-
-  const handleDirectLogin = async (studentId: string) => {
-    setLoading(true);
-    setError('');
-    try {
-      const response = await axios.post(`${API_URL}/login`, { student_id: studentId });
-      await saveSessionAndNavigate(response.data.token, response.data.student);
-    } catch (err: any) {
-      setError(err.response?.data?.message || 'Login failed');
       setLoading(false);
     }
   };
@@ -252,15 +240,53 @@ export default function StudentLogin() {
     statusBadge: { fontSize: 11, fontWeight: '800', color: theme.success, marginTop: 5, textTransform: 'uppercase' },
 
     loadingOverlay: { ...StyleSheet.absoluteFillObject, backgroundColor: 'rgba(0,0,0,0.5)', justifyContent: 'center', alignItems: 'center' },
+
+    // Enhanced Verification Styles
+    cardHeader: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 30 },
+    iconButton: { width: 40, height: 40, borderRadius: 20, backgroundColor: theme.background, justifyContent: 'center', alignItems: 'center', borderWidth: 1, borderColor: theme.border },
+    headerTitle: { fontSize: 20, fontWeight: '800', color: theme.text },
+    
+    profileSection: { alignItems: 'center', marginBottom: 25 },
+    avatarWrapper: { position: 'relative', marginBottom: 15 },
+    largeAvatar: { width: 100, height: 100, borderRadius: 50, borderWidth: 4, borderColor: theme.primary + '20' },
+    verificationBadge: { position: 'absolute', bottom: 0, right: 0, width: 32, height: 32, borderRadius: 16, backgroundColor: theme.primary, borderContent: '#fff', borderWidth: 3, justifyContent: 'center', alignItems: 'center' },
+    studentName: { fontSize: 22, fontWeight: '900', color: theme.text, marginBottom: 4 },
+    studentInfo: { fontSize: 14, color: theme.textLight, fontWeight: '600' },
+    
+    divider: { height: 1, width: '100%', backgroundColor: theme.border, marginBottom: 25 },
+    
+    inputLabel: { fontSize: 16, fontWeight: '800', color: theme.text, marginBottom: 6 },
+    inputHint: { fontSize: 13, color: theme.textLight, fontWeight: '500', marginBottom: 20 },
+    
+    codeInputContainer: { width: '100%', position: 'relative', height: 60, marginBottom: 20 },
+    hiddenInput: { position: 'absolute', opacity: 0, width: '100%', height: '100%', zIndex: 10 },
+    codeCellsRow: { flexDirection: 'row', justifyContent: 'space-between', width: '100%' },
+    codeCell: { width: 42, height: 52, borderRadius: 12, borderWidth: 1, borderColor: theme.border, backgroundColor: theme.background, justifyContent: 'center', alignItems: 'center' },
+    codeCellText: { fontSize: 22, fontWeight: '800', color: theme.primary },
+    
+    errorBadge: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', backgroundColor: theme.danger + '10', paddingVertical: 10, paddingHorizontal: 15, borderRadius: 12, marginBottom: 20 },
+    errorBadgeText: { color: theme.danger, fontSize: 13, fontWeight: '700', marginLeft: 8 },
+    
+    primaryButton: { backgroundColor: theme.primary, height: 60, borderRadius: 18, flexDirection: 'row', justifyContent: 'center', alignItems: 'center', shadowColor: theme.primary, shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.3, shadowRadius: 10, elevation: 8 },
+    primaryButtonText: { color: '#fff', fontSize: 16, fontWeight: '800' },
+    
+    footerNote: { fontSize: 12, color: theme.textLight, textAlign: 'center', marginTop: 20, fontWeight: '500' },
   }), [theme, isDark]);
 
   const renderPhoneStep = () => (
     <View style={styles.content}>
+      <TouchableOpacity 
+        style={[styles.backBtn, { position: 'absolute', top: 0, left: 25 }]} 
+        onPress={() => router.push('/(auth)/role-selection')}
+      >
+        <Ionicons name="arrow-back" size={24} color={theme.text} />
+      </TouchableOpacity>
+      
       <View style={styles.card}>
         <View style={styles.iconHeader}>
           <Ionicons name="school" size={40} color={theme.primary} />
         </View>
-        <Text style={styles.title}>Welcome Back</Text>
+        <Text style={styles.title}>Student Login</Text>
         <Text style={styles.subtitle}>Enter your registered mobile number to access your student profile</Text>
 
         <View style={styles.inputWrapper}>
@@ -283,11 +309,8 @@ export default function StudentLogin() {
         </TouchableOpacity>
 
         <View style={styles.linksContainer}>
-          <TouchableOpacity onPress={() => router.push('/(auth)/teacher-login')}>
-            <Text style={styles.link}>I am a Teacher</Text>
-          </TouchableOpacity>
-          <TouchableOpacity onPress={() => router.push('/(auth)/institute-login')}>
-            <Text style={styles.link}>Institute Administration</Text>
+          <TouchableOpacity onPress={() => router.push('/(auth)/role-selection')}>
+            <Text style={styles.link}>Change Role</Text>
           </TouchableOpacity>
         </View>
       </View>
@@ -338,7 +361,6 @@ export default function StudentLogin() {
             <View style={styles.listContent}>
               <Text style={styles.listTitle}>{stud.name}</Text>
               <Text style={styles.listSubtitle}>Class {stud.class}-{stud.section} • Roll: {stud.roll_no}</Text>
-              {stud.code_used && <Text style={styles.statusBadge}>Verified Profile</Text>}
             </View>
             <Ionicons name="chevron-forward" size={20} color={theme.textLight} />
           </TouchableOpacity>
@@ -350,33 +372,86 @@ export default function StudentLogin() {
   const renderCodeStep = () => (
     <View style={styles.content}>
       <View style={styles.card}>
-        <TouchableOpacity style={{ alignSelf: 'flex-start', marginBottom: 20 }} onPress={() => setStep('students')}>
-          <Ionicons name="arrow-back" size={24} color={theme.text} />
-        </TouchableOpacity>
-        <View style={styles.iconHeader}>
-          <Ionicons name="shield-checkmark" size={40} color={theme.primary} />
+        <View style={styles.cardHeader}>
+          <TouchableOpacity style={styles.iconButton} onPress={() => setStep('students')}>
+            <Ionicons name="arrow-back" size={22} color={theme.text} />
+          </TouchableOpacity>
+          <Text style={styles.headerTitle}>Verification</Text>
+          <View style={{ width: 40 }} /> 
         </View>
-        <Text style={styles.title}>Verification</Text>
-        <Text style={styles.subtitle}>Enter 6-digit access code for {selectedStudent?.name}</Text>
 
-        <View style={styles.inputWrapper}>
-          <Ionicons name="key-outline" size={20} color={theme.primary} style={{ marginRight: 12 }} />
+        <View style={styles.profileSection}>
+          <View style={styles.avatarWrapper}>
+            {selectedStudent?.photo_url ? (
+              <Image source={{ uri: selectedStudent.photo_url }} style={styles.largeAvatar} />
+            ) : (
+              <View style={[styles.largeAvatar, { backgroundColor: theme.primary + '10', justifyContent: 'center', alignItems: 'center' }]}>
+                <Ionicons name="person" size={40} color={theme.primary} />
+              </View>
+            )}
+            <View style={styles.verificationBadge}>
+              <Ionicons name="shield-checkmark" size={18} color="#fff" />
+            </View>
+          </View>
+          <Text style={styles.studentName}>{selectedStudent?.name}</Text>
+          <Text style={styles.studentInfo}>Class {selectedStudent?.class}-{selectedStudent?.section} • Roll No: {selectedStudent?.roll_no}</Text>
+        </View>
+
+        <View style={styles.divider} />
+
+        <Text style={styles.inputLabel}>Enter Access Code</Text>
+        <Text style={styles.inputHint}>Please type the 6-character access code provided by your institute.</Text>
+
+        <View style={styles.codeInputContainer}>
           <TextInput
-            style={[styles.input, { letterSpacing: 5, fontSize: 22, fontFamily: Platform.OS === 'ios' ? 'Courier' : 'monospace' }]}
-            placeholder="XXXXXX"
-            placeholderTextColor={theme.textLight}
+            style={styles.hiddenInput}
             value={code}
             onChangeText={setCode}
             maxLength={6}
+            autoFocus
             autoCapitalize="none"
           />
+          <View style={styles.codeCellsRow}>
+            {[0, 1, 2, 3, 4, 5].map((index) => (
+              <View 
+                key={index} 
+                style={[
+                  styles.codeCell, 
+                  code.length === index && { borderColor: theme.primary, borderWidth: 2, backgroundColor: theme.primary + '05' },
+                  code.length > index && { borderColor: theme.primary + '40' }
+                ]}
+              >
+                <Text style={styles.codeCellText}>
+                  {code[index] || ""}
+                </Text>
+              </View>
+            ))}
+          </View>
         </View>
 
-        {error ? <Text style={styles.errorText}>{error}</Text> : null}
+        {error ? (
+          <View style={styles.errorBadge}>
+            <Ionicons name="alert-circle" size={16} color={theme.danger} />
+            <Text style={styles.errorBadgeText}>{error}</Text>
+          </View>
+        ) : null}
 
-        <TouchableOpacity style={styles.button} onPress={handleVerifyCode} disabled={loading}>
-          {loading ? <ActivityIndicator color="#fff" /> : <Text style={styles.buttonText}>Authorize</Text>}
+        <TouchableOpacity 
+          style={[styles.primaryButton, loading && { opacity: 0.8 }]} 
+          onPress={handleVerifyCode} 
+          disabled={loading}
+        >
+          {loading ? (
+            <ActivityIndicator color="#fff" />
+          ) : (
+            <>
+              <Text style={styles.primaryButtonText}>Authorize Access</Text>
+              <Ionicons name="arrow-forward" size={20} color="#fff" style={{ marginLeft: 8 }} />
+            </>
+          )}
         </TouchableOpacity>
+        
+        <Text style={styles.footerNote}>Having trouble? Contact your school administrator.</Text>
       </View>
     </View>
   );
@@ -384,11 +459,21 @@ export default function StudentLogin() {
   return (
     <SafeAreaView style={styles.container}>
       <StatusBar barStyle={theme.statusBarStyle} />
-      {step === 'phone' && renderPhoneStep()}
-      {step === 'institutes' && renderInstitutesStep()}
-      {step === 'students' && renderStudentsStep()}
-      {step === 'code' && renderCodeStep()}
-      {loading && step !== 'phone' && step !== 'code' && <View style={styles.loadingOverlay}><ActivityIndicator size="large" color="#fff" /></View>}
+      <KeyboardAvoidingView 
+        behavior={Platform.OS === 'ios' ? 'padding' : 'height'} 
+        style={{ flex: 1 }}
+      >
+        {step === 'checking' && (
+          <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center' }}>
+            <ActivityIndicator size="large" color={theme.primary} />
+          </View>
+        )}
+        {step === 'phone' && renderPhoneStep()}
+        {step === 'institutes' && renderInstitutesStep()}
+        {step === 'students' && renderStudentsStep()}
+        {step === 'code' && renderCodeStep()}
+        {loading && step !== 'phone' && step !== 'code' && step !== 'checking' && <View style={styles.loadingOverlay}><ActivityIndicator size="large" color="#fff" /></View>}
+      </KeyboardAvoidingView>
     </SafeAreaView>
   );
 }

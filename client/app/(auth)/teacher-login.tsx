@@ -1,5 +1,5 @@
 import { useState, useEffect, useMemo } from 'react';
-import { View, Text, StyleSheet, TextInput, TouchableOpacity, ActivityIndicator, Image, ScrollView, Modal, StatusBar, Platform } from 'react-native';
+import { View, Text, StyleSheet, TextInput, TouchableOpacity, ActivityIndicator, Image, ScrollView, Modal, StatusBar, Platform, KeyboardAvoidingView, Keyboard } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
 import axios from 'axios';
@@ -58,6 +58,7 @@ export default function TeacherLogin() {
   };
 
   const handleVerifyPhone = async () => {
+    Keyboard.dismiss();
     setError('');
     if (!phone || phone.length !== 10) {
       setError('Please enter a valid 10-digit phone number');
@@ -103,14 +104,11 @@ export default function TeacherLogin() {
 
   const handleSelectTeacher = (teacher: Teacher) => {
     setSelectedTeacher(teacher);
-    if (teacher.code_used) {
-      handleDirectLogin(teacher.id);
-    } else {
-      setStep('code');
-    }
+    setStep('code');
   };
 
   const handleVerifyCode = async () => {
+    Keyboard.dismiss();
     setError('');
     if (!selectedTeacher || !code) {
       setError('Please enter your access code');
@@ -126,18 +124,6 @@ export default function TeacherLogin() {
     } catch (err: any) {
       setError(err.response?.data?.message || 'Invalid access code');
     } finally {
-      setLoading(false);
-    }
-  };
-
-  const handleDirectLogin = async (teacherId: string) => {
-    setLoading(true);
-    setError('');
-    try {
-      const response = await axios.post(`${API_URL}/login`, { teacher_id: teacherId });
-      await saveSessionAndNavigate(response.data.token, response.data.teacher);
-    } catch (err: any) {
-      setError(err.response?.data?.message || 'Login failed');
       setLoading(false);
     }
   };
@@ -235,6 +221,13 @@ export default function TeacherLogin() {
 
   const renderPhoneStep = () => (
     <View style={styles.content}>
+      <TouchableOpacity 
+        style={[styles.backBtn, { position: 'absolute', top: 0, left: 25 }]} 
+        onPress={() => router.push('/(auth)/role-selection')}
+      >
+        <Ionicons name="arrow-back" size={24} color={theme.text} />
+      </TouchableOpacity>
+
       <View style={styles.card}>
         <View style={styles.iconHeader}>
           <Ionicons name="people" size={40} color={theme.secondary} />
@@ -262,11 +255,8 @@ export default function TeacherLogin() {
         </TouchableOpacity>
 
         <View style={styles.linksContainer}>
-          <TouchableOpacity onPress={() => router.push('/(auth)/student-login')}>
-            <Text style={styles.link}>I am a Student</Text>
-          </TouchableOpacity>
-          <TouchableOpacity onPress={() => router.push('/(auth)/institute-login')}>
-            <Text style={styles.link}>School Administrator</Text>
+          <TouchableOpacity onPress={() => router.push('/(auth)/role-selection')}>
+            <Text style={styles.link}>Change Role</Text>
           </TouchableOpacity>
         </View>
       </View>
@@ -317,7 +307,6 @@ export default function TeacherLogin() {
             <View style={styles.listContent}>
               <Text style={styles.listTitle}>{teach.name}</Text>
               <Text style={styles.listSubtitle}>{teach.subject}</Text>
-              {teach.code_used && <Text style={styles.statusBadge}>Verified Faculty</Text>}
             </View>
             <Ionicons name="chevron-forward" size={20} color={theme.textLight} />
           </TouchableOpacity>
@@ -363,11 +352,16 @@ export default function TeacherLogin() {
   return (
     <SafeAreaView style={styles.container}>
       <StatusBar barStyle={theme.statusBarStyle} />
-      {step === 'phone' && renderPhoneStep()}
-      {step === 'institutes' && renderInstitutesStep()}
-      {step === 'teachers' && renderTeachersStep()}
-      {step === 'code' && renderCodeStep()}
-      {loading && step !== 'phone' && step !== 'code' && <View style={styles.loadingOverlay}><ActivityIndicator size="large" color="#fff" /></View>}
+      <KeyboardAvoidingView
+        behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+        style={{ flex: 1 }}
+      >
+        {step === 'phone' && renderPhoneStep()}
+        {step === 'institutes' && renderInstitutesStep()}
+        {step === 'teachers' && renderTeachersStep()}
+        {step === 'code' && renderCodeStep()}
+        {loading && step !== 'phone' && step !== 'code' && <View style={styles.loadingOverlay}><ActivityIndicator size="large" color="#fff" /></View>}
+      </KeyboardAvoidingView>
     </SafeAreaView>
   );
 }

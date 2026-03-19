@@ -44,6 +44,12 @@ export default function TeacherLiveTracking() {
             if (teacher) setTeacherData(teacher);
             const sessionId = storedSessionId || (teacher ? teacher.current_session_id : null);
 
+            if (!sessionId) {
+                console.warn('[TransportLive] Session ID missing, skipping fetch');
+                setLoading(false);
+                return;
+            }
+
             const dateStr = selectedDate.toISOString().split('T')[0];
 
             const headers = { 

@@ -247,41 +247,34 @@ export default function TakeAttendance() {
     const styles = useMemo(() => StyleSheet.create({
         container: { flex: 1, backgroundColor: theme.background },
         header: {
-            backgroundColor: theme.card,
             paddingTop: insets.top + 10,
             paddingBottom: 15,
             paddingHorizontal: 20,
             flexDirection: 'row',
             alignItems: 'center',
-            borderBottomWidth: 1,
-            borderBottomColor: theme.border,
             zIndex: 10,
-            shadowColor: '#000',
-            shadowOffset: { width: 0, height: 2 },
-            shadowOpacity: isDark ? 0.2 : 0.05,
-            shadowRadius: 10,
-            elevation: 5,
         },
-        backBtn: { padding: 8, borderRadius: 12, backgroundColor: theme.background, marginRight: 15 },
+        backBtn: { 
+            padding: 8, 
+            borderRadius: 12, 
+            backgroundColor: theme.card, 
+            marginRight: 15,
+            borderWidth: 1,
+            borderColor: theme.border
+        },
         headerTitle: { fontSize: 18, fontWeight: '900', color: theme.text },
         content: { flex: 1 },
         dateSection: {
-            backgroundColor: theme.card,
-            padding: 20,
-            borderBottomWidth: 1,
-            borderBottomColor: theme.border,
+            paddingHorizontal: 20,
+            paddingBottom: 10,
         },
-        dateLabel: { fontSize: 13, fontWeight: '700', color: theme.textLight, marginBottom: 10 },
+        dateLabel: { fontSize: 12, fontWeight: '800', color: theme.primary, marginBottom: 8, textTransform: 'uppercase', letterSpacing: 1 },
         dateButton: {
             flexDirection: 'row',
             alignItems: 'center',
-            backgroundColor: theme.background,
-            padding: 15,
-            borderRadius: 15,
-            borderWidth: 1,
-            borderColor: theme.border,
+            paddingVertical: 5,
         },
-        dateText: { flex: 1, fontSize: 16, fontWeight: '700', color: theme.text, marginLeft: 10 },
+        dateText: { fontSize: 18, fontWeight: '900', color: theme.text, marginLeft: 10 },
         logsSection: {
             backgroundColor: theme.card,
             padding: 20,
@@ -545,7 +538,7 @@ export default function TakeAttendance() {
 
     return (
         <View style={styles.container}>
-            <StatusBar barStyle={theme.statusBarStyle} backgroundColor={theme.card} translucent={true} />
+            <StatusBar barStyle={theme.statusBarStyle} backgroundColor="transparent" translucent={true} />
             <View style={styles.header}>
                 <TouchableOpacity style={styles.backBtn} onPress={() => router.back()}>
                     <Ionicons name="chevron-back" size={24} color={theme.text} />

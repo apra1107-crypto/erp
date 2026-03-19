@@ -304,11 +304,12 @@ export default function StudentDetails() {
         },
         codeLabel: { fontSize: 13, fontWeight: '700', color: theme.primary, marginRight: 10 },
         codeValue: {
-            fontSize: 20,
+            fontSize: 22,
             fontWeight: '900',
             color: theme.primary,
-            letterSpacing: 2,
-            fontFamily: Platform.OS === 'ios' ? 'Courier' : 'monospace'
+            letterSpacing: 4,
+            textTransform: 'uppercase',
+            fontFamily: Platform.OS === 'ios' ? 'Verdana' : 'sans-serif-medium'
         },
 
         section: { marginBottom: 25 },

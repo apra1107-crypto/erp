@@ -188,7 +188,6 @@ export default function StudentHomework() {
             </View>
 
             <View style={styles.dateSelector}>
-                <Ionicons name="calendar-outline" size={22} color={theme.primary} />
                 <Text style={styles.dateText}>
                     {selectedDate.toLocaleDateString('en-IN', { day: '2-digit', month: 'long', year: 'numeric' })}
                 </Text>

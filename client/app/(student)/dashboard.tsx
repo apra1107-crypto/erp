@@ -1,5 +1,5 @@
 import { useState, useEffect, useMemo, useCallback, useRef } from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, ActivityIndicator, Image, ScrollView, Modal, TextInput, Dimensions, KeyboardAvoidingView, Platform, StatusBar, LayoutAnimation, RefreshControl, UIManager, FlatList } from 'react-native';
+import { View, Text, StyleSheet, TouchableOpacity, ActivityIndicator, Image, ScrollView, Modal, TextInput, Dimensions, KeyboardAvoidingView, Platform, StatusBar, LayoutAnimation, RefreshControl, UIManager, FlatList, Pressable } from 'react-native';
 
 if (Platform.OS === 'android' && UIManager.setLayoutAnimationEnabledExperimental) {
     UIManager.setLayoutAnimationEnabledExperimental(true);
@@ -581,9 +581,11 @@ export default function StudentDashboard() {
 
     useFocusEffect(
         useCallback(() => {
-            loadInitialData();
+            if (!studentData) {
+                loadInitialData();
+            }
             fetchSessions();
-        }, [])
+        }, [studentData])
     );
 
     useEffect(() => {
@@ -773,7 +775,11 @@ export default function StudentDashboard() {
     }, [socket, studentData]);
 
     const loadInitialData = async () => {
-        setLoading(true);
+        // Only show full-screen loader if we don't have any data yet
+        if (!studentData) {
+            setLoading(true);
+        }
+        
         try {
             const data = await AsyncStorage.getItem('studentData');
             const token = await AsyncStorage.getItem('studentToken');
@@ -950,6 +956,7 @@ export default function StudentDashboard() {
 
     const handleLogout = async () => {
         try {
+            await AsyncStorage.setItem('loggedOut', 'true');
             await AsyncStorage.removeItem('studentToken');
             await AsyncStorage.removeItem('studentData');
             await AsyncStorage.removeItem('studentAccounts');
@@ -2045,42 +2052,52 @@ export default function StudentDashboard() {
                 animationType="fade"
                 onRequestClose={() => setShowNotifList(false)}
             >
-                <TouchableOpacity 
-                    style={styles.notifModalOverlay} 
-                    activeOpacity={1} 
-                    onPress={() => setShowNotifList(false)}
-                >
-                    <View style={styles.notifDropdown}>
-                        <View style={styles.notifDropdownHeader}>
-                            <Text style={styles.notifDropdownTitle}>Recent Updates</Text>
-                            <TouchableOpacity onPress={clearAllNotifications}>
-                                <Text style={styles.clearAllBtn}>Clear All</Text>
-                            </TouchableOpacity>
-                        </View>
-                        
-                        <ScrollView 
-                            style={{ maxHeight: 400 }} 
-                            showsVerticalScrollIndicator={false}
-                        >
-                            {notifications.length === 0 ? (
-                                <View style={{ padding: 20, alignItems: 'center' }}>
-                                    <Text style={{ color: theme.textLight }}>No recent updates</Text>
+                <View style={styles.notifModalOverlay}>
+                    {/* Backdrop - Tap to close */}
+                    <Pressable 
+                        style={StyleSheet.absoluteFill} 
+                        onPress={() => setShowNotifList(false)} 
+                    />
+                    
+                    {/* Dropdown Container - No Pressable here to avoid blocking scroll */}
+                    <View style={[styles.notifDropdown, { maxHeight: 400, padding: 0, overflow: 'hidden', elevation: 20 }]}>
+                        <FlatList
+                            data={notifications}
+                            keyExtractor={(item) => item.id}
+                            showsVerticalScrollIndicator={true}
+                            contentContainerStyle={{ padding: 20 }}
+                            stickyHeaderIndices={[0]}
+                            scrollEnabled={true}
+                            bounces={true}
+                            overScrollMode="always"
+                            onStartShouldSetResponder={() => true}
+                            ListHeaderComponent={
+                                <View style={[styles.notifDropdownHeader, { backgroundColor: theme.card, marginBottom: 10, paddingBottom: 15 }]}>
+                                    <Text style={styles.notifDropdownTitle}>Recent Updates</Text>
+                                    <TouchableOpacity onPress={clearAllNotifications}>
+                                        <Text style={styles.clearAllBtn}>Clear All</Text>
+                                    </TouchableOpacity>
                                 </View>
-                            ) : (
-                                notifications.map((item) => (
-                                    <View key={item.id} style={styles.notifItem}>
-                                        <View style={[styles.notifItemDot, { backgroundColor: item.type === 'attendance' ? theme.primary : item.type === 'fees' ? theme.success : '#f59e0b' }]} />
-                                        <View style={{ flex: 1 }}>
-                                            <Text style={styles.notifItemTitle}>{item.title}</Text>
-                                            <Text style={styles.notifItemMsg}>{item.message}</Text>
-                                        </View>
-                                        <Text style={styles.notifItemTime}>{item.time}</Text>
+                            }
+                            ListEmptyComponent={
+                                <View style={{ padding: 40, alignItems: 'center' }}>
+                                    <Ionicons name="notifications-off-outline" size={40} color={theme.textLight} />
+                                    <Text style={{ color: theme.textLight, marginTop: 10, fontWeight: '600' }}>No recent updates</Text>
+                                </View>
+                            }
+                            renderItem={({ item }) => (
+                                <View style={styles.notifItem}>
+                                    <View style={[styles.notifItemDot, { backgroundColor: item.type === 'attendance' ? theme.primary : item.type === 'fees' ? theme.success : '#f59e0b' }]} />
+                                    <View style={{ flex: 1 }}>
+                                        <Text style={styles.notifItemTitle}>{item.title}</Text>
+                                        <Text style={styles.notifItemMsg}>{item.message}</Text>
                                     </View>
-                                ))
+                                    <Text style={styles.notifItemTime}>{item.time}</Text>
+                                </View>
                             )}
-                        </ScrollView>
+                        />
                     </View>
-                </TouchableOpacity>
+                </View>
             </Modal>
         </View>
     );

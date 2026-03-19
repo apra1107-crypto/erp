@@ -115,14 +115,26 @@ export default function AbsentNote() {
             setAttendanceLoading(false);
             setAttendanceRefreshing(false);
         }
-    }, []);
+    }, [attendanceMonth]);
 
     useFocusEffect(
         useCallback(() => {
             fetchRequests();
             fetchAttendanceData();
-        }, [])
+        }, [fetchRequests, fetchAttendanceData])
     );
+
+    useEffect(() => {
+        fetchAttendanceData();
+    }, [attendanceMonth, fetchAttendanceData]);
+
+    const filteredRequests = useMemo(() => {
+        return requests.filter(req => {
+            const reqDate = new Date(req.date);
+            return reqDate.getMonth() === attendanceMonth.getMonth() && 
+                   reqDate.getFullYear() === attendanceMonth.getFullYear();
+        });
+    }, [requests, attendanceMonth]);
 
     const onRefresh = () => {
         setRefreshing(true);
@@ -272,11 +284,11 @@ export default function AbsentNote() {
         monthSelector: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20, backgroundColor: theme.card, padding: 10, borderRadius: 15, borderWidth: 1, borderColor: theme.border },
         monthText: { fontSize: 16, fontWeight: '800', color: theme.text },
         monthNavBtn: { padding: 8, borderRadius: 10 },
-        calendarCard: { backgroundColor: theme.card, borderRadius: 24, padding: 15, borderWidth: 1, borderColor: theme.border, marginBottom: 20 },
-        weekdayRow: { flexDirection: 'row', marginBottom: 15, justifyContent: 'space-between' },
-        weekdayHeader: { width: (SCREEN_WIDTH - 80) / 7, textAlign: 'center', fontWeight: '800', fontSize: 11, color: theme.textLight, textTransform: 'uppercase' },
-        dateGrid: { flexDirection: 'row', flexWrap: 'wrap', justifyContent: 'space-between' },
-        dateCell: { width: (SCREEN_WIDTH - 80) / 7, aspectRatio: 1, borderRadius: 12, justifyContent: 'center', alignItems: 'center', marginBottom: 10 },
+        calendarCard: { backgroundColor: theme.card, borderRadius: 24, padding: 15, paddingHorizontal: 10, borderWidth: 1, borderColor: theme.border, marginBottom: 20 },
+        weekdayRow: { flexDirection: 'row', marginBottom: 15, justifyContent: 'flex-start' },
+        weekdayHeader: { width: '14.285%', textAlign: 'center', fontWeight: '800', fontSize: 11, color: theme.textLight, textTransform: 'uppercase' },
+        dateGrid: { flexDirection: 'row', flexWrap: 'wrap', justifyContent: 'flex-start' },
+        dateCell: { width: '14.285%', aspectRatio: 1, borderRadius: 12, justifyContent: 'center', alignItems: 'center', marginBottom: 5 },
         dateNumber: { fontSize: 15, fontWeight: '800' },
         
         attendanceStats: { flexDirection: 'row', gap: 12, marginBottom: 25 },
@@ -417,13 +429,13 @@ export default function AbsentNote() {
 
                     {/* History Section */}
                     <Text style={styles.historyTitle}>Leave Requests</Text>
-                    {requests.length === 0 ? (
+                    {filteredRequests.length === 0 ? (
                         <View style={{ alignItems: 'center', padding: 40, backgroundColor: theme.card, borderRadius: 24, borderWidth: 1, borderColor: theme.border, borderStyle: 'dotted' }}>
                             <Ionicons name="document-text-outline" size={40} color={theme.textLight} />
-                            <Text style={{ color: theme.textLight, marginTop: 10, fontWeight: '700' }}>No leave requests found</Text>
+                            <Text style={{ color: theme.textLight, marginTop: 10, fontWeight: '700' }}>No leave requests for this month</Text>
                         </View>
                     ) : (
-                        requests.map((item) => {
+                        filteredRequests.map((item) => {
                             const styles_status = getStatusStyles(item.status);
                             const isApproved = item.status === 'approved';
                             

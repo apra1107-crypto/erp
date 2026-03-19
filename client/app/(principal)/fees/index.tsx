@@ -41,6 +41,7 @@ export default function Fees() {
     const [refreshing, setRefreshing] = useState(false);
     const [students, setStudents] = useState<any[]>([]);
     const [isActivated, setIsActivated] = useState(false);
+    const [processingId, setProcessingId] = useState<number | null>(null);
     const [processing, setProcessing] = useState(false);
     const [searchTerm, setSearchTerm] = useState('');
     const [filters, setFilters] = useState({ class: '', section: '', status: 'all' as 'all' | 'paid' | 'unpaid' });
@@ -145,6 +146,15 @@ export default function Fees() {
     };
 
     const handleCollectFee = async (student: any) => {
+        if (!isActivated) {
+            Alert.alert(
+                'Fee Collection Disabled',
+                'This month is currently deactivated. Please activate fees using the toggle button above before collecting payments.',
+                [{ text: 'OK' }]
+            );
+            return;
+        }
+
         const total = (parseFloat(student.monthly_fees || 0) + 
                        (student.transport_facility ? parseFloat(student.transport_fees || 0) : 0) + 
                        (student.extra_charges || []).reduce((acc: number, ec: any) => acc + parseFloat(ec.amount), 0));
@@ -157,7 +167,7 @@ export default function Fees() {
                 { 
                     text: 'Confirm', 
                     onPress: async () => {
-                        setProcessing(true);
+                        setProcessingId(student.id);
                         try {
                             const token = await AsyncStorage.getItem('token');
                             await axios.post(`${API_ENDPOINTS.PRINCIPAL}/student/collect-fee/${student.id}`, {
@@ -169,7 +179,7 @@ export default function Fees() {
                         } catch (error) {
                             Toast.show({ type: 'error', text1: 'Error', text2: 'Failed to collect fee' });
                         } finally {
-                            setProcessing(false);
+                            setProcessingId(null);
                         }
                     }
                 }
@@ -179,7 +189,7 @@ export default function Fees() {
 
     const handleDownloadMonthly = async (student: any) => {
         if (!instituteData) return;
-        setProcessing(true);
+        setProcessingId(student.id);
         try {
             const breakage = [
                 { label: 'Monthly Tuition Fee', amount: parseFloat(student.monthly_fees || 0) },
@@ -196,9 +206,10 @@ export default function Fees() {
                 months
             });
         } catch (error) {
+            console.error('Download Error:', error);
             Toast.show({ type: 'error', text1: 'Error', text2: 'Failed to generate PDF' });
         } finally {
-            setProcessing(false);
+            setProcessingId(null);
         }
     };
 
@@ -208,6 +219,7 @@ export default function Fees() {
         const extra = (item.extra_charges || []).reduce((acc: number, ec: any) => acc + parseFloat(ec.amount), 0);
         const total = monthly + transport + extra;
         const isPaid = item.fee_status === 'paid';
+        const isProcessing = processingId === item.id;
 
         return (
             <Animated.View 
@@ -262,11 +274,24 @@ export default function Fees() {
                     </View>
                     {!isPaid && (
                         <TouchableOpacity 
-                            style={[styles.collectBtn, { backgroundColor: theme.primary }]}
+                            style={[
+                                styles.collectBtn, 
+                                { backgroundColor: theme.primary },
+                                (!isActivated || isProcessing) && { opacity: 0.5 }
+                            ]}
                             onPress={() => handleCollectFee(item)}
-                            disabled={processing}
+                            disabled={isProcessing}
                         >
-                            <Text style={styles.collectBtnText}>Collect</Text>
+                            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
+                                {isProcessing ? (
+                                    <ActivityIndicator size="small" color="#fff" />
+                                ) : (
+                                    <>
+                                        {!isActivated && <Ionicons name="lock-closed" size={12} color="#fff" />}
+                                        <Text style={styles.collectBtnText}>Collect</Text>
+                                    </>
+                                )}
+                            </View>
                         </TouchableOpacity>
                     )}
                     {isPaid && (
@@ -283,9 +308,9 @@ export default function Fees() {
                             <TouchableOpacity 
                                 style={styles.iconBtn}
                                 onPress={() => handleDownloadMonthly(item)}
-                                disabled={processing}
+                                disabled={isProcessing}
                             >
-                                {processing ? (
+                                {isProcessing ? (
                                     <ActivityIndicator size="small" color={theme.primary} />
                                 ) : (
                                     <Ionicons name="download-outline" size={20} color={theme.primary} />

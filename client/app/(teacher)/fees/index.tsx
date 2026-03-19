@@ -145,6 +145,15 @@ export default function TeacherFees() {
     };
 
     const handleCollectFee = async (student: any) => {
+        if (!isActivated) {
+            Alert.alert(
+                'Fee Collection Disabled',
+                'This month is currently deactivated. Please ask the Principal to activate fees for this month before collecting payments.',
+                [{ text: 'OK' }]
+            );
+            return;
+        }
+
         const total = (parseFloat(student.monthly_fees || 0) + 
                        (student.transport_facility ? parseFloat(student.transport_fees || 0) : 0) + 
                        (student.extra_charges || []).reduce((acc: number, ec: any) => acc + parseFloat(ec.amount), 0));
@@ -280,11 +289,18 @@ export default function TeacherFees() {
                     </View>
                     {!isPaid && (
                         <TouchableOpacity 
-                            style={[styles.collectBtn, { backgroundColor: theme.primary }]}
+                            style={[
+                                styles.collectBtn, 
+                                { backgroundColor: theme.primary },
+                                !isActivated && { opacity: 0.5 }
+                            ]}
                             onPress={() => handleCollectFee(item)}
                             disabled={processing}
                         >
-                            <Text style={styles.collectBtnText}>Collect</Text>
+                            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
+                                {!isActivated && <Ionicons name="lock-closed" size={12} color="#fff" />}
+                                <Text style={styles.collectBtnText}>Collect</Text>
+                            </View>
                         </TouchableOpacity>
                     )}
                     {isPaid && (

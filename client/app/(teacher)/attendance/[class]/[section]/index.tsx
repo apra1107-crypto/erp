@@ -53,6 +53,31 @@ export default function TakeAttendance() {
         return date.toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit', hour12: true });
     };
 
+    const renderLogChanges = (log: any) => {
+        if (!log.changes_made) return null;
+        try {
+            const changes = typeof log.changes_made === 'string' ? JSON.parse(log.changes_made) : log.changes_made;
+            if (!changes.total || changes.total === 0) return null;
+
+            return (
+                <View style={{ marginTop: 8, padding: 10, backgroundColor: theme.background + '80', borderRadius: 12 }}>
+                    {changes.presentToAbsent?.length > 0 && (
+                        <Text style={{ fontSize: 11, color: theme.danger, fontWeight: '600' }}>
+                            ↓ P ➔ A: Roll {changes.presentToAbsent.join(', ')}
+                        </Text>
+                    )}
+                    {changes.absentToPresent?.length > 0 && (
+                        <Text style={{ fontSize: 11, color: theme.success, fontWeight: '600', marginTop: 2 }}>
+                            ↑ A ➔ P: Roll {changes.absentToPresent.join(', ')}
+                        </Text>
+                    )}
+                </View>
+            );
+        } catch (e) {
+            return null;
+        }
+    };
+
     const fetchData = async () => {
         setLoading(true);
         try {
@@ -347,7 +372,7 @@ export default function TakeAttendance() {
         absentText: { color: theme.danger },
         saveButton: {
             position: 'absolute',
-            bottom: 20,
+            bottom: Math.max(20, insets.bottom),
             left: 20,
             right: 20,
             backgroundColor: theme.primary,

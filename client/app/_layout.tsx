@@ -213,7 +213,7 @@ export default function RootLayout() {
           }
 
           if (isPrincipalPath) {
-            const principalToken = await AsyncStorage.getItem('token');
+            const principalToken = await AsyncStorage.getItem('principalToken') || await AsyncStorage.getItem('token');
             if (principalToken) {
               const url = `${API_ENDPOINTS.AUTH.INSTITUTE}/update-token`;
               console.log(`[PushSync] Attempting principal sync: ${url}`);
@@ -240,14 +240,17 @@ export default function RootLayout() {
               await axios.put(`${API_ENDPOINTS.AUTH.TEACHER}/update-token`, { push_token: expoPushToken }, { headers: { Authorization: `Bearer ${tToken}` } });
               return;
             }
-            const pToken = await AsyncStorage.getItem('token');
+            const pToken = await AsyncStorage.getItem('principalToken') || await AsyncStorage.getItem('token');
             if (pToken) {
               await axios.put(`${API_ENDPOINTS.AUTH.INSTITUTE}/update-token`, { push_token: expoPushToken }, { headers: { Authorization: `Bearer ${pToken}` } });
               return;
             }
           }
-        } catch (error) {
+        } catch (error: any) {
           console.error('Error syncing push token:', error);
+          if (error.response?.status === 401) {
+            console.log('Push sync 401: Unauthorized - possible expired token');
+          }
         }
       }
     };

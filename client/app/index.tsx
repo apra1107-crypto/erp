@@ -14,7 +14,7 @@ export default function Index() {
         const [studentToken, teacherToken, principalToken] = await Promise.all([
           AsyncStorage.getItem('studentToken'),
           AsyncStorage.getItem('teacherToken'),
-          AsyncStorage.getItem('token')
+          AsyncStorage.getItem('principalToken') || AsyncStorage.getItem('token')
         ]);
 
         if (studentToken) {

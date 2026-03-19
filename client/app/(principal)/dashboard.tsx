@@ -489,7 +489,7 @@ export default function PrincipalDashboard() {
 
   const fetchProfileImages = async (forcedToken?: string) => {
     try {
-      const token = forcedToken || await AsyncStorage.getItem('token');
+      const token = forcedToken || await AsyncStorage.getItem('principalToken') || await AsyncStorage.getItem('token');
       const res = await axios.get(`${API_ENDPOINTS.PRINCIPAL}/profile`, { headers: { Authorization: `Bearer ${token}` } });
       setProfileData(res.data.profile);
       setUserData((prev: any) => ({ ...prev, ...res.data.profile }));
@@ -498,7 +498,7 @@ export default function PrincipalDashboard() {
 
   const checkSubscription = async (id: any) => {
     try {
-      const token = await AsyncStorage.getItem('token');
+      const token = await AsyncStorage.getItem('principalToken') || await AsyncStorage.getItem('token');
       const res = await axios.get(`${API_ENDPOINTS.SUBSCRIPTION}/${id}/status`, { headers: { Authorization: `Bearer ${token}` } });
       setSubStatus(res.data.status); setSubData(res.data);
     } catch (e) {}
@@ -506,8 +506,8 @@ export default function PrincipalDashboard() {
 
   const fetchDashboardData = async (forcedId?: number) => {
     try {
-      const token = await AsyncStorage.getItem('token');
-      const data = await AsyncStorage.getItem('userData');
+      const token = await AsyncStorage.getItem('principalToken') || await AsyncStorage.getItem('token');
+      const data = await AsyncStorage.getItem('principalData') || await AsyncStorage.getItem('userData');
       const sId = forcedId || (data ? JSON.parse(data).current_session_id : null);
       if (!sId) return;
       const res = await axios.get(`${API_ENDPOINTS.PRINCIPAL}/dashboard`, { headers: { Authorization: `Bearer ${token}`, 'x-academic-session-id': sId.toString() } });
@@ -517,7 +517,7 @@ export default function PrincipalDashboard() {
 
   const fetchSessions = async () => {
     try {
-      const token = await AsyncStorage.getItem('token');
+      const token = await AsyncStorage.getItem('principalToken') || await AsyncStorage.getItem('token');
       const sId = await AsyncStorage.getItem('selectedSessionId');
       const res = await axios.get(API_ENDPOINTS.ACADEMIC_SESSIONS, { headers: { Authorization: `Bearer ${token}` } });
       setSessions(res.data);
@@ -529,7 +529,7 @@ export default function PrincipalDashboard() {
   const handleAddSession = async () => {
     if (!newSessionName.trim()) return;
     try {
-      const token = await AsyncStorage.getItem('token');
+      const token = await AsyncStorage.getItem('principalToken') || await AsyncStorage.getItem('token');
       await axios.post(API_ENDPOINTS.ACADEMIC_SESSIONS, { name: newSessionName }, { headers: { Authorization: `Bearer ${token}` } });
       setNewSessionName(''); setIsAddingSession(false); fetchSessions();
       Toast.show({ type: 'success', text1: 'Success', text2: 'New session added' });
@@ -540,7 +540,7 @@ export default function PrincipalDashboard() {
     try {
       await AsyncStorage.setItem('selectedSessionId', String(id));
       setSelectedSessionId(id);
-      const token = await AsyncStorage.getItem('token');
+      const token = await AsyncStorage.getItem('principalToken') || await AsyncStorage.getItem('token');
       await axios.put(`${API_ENDPOINTS.ACADEMIC_SESSIONS}/${id}`, { name, is_active: isActive }, { headers: { Authorization: `Bearer ${token}`, 'x-academic-session-id': id.toString() } });
       setEditingSessionId(null);
       Toast.show({ type: 'success', text1: 'Success', text2: 'Session updated' });
@@ -553,7 +553,7 @@ export default function PrincipalDashboard() {
       { text: 'Cancel', style: 'cancel' },
       { text: 'Delete', style: 'destructive', onPress: async () => {
           try {
-            const token = await AsyncStorage.getItem('token');
+            const token = await AsyncStorage.getItem('principalToken') || await AsyncStorage.getItem('token');
             await axios.delete(`${API_ENDPOINTS.ACADEMIC_SESSIONS}/${id}`, { headers: { Authorization: `Bearer ${token}` } });
             fetchSessions();
             Toast.show({ type: 'success', text1: 'Success', text2: 'Session deleted' });
@@ -565,12 +565,20 @@ export default function PrincipalDashboard() {
   const onRefresh = async (forcedId?: number) => {
     setRefreshing(true);
     try {
-        const token = await AsyncStorage.getItem('token');
+        const token = await AsyncStorage.getItem('principalToken') || await AsyncStorage.getItem('token');
+        if (!token) {
+            router.replace('/(auth)/institute-login');
+            return;
+        }
+
         const profileRes = await axios.get(`${API_ENDPOINTS.PRINCIPAL}/profile`, { headers: { Authorization: `Bearer ${token}` } });
         const profile = profileRes.data.profile;
         
         setProfileData(profile);
         setUserData(profile);
+
+        // Update principal data in storage to keep it fresh
+        await AsyncStorage.setItem('principalData', JSON.stringify(profile));
 
         // Load saved principal accounts
         const accountsStr = await AsyncStorage.getItem('savedPrincipalAccounts');
@@ -583,8 +591,16 @@ export default function PrincipalDashboard() {
             fetchSessions(),
             checkSubscription(profile.id)
         ]);
-    } catch (e) {
+    } catch (e: any) {
         console.error('Refresh error:', e);
+        if (e.response?.status === 401) {
+            Toast.show({ type: 'error', text1: 'Session Expired', text2: 'Please login again' });
+            await AsyncStorage.removeItem('token');
+            await AsyncStorage.removeItem('userData');
+            await AsyncStorage.removeItem('principalToken');
+            await AsyncStorage.removeItem('principalData');
+            router.replace('/(auth)/institute-login');
+        }
     } finally {
         setRefreshing(false);
     }
@@ -597,7 +613,7 @@ export default function PrincipalDashboard() {
     if (t.length < 2) { setSearchResults([]); setShowResults(false); return; }
     setIsSearching(true); setShowResults(true);
     try {
-      const token = await AsyncStorage.getItem('token');
+      const token = await AsyncStorage.getItem('principalToken') || await AsyncStorage.getItem('token');
       const res = await axios.get(`${API_ENDPOINTS.PRINCIPAL}/search?query=${t}`, { headers: { Authorization: `Bearer ${token}` } });
       setSearchResults(res.data.results);
     } catch (e) {} finally { setIsSearching(false); }
@@ -636,8 +652,8 @@ export default function PrincipalDashboard() {
         await AsyncStorage.setItem('savedPrincipalAccounts', JSON.stringify(updatedAccounts));
 
         // 3. Switch to this account
-        await AsyncStorage.setItem('token', token);
-        await AsyncStorage.setItem('userData', JSON.stringify(newAccount.userData));
+        await AsyncStorage.setItem('principalToken', token);
+        await AsyncStorage.setItem('principalData', JSON.stringify(newAccount.userData));
         
         Toast.show({ type: 'success', text1: 'Account Added', text2: `Logged into ${institute.institute_name}` });
         
@@ -656,8 +672,8 @@ export default function PrincipalDashboard() {
   };
 
   const switchAccount = async (acc: any) => { 
-    await AsyncStorage.setItem('token', acc.token); 
-    await AsyncStorage.setItem('userData', JSON.stringify(acc.userData)); 
+    await AsyncStorage.setItem('principalToken', acc.token); 
+    await AsyncStorage.setItem('principalData', JSON.stringify(acc.userData)); 
     // Close menu and refresh
     setShowAccountMenu(false);
     onRefresh(); 
@@ -668,6 +684,8 @@ export default function PrincipalDashboard() {
     // Only remove current session data, preserve the saved accounts list
     await AsyncStorage.removeItem('token');
     await AsyncStorage.removeItem('userData');
+    await AsyncStorage.removeItem('principalToken');
+    await AsyncStorage.removeItem('principalData');
     await AsyncStorage.removeItem('selectedSessionId');
     router.replace('/(auth)/institute-login'); 
   };

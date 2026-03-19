@@ -60,7 +60,7 @@ export default function InstituteLogin() {
   useEffect(() => {
     // Auto-login check
     const checkSession = async () => {
-      const token = await AsyncStorage.getItem('token');
+      const token = await AsyncStorage.getItem('principalToken');
       if (token) {
         router.replace('/(principal)/dashboard');
       }
@@ -151,8 +151,12 @@ export default function InstituteLogin() {
         password: trimmedPassword,
       });
 
-      await AsyncStorage.setItem('token', response.data.token);
-      await AsyncStorage.setItem('userData', JSON.stringify(response.data.institute));
+      // Clear old generic keys if they exist
+      await AsyncStorage.removeItem('token');
+      await AsyncStorage.removeItem('userData');
+
+      await AsyncStorage.setItem('principalToken', response.data.token);
+      await AsyncStorage.setItem('principalData', JSON.stringify(response.data.institute));
 
       Toast.show({
         type: 'success',

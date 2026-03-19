@@ -54,6 +54,7 @@ const PrincipalDashboard = () => {
     const [isCollapsed, setIsCollapsed] = useState(false);
     const [showProfilePopup, setShowProfilePopup] = useState(false);
     const [showProfileModal, setShowProfileModal] = useState(false);
+    const [showMobileSessionList, setShowMobileSessionList] = useState(false);
     
     // Session States
     const [sessions, setSessions] = useState([]);
@@ -356,8 +357,6 @@ const PrincipalDashboard = () => {
 
     const isLocked = subStatus === 'expired' || subStatus === 'disabled' || subStatus === 'loading';
 
-    console.log("RENDER: PrincipalDashboard", { subStatus, subData, userData, profileData, isLocked, path: location.pathname });
-
     // Define what is allowed when locked
     const allowedPaths = ['/dashboard', '/dashboard/subscription'];
 
@@ -436,6 +435,16 @@ const PrincipalDashboard = () => {
             {/* Main Content Area */}
             <div className="dashboard-main-container">
                 <header className="dashboard-header-modern">
+                    <div className="mobile-header-inst-name">
+                        {profileData?.logo_url ? (
+                            <img src={profileData.logo_url} alt="" style={{ height: '20px', width: 'auto', borderRadius: '4px' }} />
+                        ) : (
+                            <div style={{ width: '20px', height: '20px', background: '#6366f1', color: 'white', borderRadius: '4px', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '10px' }}>
+                                {userData?.institute_name?.charAt(0)}
+                            </div>
+                        )}
+                        <span>{(userData?.institute_name || profileData?.institute_name || '').toUpperCase()}</span>
+                    </div>
                     <div className="header-left-section">
                         {/* Empty spacer to keep center truly centered */}
                     </div>
@@ -498,14 +507,22 @@ const PrincipalDashboard = () => {
                                         </button>
 
                                         {/* Academic Session Management - Flyout Menu */}
-                                        <div className="popup-item has-flyout">
+                                        <div 
+                                            className={`popup-item has-flyout ${showMobileSessionList ? 'mobile-active' : ''}`}
+                                            onClick={(e) => {
+                                                if (window.innerWidth <= 768) {
+                                                    e.stopPropagation();
+                                                    setShowMobileSessionList(!showMobileSessionList);
+                                                }
+                                            }}
+                                        >
                                             <div className="item-content-row">
                                                 <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><rect x="3" y="4" width="18" height="18" rx="2" ry="2" /><line x1="16" y1="2" x2="16" y2="6" /><line x1="8" y1="2" x2="8" y2="6" /><line x1="3" y1="10" x2="21" y2="10" /></svg>
                                                 <span>Academic Session</span>
-                                                <svg className="chevron-left-icon" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><polyline points="15 18 9 12 15 6" /></svg>
+                                                <svg className={`chevron-left-icon ${showMobileSessionList ? 'rotated' : ''}`} width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><polyline points="15 18 9 12 15 6" /></svg>
                                             </div>
 
-                                            <div className="session-flyout-menu">
+                                            <div className={`session-flyout-menu ${showMobileSessionList ? 'open' : ''}`}>
                                                 <div className="flyout-header">
                                                     <span>Switch Session</span>
                                                 </div>
@@ -631,7 +648,7 @@ const PrincipalDashboard = () => {
                             <Route path="/" element={<DashboardOverview userData={userData} profileData={profileData} subData={subData} />} />
                             <Route path="/students" element={<Students />} />
                             <Route path="/students/:id" element={<Students />} />
-                            <Route path="/teachers" element={<Teachers />} />
+                            <Route path="/Teachers" element={<Teachers />} />
                             <Route path="/teachers/:id" element={<Teachers />} />
                             <Route path="/attendance" element={<Attendance />} />
                             <Route path="/attendance/:class/:section" element={<TakeAttendance />} />

@@ -355,14 +355,52 @@
 .placeholder-avatar.student-avatar { background: linear-gradient(135deg, #3B82F6, #8B5CF6); }
 .placeholder-avatar.teacher-avatar { background: linear-gradient(135deg, #EC4899, #F43F5E); }
 
-/* Loader */
-.auth-loader {
-    width: 20px;
-    height: 20px;
-    border: 2px solid rgba(255, 255, 255, 0.2);
-    border-top-color: white;
-    border-radius: 50%;
-    animation: authSpin 0.6s linear infinite;
-}
+/* Mobile Adjustments */
+@media (max-width: 768px) {
+    .auth-view-icon {
+        width: 48px !important;
+        height: 48px !important;
+        margin-bottom: 0.5rem !important;
+    }
 
-@keyframes authSpin { to { transform: rotate(360deg); } }
+    .split-view-header .auth-view-icon {
+        display: none !important;
+    }
+
+    .auth-view-title {
+        font-size: 1.4rem !important;
+    }
+
+    .auth-view-subtitle {
+        font-size: 0.85rem !important;
+    }
+
+    .auth-view-form {
+        gap: 1rem !important;
+    }
+
+    .auth-input-wrapper {
+        height: 48px !important;
+    }
+
+    .auth-submit-btn {
+        height: 48px !important;
+    }
+
+    .step-back-btn {
+        top: -30px !important;
+        left: 0 !important;
+        padding: 4px 10px !important;
+        font-size: 0.75rem !important;
+        background: rgba(255, 255, 255, 0.1) !important;
+    }
+
+    .selection-list-container {
+        max-height: 300px !important;
+    }
+
+    .access-code-input {
+        font-size: 1.5rem !important;
+        padding: 12px !important;
+    }
+}

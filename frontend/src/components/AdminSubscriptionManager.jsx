@@ -109,10 +109,10 @@ const AdminSubscriptionManager = ({ instituteId, currentStatus, onUpdate }) => {
                         <div className="sub-icon-box price">
                             <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><circle cx="12" cy="12" r="10" /><path d="M16 8h-6a2 2 0 1 0 0 4h4a2 2 0 1 1 0 4H8" /><path d="M12 18V6" /></svg>
                         </div>
-                        <h4>Minute Price</h4>
+                        <h4>Monthly Price</h4>
                     </div>
                     <div className="sub-card-body">
-                        <p className="sub-desc">Base cost per minute for the institute.</p>
+                        <p className="sub-desc">Base cost per 30 days for the institute.</p>
                         <div className="input-group-price">
                             <span className="curr">₹</span>
                             <input

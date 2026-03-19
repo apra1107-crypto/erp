@@ -193,7 +193,13 @@ export const generateReceiptPDF = async (data: ReceiptData) => {
     `;
 
     try {
-        const { uri } = await Print.printToFileAsync({ html: htmlContent });
+        // Use a Promise.race to implement a timeout for PDF generation
+        const printPromise = Print.printToFileAsync({ html: htmlContent });
+        const timeoutPromise = new Promise((_, reject) => 
+            setTimeout(() => reject(new Error('PDF Generation timed out')), 15000)
+        );
+
+        const { uri } = await Promise.race([printPromise, timeoutPromise]) as { uri: string };
         
         if (Platform.OS === 'ios') {
             await Sharing.shareAsync(uri);

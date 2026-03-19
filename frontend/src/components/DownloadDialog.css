@@ -80,41 +80,6 @@
     line-height: 1.5;
 }
 
-.app-details-grid {
-    display: grid;
-    grid-template-columns: repeat(3, 1fr);
-    gap: 16px;
-    background: rgba(255, 255, 255, 0.03);
-    padding: 20px;
-    border-radius: 16px;
-    margin-bottom: 24px;
-    border: 1px solid var(--border-subtle);
-}
-
-.detail-item {
-    display: flex;
-    flex-direction: column;
-    gap: 4px;
-}
-
-.detail-label {
-    font-size: 0.75rem;
-    text-transform: uppercase;
-    letter-spacing: 0.05em;
-    color: var(--text-tertiary);
-}
-
-.detail-value {
-    font-weight: 600;
-    color: var(--text-primary);
-}
-
-.detail-value-highlight {
-    font-weight: 700;
-    color: #FFD700;
-    font-size: 1.1rem;
-}
-
 .download-instructions {
     background: rgba(255, 215, 0, 0.05);
     border-left: 3px solid #FFD700;

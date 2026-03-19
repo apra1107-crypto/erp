@@ -20,6 +20,7 @@ const DashboardOverview = ({ userData, profileData, subData }) => {
     const [searchQuery, setSearchQuery] = useState('');
     const [searchResults, setSearchResults] = useState([]);
     const [isSearching, setIsSearching] = useState(false);
+    const [isMobile, setIsMobile] = useState(window.innerWidth <= 768);
     const [visuals, setVisuals] = useState({
         percentage: 0,
         progressColor: '#9ca3af',
@@ -27,6 +28,12 @@ const DashboardOverview = ({ userData, profileData, subData }) => {
         timeLeftText: 'Checking...',
         isDanger: false
     });
+
+    useEffect(() => {
+        const handleResize = () => setIsMobile(window.innerWidth <= 768);
+        window.addEventListener('resize', handleResize);
+        return () => window.removeEventListener('resize', handleResize);
+    }, []);
 
     useEffect(() => {
         if (isSearchOpen && inputRef.current) {
@@ -113,7 +120,7 @@ const DashboardOverview = ({ userData, profileData, subData }) => {
         }
     };
 
-    // Auto-swap Flashcards every 3 seconds
+    // Auto-swap Flashcards every 3 seconds - Re-enabled for all screen sizes
     useEffect(() => {
         const timer = setInterval(() => {
             setActiveFlashcard(prev => (prev + 1) % 3);
@@ -242,7 +249,7 @@ const DashboardOverview = ({ userData, profileData, subData }) => {
                 <div className="card-glass-overlay"></div>
                 <div className="card-shimmer"></div>
                 
-                {activeCard.showDateTime && (
+                {!isMobile && activeCard.showDateTime && (
                     <div className="card-side-clock">
                         <span className="card-date-day-bold">{currentTime.toLocaleDateString('en-IN', { weekday: 'short', day: '2-digit', month: 'short' })}</span>
                         <span className="card-time-bold">{currentTime.toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit', hour12: true })}</span>

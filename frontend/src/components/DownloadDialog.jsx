@@ -1,26 +1,8 @@
-import React, { useState, useEffect } from 'react';
-import axios from 'axios';
-import { API_ENDPOINTS } from '../config';
+import React, { useState } from 'react';
 import './DownloadDialog.css';
 
 const DownloadDialog = ({ isOpen, onClose }) => {
-    const [downloadCount, setDownloadCount] = useState(0);
     const [loading, setLoading] = useState(false);
-
-    useEffect(() => {
-        if (isOpen) {
-            fetchDownloadCount();
-        }
-    }, [isOpen]);
-
-    const fetchDownloadCount = async () => {
-        try {
-            const response = await axios.get(`${API_ENDPOINTS.STATS}/download-count`);
-            setDownloadCount(response.data.count);
-        } catch (error) {
-            console.error('Error fetching download count:', error);
-        }
-    };
 
     const handleDownload = async () => {
         setLoading(true);
@@ -53,21 +35,6 @@ const DownloadDialog = ({ isOpen, onClose }) => {
                 <h2 className="dialog-title">Get the NEW Klassin App</h2>
                 <p className="dialog-subtitle">Manage your school on the go with our Android application.</p>
                 
-                <div className="app-details-grid">
-                    <div className="detail-item">
-                        <span className="detail-label">Version</span>
-                        <span className="detail-value">v1.0.0</span>
-                    </div>
-                    <div className="detail-item">
-                        <span className="detail-value-highlight">{downloadCount}+</span>
-                        <span className="detail-label">Downloads</span>
-                    </div>
-                    <div className="detail-item">
-                        <span className="detail-label">Size</span>
-                        <span className="detail-value">~15 MB</span>
-                    </div>
-                </div>
-
                 <div className="download-instructions">
                     <p><strong>Note:</strong> Since this is a direct APK download, you may need to enable "Install from Unknown Sources" in your phone's settings.</p>
                 </div>

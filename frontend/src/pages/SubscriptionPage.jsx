@@ -147,7 +147,7 @@ const SubscriptionPage = ({ onRefreshStatus }) => {
                 amount: order.amount,
                 currency: order.currency,
                 name: "Klassin ERP",
-                description: `Subscription Renewal for ${minutes} minutes`,
+                description: `Subscription Renewal for ${minutes} Month(s)`,
                 order_id: order.id,
                 handler: async function (response) {
                     try {
@@ -239,7 +239,7 @@ const SubscriptionPage = ({ onRefreshStatus }) => {
                         <div className="plan-price-row">
                             <span className="currency">₹</span>
                             <span className="amount">{Math.round(parseFloat(planPrice || 0)).toLocaleString('en-IN')}</span>
-                            <span className="period">/min</span>
+                            <span className="period">/month</span>
                         </div>
                         <div className="plan-features-list">
                             <span>Unlimited Students</span>
@@ -266,14 +266,14 @@ const SubscriptionPage = ({ onRefreshStatus }) => {
                 <div className="bento-item area-action">
                     <div className="action-header">
                         <h3>Extend Subscription</h3>
-                        <p>Select minutes to add</p>
+                        <p>Select months to add (30 days each)</p>
                     </div>
 
                     <div className="interactive-counter">
                         <button className="counter-btn" onClick={handleDecrement} disabled={minutes <= 1}>−</button>
                         <div className="counter-display">
                             <span className="count">{minutes}</span>
-                            <span className="label text-xs uppercase tracking-wider text-gray-400">Minute{minutes > 1 ? 's' : ''}</span>
+                            <span className="label text-xs uppercase tracking-wider text-gray-400">Month{minutes > 1 ? 's' : ''}</span>
                         </div>
                         <button className="counter-btn" onClick={handleIncrement}>+</button>
                     </div>

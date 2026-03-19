@@ -416,7 +416,7 @@ export default function OneTimeFeesTab({ }: OneTimeFeesTabProps) {
 
         // Wizard Styles
         modalOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.5)', justifyContent: 'flex-end' },
-        modalContent: { backgroundColor: theme.card, borderTopLeftRadius: 30, borderTopRightRadius: 30, height: SCREEN_HEIGHT * 0.85 },
+        modalContent: { backgroundColor: theme.card, borderTopLeftRadius: 30, borderTopRightRadius: 30, maxHeight: SCREEN_HEIGHT * 0.9, height: SCREEN_HEIGHT * 0.85 },
         modalHeader: { padding: 20, borderBottomWidth: 1, borderBottomColor: theme.border, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
         modalTitle: { fontSize: 18, fontWeight: '800', color: theme.text },
         
@@ -524,7 +524,7 @@ export default function OneTimeFeesTab({ }: OneTimeFeesTabProps) {
 
                         <ScrollView 
                             style={styles.wizardBody} 
-                            contentContainerStyle={{ paddingBottom: insets.bottom + 40 }}
+                            contentContainerStyle={{ paddingBottom: SCREEN_HEIGHT * 0.5 }}
                             keyboardShouldPersistTaps="handled"
                             showsVerticalScrollIndicator={false}
                         >
@@ -572,7 +572,7 @@ export default function OneTimeFeesTab({ }: OneTimeFeesTabProps) {
                                         <Text style={{ color: theme.primary, fontWeight: '700' }}>Add Row</Text>
                                     </TouchableOpacity>
 
-                                    {/* Action Button moved inside ScrollView */}
+                                    {/* Action Button back inside ScrollView with enough bottom space */}
                                     <TouchableOpacity 
                                         style={styles.nextBtn} 
                                         onPress={() => (reasonTitle && reasonsList.some(r => r.reason && r.amount)) ? setStep(2) : Alert.alert('Required', 'Please fill campaign title and structure')}
@@ -635,7 +635,16 @@ export default function OneTimeFeesTab({ }: OneTimeFeesTabProps) {
                                                 <View style={[styles.selectionCircle, isSelected && styles.selectionCircleActive]}>
                                                     {isSelected && <Ionicons name="checkmark" size={12} color="#fff" />}
                                                 </View>
-                                                <View>
+                                                
+                                                <View style={[styles.avatar, { width: 40, height: 40, borderRadius: 20, marginRight: 12, overflow: 'hidden' }]}>
+                                                    {item.photo_url ? (
+                                                        <Image source={{ uri: item.photo_url }} style={{ width: '100%', height: '100%' }} />
+                                                    ) : (
+                                                        <Text style={styles.avatarText}>{item.name?.charAt(0)}</Text>
+                                                    )}
+                                                </View>
+
+                                                <View style={{ flex: 1 }}>
                                                     <Text style={[styles.studentRowName, { color: theme.text }]}>{item.name}</Text>
                                                     <Text style={styles.studentRowMeta}>Class {item.class}-{item.section} | Roll: {item.roll_no}</Text>
                                                 </View>
@@ -652,7 +661,7 @@ export default function OneTimeFeesTab({ }: OneTimeFeesTabProps) {
                                         )}
                                     </View>
 
-                                    {/* Action Buttons at the bottom of the scroll list */}
+                                    {/* Action Buttons inside ScrollView with enough space */}
                                     <View style={{ flexDirection: 'row', gap: 12, marginTop: 10 }}>
                                         <TouchableOpacity style={[styles.nextBtn, { backgroundColor: theme.border, flex: 0.4 }]} onPress={() => setStep(1)}>
                                             <Text style={[styles.nextBtnText, { color: theme.text }]}>Back</Text>
@@ -723,26 +732,36 @@ export default function OneTimeFeesTab({ }: OneTimeFeesTabProps) {
                                     const isPartial = item.status === 'partial';
                                     return (
                                         <View style={styles.studentRow}>
-                                            <View style={styles.studentRowInfo}>
-                                                <Text style={styles.studentRowName}>{item.name}</Text>
-                                                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
-                                                    <Text style={styles.studentRowMeta}>Class {item.class}-{item.section}</Text>
-                                                    {isPartial && (
-                                                        <View style={{ backgroundColor: '#f59e0b15', paddingHorizontal: 6, paddingVertical: 2, borderRadius: 4 }}>
-                                                            <Text style={{ color: '#f59e0b', fontSize: 8, fontWeight: '800' }}>HALF PAID</Text>
-                                                        </View>
-                                                    )}
-                                                    {(isPartial || isPaid) && (
-                                                        <TouchableOpacity onPress={() => { setHistoryStudent(item); setShowHistoryModal(true); }}>
-                                                            <Ionicons 
-                                                                name="information-circle-outline" 
-                                                                size={12} 
-                                                                color={isPartial ? "#f59e0b" : theme.primary} 
-                                                            />
-                                                        </TouchableOpacity>
+                                            <TouchableOpacity 
+                                                style={{ flexDirection: 'row', alignItems: 'center', flex: 1, gap: 12 }}
+                                                onPress={() => { setHistoryStudent(item); setShowHistoryModal(true); }}
+                                            >
+                                                <View style={[styles.avatar, { width: 44, height: 44, borderRadius: 22, overflow: 'hidden' }]}>
+                                                    {item.photo_url ? (
+                                                        <Image source={{ uri: item.photo_url }} style={{ width: '100%', height: '100%' }} />
+                                                    ) : (
+                                                        <Text style={styles.avatarText}>{item.name?.charAt(0)}</Text>
                                                     )}
                                                 </View>
-                                            </View>
+
+                                                <View style={styles.studentRowInfo}>
+                                                    <Text style={styles.studentRowName}>{item.name}</Text>
+                                                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                                                        <Text style={styles.studentRowMeta}>Class {item.class}-{item.section}</Text>
+                                                        {isPartial && (
+                                                            <View style={{ backgroundColor: '#f59e0b15', paddingHorizontal: 6, paddingVertical: 2, borderRadius: 4 }}>
+                                                                <Text style={{ color: '#f59e0b', fontSize: 8, fontWeight: '800' }}>HALF PAID</Text>
+                                                            </View>
+                                                        )}
+                                                        <Ionicons 
+                                                            name="information-circle-outline" 
+                                                            size={12} 
+                                                            color={isPartial ? "#f59e0b" : theme.primary} 
+                                                        />
+                                                    </View>
+                                                </View>
+                                            </TouchableOpacity>
+
                                             <TouchableOpacity 
                                                 style={styles.studentRowDue}
                                                 disabled={isPaid}

@@ -1,48 +1,46 @@
-import { useEffect, useMemo } from 'react';
-import { View, Text, StyleSheet, StatusBar } from 'react-native';
-import { useRouter } from 'expo-router';
+import { useEffect, useState } from 'react';
+import { View, ActivityIndicator } from 'react-native';
+import { useRouter, Redirect } from 'expo-router';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useTheme } from '../context/ThemeContext';
 
 export default function Index() {
-  const router = useRouter();
+  const [initialRoute, setInitialRoute] = useState<string | null>(null);
   const { theme } = useTheme();
 
   useEffect(() => {
-    const timer = setTimeout(() => {
-      router.replace('/(auth)/student-login');
-    }, 2000);
+    const checkAuth = async () => {
+      try {
+        const [studentToken, teacherToken, principalToken] = await Promise.all([
+          AsyncStorage.getItem('studentToken'),
+          AsyncStorage.getItem('teacherToken'),
+          AsyncStorage.getItem('token')
+        ]);
 
-    return () => clearTimeout(timer);
+        if (studentToken) {
+          setInitialRoute('/(student)/dashboard');
+        } else if (teacherToken) {
+          setInitialRoute('/(teacher)/dashboard');
+        } else if (principalToken) {
+          setInitialRoute('/(principal)/dashboard');
+        } else {
+          setInitialRoute('/(auth)/role-selection');
+        }
+      } catch (error) {
+        setInitialRoute('/(auth)/role-selection');
+      }
+    };
+
+    checkAuth();
   }, []);
 
-  const styles = useMemo(() => StyleSheet.create({
-    container: {
-      flex: 1,
-      justifyContent: 'center',
-      alignItems: 'center',
-      backgroundColor: theme.primary,
-    },
-    title: {
-      fontSize: 42,
-      fontWeight: '900',
-      color: '#fff',
-      marginBottom: 10,
-      letterSpacing: 1,
-    },
-    subtitle: {
-      fontSize: 18,
-      color: 'rgba(255,255,255,0.8)',
-      fontWeight: '600',
-      textTransform: 'uppercase',
-      letterSpacing: 2,
-    },
-  }), [theme]);
+  if (!initialRoute) {
+    return (
+      <View style={{ flex: 1, backgroundColor: theme.background, justifyContent: 'center', alignItems: 'center' }}>
+        <ActivityIndicator size="large" color={theme.primary} />
+      </View>
+    );
+  }
 
-  return (
-    <View style={styles.container}>
-      <StatusBar barStyle="light-content" />
-      <Text style={styles.title}>School ERP</Text>
-      <Text style={styles.subtitle}>Unified Management</Text>
-    </View>
-  );
+  return <Redirect href={initialRoute as any} />;
 }

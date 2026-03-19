@@ -900,6 +900,19 @@ const collectFee = async (req, res) => {
       return res.status(404).json({ message: 'Student not found' });
     }
 
+    // NEW: Check if monthly fees are activated before collecting
+    const activationRes = await pool.query(
+      `SELECT is_activated FROM monthly_fee_activations 
+       WHERE institute_id = $1 AND session_id = $2 AND month = $3 AND year = $4`,
+      [instituteId, sessionId, parseInt(month), parseInt(year)]
+    );
+
+    if (!activationRes.rows[0]?.is_activated) {
+      return res.status(403).json({ 
+        message: 'Fee collection is disabled because this month is not activated. Please activate the month first.' 
+      });
+    }
+
     // Insert or update status in student_fees
     await pool.query(
       `INSERT INTO student_fees (student_id, institute_id, session_id, month, year, status, paid_at, collected_by, payment_method) 

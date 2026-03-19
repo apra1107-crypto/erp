@@ -24,9 +24,9 @@ const s3Client = new S3Client({
   },
 });
 
-// Generate base62 unique code
+// Generate base62 unique code (Clean set: No 0, o, O, i, I, l, L)
 const generateUniqueCode = () => {
-  const chars = '0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz';
+  const chars = '123456789ABCDEFGHJKMNPQRSTUVWXYZabcdefghjkmnpqrstuvwxyz';
   let code = '';
   const randomBytes = crypto.randomBytes(6);
 
@@ -662,6 +662,188 @@ const sendPromotionEmail = async (email, studentName, instituteName, details, pr
   }
 };
 
+// Send subscription payment success email
+const sendSubscriptionSuccessEmail = async (email, principalName, instituteName, details) => {
+  const { amount, durationDays, expiryDate, transactionId, months } = details;
+  
+  const params = {
+    Source: process.env.SES_FROM_EMAIL,
+    Destination: {
+      ToAddresses: [email],
+    },
+    Message: {
+      Subject: {
+        Data: `Subscription Renewed Successfully - ${instituteName}`,
+        Charset: 'UTF-8',
+      },
+      Body: {
+        Html: {
+          Data: `
+            <!DOCTYPE html>
+            <html>
+            <head>
+              <style>
+                body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; line-height: 1.6; color: #1e293b; margin: 0; padding: 0; }
+                .container { max-width: 600px; margin: 20px auto; border: 1px solid #e2e8f0; border-radius: 12px; overflow: hidden; box-shadow: 0 4px 6px -1px rgb(0 0 0 / 0.1); }
+                .header { background: linear-gradient(135deg, #111827 0%, #1e1b4b 100%); color: white; padding: 40px 20px; text-align: center; }
+                .status-badge { display: inline-block; background: rgba(34, 211, 238, 0.2); color: #22d3ee; padding: 6px 16px; border-radius: 20px; font-size: 12px; font-weight: bold; text-transform: uppercase; margin-bottom: 15px; border: 1px solid rgba(34, 211, 238, 0.3); }
+                .content { background-color: #ffffff; padding: 35px; }
+                .details-grid { background-color: #f8fafc; border-radius: 10px; padding: 20px; margin: 25px 0; border: 1px solid #f1f5f9; }
+                .detail-row { display: flex; justify-content: space-between; margin-bottom: 12px; border-bottom: 1px solid #edf2f7; padding-bottom: 8px; }
+                .detail-row:last-child { border-bottom: none; }
+                .label { color: #64748b; font-size: 13px; font-weight: 600; text-transform: uppercase; }
+                .value { color: #0f172a; font-size: 14px; font-weight: 700; }
+                .expiry-box { background: #ecfeff; border-left: 4px solid #06b6d4; padding: 15px; margin-top: 20px; color: #164e63; }
+                .footer { text-align: center; padding: 20px; color: #94a3b8; font-size: 12px; background: #f8fafc; }
+                .button { background-color: #22d3ee; color: #083344; padding: 12px 25px; text-decoration: none; border-radius: 6px; font-weight: bold; display: inline-block; margin-top: 20px; }
+              </style>
+            </head>
+            <body>
+              <div class="container">
+                <div class="header">
+                  <div class="status-badge">Payment Successful</div>
+                  <h1 style="margin: 0; font-size: 24px;">Subscription Renewed!</h1>
+                </div>
+                <div class="content">
+                  <h2 style="margin-top: 0; color: #0f172a;">Hello ${principalName},</h2>
+                  <p>Great news! Your payment has been successfully processed, and your access to <strong>${instituteName}</strong> ERP has been extended.</p>
+                  
+                  <div class="details-grid">
+                    <div class="detail-row">
+                      <span class="label">Amount Paid</span>
+                      <span class="value">₹${parseFloat(amount).toLocaleString('en-IN')}</span>
+                    </div>
+                    <div class="detail-row">
+                      <span class="label">Duration</span>
+                      <span class="value">${durationDays} Days (${months} Month/s)</span>
+                    </div>
+                    <div class="detail-row">
+                      <span class="label">Transaction ID</span>
+                      <span class="value" style="font-family: monospace;">${transactionId}</span>
+                    </div>
+                    <div class="detail-row">
+                      <span class="label">Payment Status</span>
+                      <span class="value" style="color: #059669;">Completed</span>
+                    </div>
+                  </div>
+                  
+                  <div class="expiry-box">
+                    <strong style="font-size: 12px; text-transform: uppercase; display: block; margin-bottom: 4px;">New Expiry Date</strong>
+                    <span style="font-size: 18px; font-weight: 800;">${new Date(expiryDate).toLocaleString('en-IN', { day: '2-digit', month: 'long', year: 'numeric', hour: '2-digit', minute: '2-digit' })}</span>
+                  </div>
+                  
+                  <p style="margin-top: 25px;">You can now continue managing your institute without any interruptions. Your dashboard visuals and progress bars have been updated.</p>
+                  
+                  <div style="text-align: center;">
+                    <a href="${process.env.FRONTEND_URL}/login?redirectTo=/dashboard/subscription" class="button">Go to Dashboard</a>
+                  </div>
+                </div>
+                <div class="footer">
+                  <p>&copy; 2026 School ERP. All rights reserved.</p>
+                  <p>This is an automated receipt. No signature required.</p>
+                </div>
+              </div>
+            </body>
+            </html>
+          `,
+          Charset: 'UTF-8',
+        },
+      },
+    },
+  };
+
+  try {
+    const command = new SendEmailCommand(params);
+    const response = await sesClient.send(command);
+    console.log('✅ Subscription success email sent:', response.MessageId);
+    return { success: true, messageId: response.MessageId };
+  } catch (error) {
+    console.error('❌ Error sending subscription success email:', error);
+    return { success: false, error: error.message };
+  }
+};
+
+// Send subscription expired email
+const sendSubscriptionExpiredEmail = async (email, principalName, instituteName, details) => {
+  const { expiryDate, monthlyPrice } = details;
+  
+  const params = {
+    Source: process.env.SES_FROM_EMAIL,
+    Destination: {
+      ToAddresses: [email],
+    },
+    Message: {
+      Subject: {
+        Data: `URGENT: Subscription Expired - ${instituteName}`,
+        Charset: 'UTF-8',
+      },
+      Body: {
+        Html: {
+          Data: `
+            <!DOCTYPE html>
+            <html>
+            <head>
+              <style>
+                body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; line-height: 1.6; color: #1e293b; margin: 0; padding: 0; }
+                .container { max-width: 600px; margin: 20px auto; border: 1px solid #fee2e2; border-radius: 12px; overflow: hidden; box-shadow: 0 4px 6px -1px rgb(0 0 0 / 0.1); }
+                .header { background: linear-gradient(135deg, #7f1d1d 0%, #450a0a 100%); color: white; padding: 40px 20px; text-align: center; }
+                .status-badge { display: inline-block; background: rgba(248, 113, 113, 0.2); color: #f87171; padding: 6px 16px; border-radius: 20px; font-size: 12px; font-weight: bold; text-transform: uppercase; margin-bottom: 15px; border: 1px solid rgba(248, 113, 113, 0.3); }
+                .content { background-color: #ffffff; padding: 35px; }
+                .alert-box { background-color: #fef2f2; border: 1px solid #fee2e2; border-radius: 10px; padding: 20px; margin: 25px 0; color: #991b1b; }
+                .expiry-info { font-size: 18px; font-weight: 800; color: #b91c1c; display: block; margin-top: 10px; }
+                .footer { text-align: center; padding: 20px; color: #94a3b8; font-size: 12px; background: #f8fafc; }
+                .button { background-color: #ef4444; color: white; padding: 14px 30px; text-decoration: none; border-radius: 6px; font-weight: bold; display: inline-block; margin-top: 10px; box-shadow: 0 4px 14px 0 rgba(239, 68, 68, 0.39); }
+              </style>
+            </head>
+            <body>
+              <div class="container">
+                <div class="header">
+                  <div class="status-badge">Access Suspended</div>
+                  <h1 style="margin: 0; font-size: 24px;">Your Subscription Has Expired</h1>
+                </div>
+                <div class="content">
+                  <h2 style="margin-top: 0; color: #0f172a;">Hello ${principalName},</h2>
+                  <p>Your subscription for <strong>${instituteName}</strong> has expired. As a result, access to the administrative dashboard, teacher tools, and student portals has been temporarily restricted.</p>
+                  
+                  <div class="alert-box">
+                    <strong>Subscription Expired On:</strong>
+                    <span class="expiry-info">${new Date(expiryDate).toLocaleString('en-IN', { day: '2-digit', month: 'long', year: 'numeric' })}</span>
+                    <p style="margin-top: 15px; font-size: 14px;">Please renew your subscription to restore full access for all staff and students. Your current plan is <strong>₹${parseFloat(monthlyPrice).toLocaleString('en-IN')}/month</strong>.</p>
+                  </div>
+                  
+                  <p>To avoid any further disruption in school management and classes, please click the button below to renew your plan immediately.</p>
+                  
+                  <div style="text-align: center; margin-top: 30px;">
+                    <a href="${process.env.FRONTEND_URL}/login?redirectTo=/dashboard/subscription" class="button">RENEW NOW & UNLOCK ACCESS</a>
+                  </div>
+                  
+                  <p style="margin-top: 30px; font-size: 14px; color: #64748b;">If you have already made the payment and still see this message, please wait a few minutes or contact support.</p>
+                </div>
+                <div class="footer">
+                  <p>&copy; 2026 School ERP. All rights reserved.</p>
+                  <p>School Management Made Easy & Secure.</p>
+                </div>
+              </div>
+            </body>
+            </html>
+          `,
+          Charset: 'UTF-8',
+        },
+      },
+    },
+  };
+
+  try {
+    const command = new SendEmailCommand(params);
+    const response = await sesClient.send(command);
+    console.log('✅ Subscription expired email sent:', response.MessageId);
+    return { success: true, messageId: response.MessageId };
+  } catch (error) {
+    console.error('❌ Error sending subscription expired email:', error);
+    return { success: false, error: error.message };
+  }
+};
+
 export {
   sendWelcomeEmail,
   uploadToS3,
@@ -672,6 +854,8 @@ export {
   generateOTP,
   sendPasswordResetOTP,
   sendFeeReceiptEmail,
-  sendPromotionEmail
+  sendPromotionEmail,
+  sendSubscriptionSuccessEmail,
+  sendSubscriptionExpiredEmail
 };
 

@@ -1,6 +1,7 @@
 import db from '../config/db.js';
 import { emitToPrincipal, emitToAdmin, emitToTeacher } from '../utils/socket.js';
 import { sendWhatsAppMessage } from '../utils/whatsapp.js';
+import { sendSubscriptionSuccessEmail } from '../utils/aws.js';
 
 // Get subscription settings for an institute
 export const getSubscriptionSettings = async (req, res) => {
@@ -161,7 +162,8 @@ export const processPayment = async (req, res) => {
         }
 
         const newEndDate = new Date(startDateForCalc);
-        newEndDate.setMinutes(newEndDate.getMinutes() + parseInt(months));
+        const daysToAdd = parseInt(months) * 30;
+        newEndDate.setDate(newEndDate.getDate() + daysToAdd);
 
         const query = `
             UPDATE subscription_settings 
@@ -176,25 +178,35 @@ export const processPayment = async (req, res) => {
             RETURNING *
         `;
 
-        const actionDetails = `Payment: ₹${Math.round(amount)} for ${months} minutes`;
+        const actionDetails = `Payment: ₹${Math.round(amount)} for ${daysToAdd} Days (${months} Month/s)`;
         const result = await db.query(query, [newEndDate, instituteId, actionDetails]);
 
         // Log payment
         await db.query('INSERT INTO subscription_logs (institute_id, action_type, details, amount) VALUES ($1, $2, $3, $4)',
             [instituteId, 'PAYMENT', actionDetails, amount]);
 
-        // Get Principal details for WhatsApp
-        const instRes = await db.query('SELECT principal_name, mobile, institute_name FROM institutes WHERE id = $1', [instituteId]);
+        // Get Principal details for WhatsApp & Email
+        const instRes = await db.query('SELECT principal_name, mobile, email, institute_name FROM institutes WHERE id = $1', [instituteId]);
         if (instRes.rows.length > 0) {
-            const { principal_name, mobile, institute_name } = instRes.rows[0];
+            const { principal_name, mobile, email, institute_name } = instRes.rows[0];
             const newExpiry = new Date(result.rows[0].subscription_end_date).toLocaleDateString('en-IN');
             
+            // Send WhatsApp
             sendWhatsAppMessage(mobile, 'payment_success_thanks', [
                 principal_name,
                 amount,
                 institute_name,
                 newExpiry
             ]).catch(err => console.error('Failed to send WhatsApp payment confirmation:', err));
+
+            // Send Email
+            sendSubscriptionSuccessEmail(email, principal_name, institute_name, {
+                amount: amount,
+                durationDays: daysToAdd,
+                months: months,
+                expiryDate: result.rows[0].subscription_end_date,
+                transactionId: `SUB-${Date.now()}` // Generating a manual txn ID for internal payments
+            }).catch(err => console.error('Failed to send subscription email:', err));
         }
 
         res.json({

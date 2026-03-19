@@ -109,11 +109,13 @@ export const getMyRoutine = async (req, res) => {
 // Get teachers for student routine (minimal info)
 export const getTeachersForStudent = async (req, res) => {
     try {
-        const { institute_id } = req.user;
+        const institute_id = req.user.institute_id || req.user.id;
+        console.log(`[TeachersList] Fetching for institute: ${institute_id}`);
         const result = await pool.query(
             'SELECT id, name, subject, photo_url FROM teachers WHERE institute_id = $1 AND is_active = true',
             [institute_id]
         );
+        console.log(`[TeachersList] Found ${result.rows.length} teachers`);
         res.json(result.rows);
     } catch (error) {
         console.error('Error fetching teachers for student:', error);

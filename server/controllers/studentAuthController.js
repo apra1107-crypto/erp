@@ -376,6 +376,7 @@ export const getProfile = async (req, res) => {
             transport_fees: student.transport_fees,
             photo_url: student.photo_url,
             institute_id: student.institute_id,
+            current_session_id: student.session_id,
             institute_name: student.institute_name,
             institute_address: student.institute_address,
             institute_logo: student.institute_logo,

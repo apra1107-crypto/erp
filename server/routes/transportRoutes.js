@@ -2,7 +2,8 @@ import express from 'express';
 import { 
     getBuses, addBus, updateBus, deleteBus, 
     getStops, saveStops, syncManifest,
-    getPublicBusManifest, markStudentBoarding, getTransportLogs, getPublicLogs
+    getPublicBusManifest, markStudentBoarding, getTransportLogs, getPublicLogs,
+    updateTripStatus
 } from '../controllers/transportController.js';
 import { protect, principalOrSpecialTeacher, staffOnly, studentOnly } from '../middlewares/auth.js';
 
@@ -27,6 +28,7 @@ router.post('/sync-manifest/:busId', protect, principalOrSpecialTeacher, (req, r
 // Real-time tracking & public access
 router.get('/public/manifest/:busId', getPublicBusManifest);
 router.post('/public/mark-status/:busId', markStudentBoarding);
+router.post('/public/trip-status/:busId', updateTripStatus);
 router.get('/public/logs-mini/:busId', (req, res, next) => {
     import('../controllers/transportController.js').then(m => m.getPublicLogs(req, res)).catch(next);
 });

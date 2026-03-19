@@ -3,6 +3,7 @@ import pool from '../config/db.js';
 import { broadcastInstituteNotification } from './pushNotification.js';
 import { emitToPrincipal, emitToTeacher, emitToAllStudents } from './socket.js';
 import { sendWhatsAppMessage } from './whatsapp.js';
+import { sendSubscriptionExpiredEmail } from './aws.js';
 
 /**
  * Checks for academic calendar events scheduled for today and notifies everyone.
@@ -80,19 +81,42 @@ export const checkSubscriptionExpirations = async () => {
 
         // 2. Check for already expired (e.g., expired today)
         const expiredResult = await pool.query(
-            `SELECT i.mobile, i.principal_name, i.institute_name, ss.monthly_price
+            `SELECT i.mobile, i.email, i.principal_name, i.institute_name, ss.monthly_price, ss.subscription_end_date
              FROM subscription_settings ss 
              JOIN institutes i ON i.id = ss.institute_id 
              WHERE ss.subscription_end_date::date = CURRENT_DATE::date`
         );
 
         for (const row of expiredResult.rows) {
-            // template: sub_expired_request body: "Notice: Hi {{1}}, your subscription for {{2}} has expired. ❌ Access to your dashboard is now limited. Please make a payment of ₹{{3}} to restore full access. We value your partnership!"
+            // WhatsApp Notification
             sendWhatsAppMessage(row.mobile, 'sub_expired_request', [
                 row.principal_name,
                 row.institute_name,
                 row.monthly_price
             ]).catch(err => console.error(`Failed to send expiry notification to ${row.mobile}:`, err));
+
+            // Email Notification
+            sendSubscriptionExpiredEmail(row.email, row.principal_name, row.institute_name, {
+                expiryDate: row.subscription_end_date,
+                monthlyPrice: row.monthly_price
+            }).catch(err => console.error(`Failed to send expiry email to ${row.email}:`, err));
+        }
+
+        // 3. Optional: Add a 3-day reminder for better UX
+        const threeDayReminder = await pool.query(
+            `SELECT i.email, i.principal_name, i.institute_name, ss.subscription_end_date, ss.monthly_price
+             FROM subscription_settings ss 
+             JOIN institutes i ON i.id = ss.institute_id 
+             WHERE ss.subscription_end_date::date = (CURRENT_DATE + INTERVAL '3 days')::date`
+        );
+
+        for (const row of threeDayReminder.rows) {
+            // Using the expired template with modified subject/text or you can create a specific reminder one
+            // For now, let's just use the expired one but it will show the future date correctly
+            sendSubscriptionExpiredEmail(row.email, row.principal_name, row.institute_name, {
+                expiryDate: row.subscription_end_date,
+                monthlyPrice: row.monthly_price
+            }).catch(err => console.error(`Failed to send 3-day reminder email to ${row.email}:`, err));
         }
 
     } catch (error) {

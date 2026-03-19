@@ -2,6 +2,7 @@ import Razorpay from 'razorpay';
 import crypto from 'crypto';
 import db from '../config/db.js';
 import { emitToPrincipal, emitToAdmin, emitToTeacher, emitToSpecificTeacher, emitToStudent } from '../utils/socket.js';
+import { sendSubscriptionSuccessEmail } from '../utils/aws.js';
 
 const razorpay = new Razorpay({
     key_id: process.env.RAZORPAY_KEY_ID || 'rzp_test_placeholder',
@@ -11,11 +12,16 @@ const razorpay = new Razorpay({
 // Subscription Order
 export const createOrder = async (req, res) => {
     try {
-        const { amount, currency = 'INR' } = req.body;
+        const { months, amount, currency = 'INR' } = req.body;
+        // months here represents the number of 30-day blocks
         const options = {
             amount: Math.round(amount * 100), // amount in smallest currency unit
             currency,
             receipt: `sub_receipt_${Date.now()}`,
+            notes: {
+                months: months,
+                type: 'subscription_renewal'
+            }
         };
 
         const order = await razorpay.orders.create(options);
@@ -61,8 +67,9 @@ export const verifyPayment = async (req, res) => {
             }
 
             const newEndDate = new Date(startDate);
-            // Correct logic: Add actual minutes
-            newEndDate.setMinutes(newEndDate.getMinutes() + parseInt(months));
+            // PRODUCTION LOGIC: Add multiples of 30 days
+            const daysToAdd = parseInt(months) * 30;
+            newEndDate.setDate(newEndDate.getDate() + daysToAdd);
 
             const query = `
                 UPDATE subscription_settings 
@@ -77,13 +84,26 @@ export const verifyPayment = async (req, res) => {
                 RETURNING *
             `;
 
-            const actionDetails = `Razorpay: ₹${Math.round(amount/100)} for ${months} mins`;
+            const actionDetails = `Razorpay: ₹${Math.round(amount/100)} for ${daysToAdd} Days (${months} Month/s)`;
             const result = await db.query(query, [newEndDate, instituteId, actionDetails]);
+
+            // 1. Get Principal & Institute details for email
+            const instRes = await db.query('SELECT principal_name, email, institute_name FROM institutes WHERE id = $1', [instituteId]);
+            if (instRes.rows.length > 0) {
+                const { principal_name, email, institute_name } = instRes.rows[0];
+                sendSubscriptionSuccessEmail(email, principal_name, institute_name, {
+                    amount: amount / 100,
+                    durationDays: daysToAdd,
+                    months: months,
+                    expiryDate: result.rows[0].subscription_end_date,
+                    transactionId: razorpay_payment_id
+                }).catch(err => console.error('Failed to send subscription email:', err));
+            }
 
             // Log payment (Convert amount from paise to rupees for logging)
             const logAmount = parseFloat(amount) / 100;
             await db.query('INSERT INTO subscription_logs (institute_id, action_type, details, amount) VALUES ($1, $2, $3, $4)',
-                [instituteId, 'PAYMENT', `Razorpay Payment (${razorpay_payment_id}) - ${months} minutes`, logAmount]);
+                [instituteId, 'PAYMENT', `Razorpay Payment (${razorpay_payment_id}) - ${daysToAdd} Days`, logAmount]);
 
             // Notify via Socket
             emitToAdmin('payment_received', {

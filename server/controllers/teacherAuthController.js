@@ -218,12 +218,12 @@ export const getAllUserAccounts = async (req, res) => {
         mobile = mobile.toString().replace(/\s/g, '').slice(-10);
 
         const result = await pool.query(
-            `SELECT DISTINCT ON (i.id) t.id, t.name, t.subject, t.qualification, t.photo_url, t.code_used, t.unique_code,
+            `SELECT t.id, t.name, t.subject, t.qualification, t.photo_url, t.code_used, t.unique_code,
                     i.id as institute_id, i.institute_name, i.logo_url as institute_logo, i.landmark
              FROM teachers t
              INNER JOIN institutes i ON t.institute_id = i.id
              WHERE t.mobile = $1 AND t.is_active = true
-             ORDER BY i.id, i.institute_name, t.name`,
+             ORDER BY i.institute_name, t.name`,
             [mobile]
         );
 

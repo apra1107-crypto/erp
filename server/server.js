@@ -49,18 +49,6 @@ app.use(cors());
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 
-// Request Logger
-app.use((req, res, next) => {
-  const log = `[${new Date().toISOString()}] ${req.method} ${req.url}\n`;
-  console.log(log.trim());
-  try {
-    fs.appendFileSync(path.join(process.cwd(), 'all_requests.log'), log);
-  } catch (err) {
-    // Ignore log errors
-  }
-  next();
-});
-
 // Test database connection
 pool.query('SELECT NOW()', async (err, res) => {
   if (err) {
@@ -86,32 +74,6 @@ app.use('/api/auth/student', studentAuthRoutes);
 app.use('/api/auth/teacher', teacherAuthRoutes);
 app.use('/api/auth/admin', adminAuthRoutes);
 app.use('/api/auth', authRoutes);
-
-app.get('/api/debug/dashboard', protect, async (req, res) => {
-    try {
-        const instituteId = req.user.institute_id || req.user.id;
-        let sessionId = req.user.current_session_id;
-        const today = new Date().toISOString().split('T')[0];
-        
-        const teacherRec = await pool.query('SELECT institute_id FROM teachers WHERE id = $1', [req.user.id]);
-        const actualInstId = teacherRec.rows[0]?.institute_id || instituteId;
-        
-        const hwCount = await pool.query(
-            'SELECT COUNT(DISTINCT (class, section)) FROM homework WHERE teacher_id = $1 AND homework_date = $2',
-            [req.user.id, today]
-        );
-        
-        res.json({
-            user: req.user,
-            actualInstId,
-            today,
-            hwCount: hwCount.rows[0].count,
-            allHwForTeacher: (await pool.query('SELECT * FROM homework WHERE teacher_id = $1', [req.user.id])).rows
-        });
-    } catch (err) {
-        res.status(500).json({ error: err.message });
-    }
-});
 app.use('/api/attendance', attendanceRoutes);
 app.use('/api/principal/attendance', attendanceRoutes);
 app.use('/api/teacher/attendance', attendanceRoutes);
@@ -183,15 +145,6 @@ app.post('/api/debug/test-send-otp', async (req, res) => {
   }
 });
 
-// Manual trigger for scheduler (Debug only)
-app.post('/api/debug/trigger-calendar-events', async (req, res) => {
-    try {
-        await triggerDailyEvents();
-        res.status(200).json({ message: 'Daily events check triggered successfully' });
-    } catch (error) {
-        res.status(500).json({ message: 'Failed to trigger daily events', error: error.message });
-    }
-});
 
 // Health check route
 app.get('/api/health', (req, res) => {

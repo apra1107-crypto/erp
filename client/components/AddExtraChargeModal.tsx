@@ -1,5 +1,6 @@
 import React, { useState, useMemo } from 'react';
 import { View, Text, StyleSheet, Modal, TouchableOpacity, TextInput, ScrollView, FlatList, ActivityIndicator, Dimensions } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { useTheme } from '../context/ThemeContext';
 
@@ -15,6 +16,7 @@ interface AddExtraChargeModalProps {
 
 export default function AddExtraChargeModal({ isOpen, onClose, onConfirm, students, monthName }: AddExtraChargeModalProps) {
     const { theme, isDark } = useTheme();
+    const insets = useSafeAreaInsets();
     const [step, setStep] = useState(1);
     const [charges, setCharges] = useState([{ reason: '', amount: '' }]);
     const [selectedStudentIds, setSelectedStudentIds] = useState<number[]>([]);
@@ -84,7 +86,13 @@ export default function AddExtraChargeModal({ isOpen, onClose, onConfirm, studen
 
     const styles = StyleSheet.create({
         overlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.5)', justifyContent: 'flex-end' },
-        container: { backgroundColor: theme.card, borderTopLeftRadius: 30, borderTopRightRadius: 30, height: SCREEN_HEIGHT * 0.85, paddingBottom: 20 },
+        container: { 
+            backgroundColor: theme.card, 
+            borderTopLeftRadius: 30, 
+            borderTopRightRadius: 30, 
+            height: SCREEN_HEIGHT * 0.85, 
+            paddingBottom: Math.max(insets.bottom, 20) 
+        },
         header: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', padding: 20, borderBottomWidth: 1, borderBottomColor: theme.border },
         title: { fontSize: 18, fontWeight: '800', color: theme.text },
         subtitle: { fontSize: 12, color: theme.textLight, marginTop: 4 },

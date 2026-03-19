@@ -320,6 +320,7 @@ export default function RootLayout() {
             animationDuration: 250,
           }}>
             <Stack.Screen name="index" />
+            <Stack.Screen name="(auth)/role-selection" />
             <Stack.Screen name="(auth)/student-login" />
             <Stack.Screen name="(auth)/institute-login" />
             <Stack.Screen name="(auth)/institute-register" />

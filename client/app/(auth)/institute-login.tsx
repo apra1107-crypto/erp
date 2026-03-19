@@ -31,6 +31,8 @@ export default function InstituteLogin() {
   const [otpTimer, setOtpTimer] = useState(0);
   const [otpVerified, setOtpVerified] = useState(false);
   const [otpError, setOtpError] = useState('');
+  const [emailError, setEmailError] = useState('');
+  const [focusedIndex, setFocusedIndex] = useState<number | null>(null);
   
   // Login error banner
   const [loginError, setLoginError] = useState('');
@@ -46,16 +48,25 @@ export default function InstituteLogin() {
   
   // OTP input refs for auto-focus
   const otpRefs = useRef([
-    useRef(null),
-    useRef(null),
-    useRef(null),
-    useRef(null),
-    useRef(null),
-    useRef(null),
+    useRef<TextInput>(null),
+    useRef<TextInput>(null),
+    useRef<TextInput>(null),
+    useRef<TextInput>(null),
+    useRef<TextInput>(null),
+    useRef<TextInput>(null),
   ]);
 
   // Handle OTP timer countdown
   useEffect(() => {
+    // Auto-login check
+    const checkSession = async () => {
+      const token = await AsyncStorage.getItem('token');
+      if (token) {
+        router.replace('/(principal)/dashboard');
+      }
+    };
+    checkSession();
+
     // Animate in on mount
     Animated.parallel([
       Animated.timing(fadeAnim, {
@@ -105,7 +116,7 @@ export default function InstituteLogin() {
         type: 'error',
         text1: '⚠️ Missing Fields',
         text2: 'Please enter both email and password',
-        duration: 5000,
+        visibilityTime: 5000,
       });
       return;
     }
@@ -115,7 +126,7 @@ export default function InstituteLogin() {
         type: 'error',
         text1: '❌ Invalid Email',
         text2: 'Please enter a valid email address',
-        duration: 5000,
+        visibilityTime: 5000,
       });
       return;
     }
@@ -125,7 +136,7 @@ export default function InstituteLogin() {
         type: 'error',
         text1: '⚠️ Weak Password',
         text2: 'Password must be at least 6 characters',
-        duration: 5000,
+        visibilityTime: 5000,
       });
       return;
     }
@@ -147,7 +158,7 @@ export default function InstituteLogin() {
         type: 'success',
         text1: '✅ Login Successful',
         text2: `Welcome back, ${response.data.institute.institute_name}!`,
-        duration: 5000,
+        visibilityTime: 5000,
       });
 
       setTimeout(() => {
@@ -214,6 +225,7 @@ export default function InstituteLogin() {
 
     try {
       setForgotLoading(true);
+      setEmailError('');
       
       // First, fetch institute details to verify email and show confirmation
       const instituteResponse = await axios.get(`${API_ENDPOINTS.AUTH.INSTITUTE}/get-by-email`, {
@@ -227,16 +239,20 @@ export default function InstituteLogin() {
           type: 'success',
           text1: '✅ Institute Found',
           text2: 'Please verify the details',
-          duration: 2000,
+          visibilityTime: 2000,
         });
       }
     } catch (error: any) {
-      const errorMsg = error.response?.data?.message || 'Institute not found';
+      const errorMsg = error.response?.status === 404 
+        ? 'This email address is not registered with any institute. Please check and try again.'
+        : (error.response?.data?.message || 'We could not find an institute associated with this email.');
+      
+      setEmailError(errorMsg);
       Toast.show({
         type: 'error',
-        text1: '❌ Failed',
-        text2: errorMsg,
-        duration: 4000,
+        text1: '❌ Account Not Found',
+        text2: 'The email address you entered is not registered.',
+        visibilityTime: 4000,
       });
     } finally {
       setForgotLoading(false);
@@ -254,7 +270,7 @@ export default function InstituteLogin() {
         type: 'success',
         text1: '✅ OTP Sent',
         text2: `Check your email for OTP`,
-        duration: 5000,
+        visibilityTime: 5000,
       });
 
       setOtpSent(true);
@@ -267,7 +283,7 @@ export default function InstituteLogin() {
         type: 'error',
         text1: '❌ Failed to Send OTP',
         text2: errorMsg,
-        duration: 4000,
+        visibilityTime: 4000,
       });
     } finally {
       setForgotLoading(false);
@@ -341,7 +357,7 @@ export default function InstituteLogin() {
         type: 'success',
         text1: '✅ Password Reset Successful',
         text2: 'Your password has been updated. Please login with your new password.',
-        duration: 5000,
+        visibilityTime: 5000,
       });
 
       // Reset forgot password form
@@ -361,7 +377,7 @@ export default function InstituteLogin() {
         type: 'error',
         text1: '❌ Password Reset Failed',
         text2: errorMsg,
-        duration: 4000,
+        visibilityTime: 4000,
       });
     } finally {
       setForgotLoading(false);
@@ -377,7 +393,7 @@ export default function InstituteLogin() {
         type: 'error',
         text1: '⚠️ OTP Required',
         text2: 'Please enter the 6-digit OTP',
-        duration: 4000,
+        visibilityTime: 4000,
       });
       return;
     }
@@ -388,7 +404,7 @@ export default function InstituteLogin() {
         type: 'error',
         text1: '❌ Invalid OTP',
         text2: 'OTP must be exactly 6 digits',
-        duration: 4000,
+        visibilityTime: 4000,
       });
       return;
     }
@@ -407,7 +423,7 @@ export default function InstituteLogin() {
         type: 'success',
         text1: '✅ OTP Verified',
         text2: 'Now create your new password',
-        duration: 2000,
+        visibilityTime: 2000,
       });
       
       setOtpVerified(true);
@@ -420,7 +436,7 @@ export default function InstituteLogin() {
         type: 'error',
         text1: '❌ OTP Verification Failed',
         text2: errorMsg,
-        duration: 5000,
+        visibilityTime: 5000,
       });
       setOtpVerified(false);
     } finally {
@@ -440,6 +456,7 @@ export default function InstituteLogin() {
     setInstituteDetails(null);
     setOtpVerified(false);
     setOtpError('');
+    setEmailError('');
   };
 
   const handleButtonPress = (callback: () => void) => {
@@ -588,6 +605,13 @@ export default function InstituteLogin() {
                 }
               ]}
             >
+              <TouchableOpacity 
+                style={{ position: 'absolute', top: 20, left: 20, zIndex: 10 }} 
+                onPress={() => router.push('/(auth)/role-selection')}
+              >
+                <Ionicons name="arrow-back" size={24} color={theme.text} />
+              </TouchableOpacity>
+
               <View style={styles.iconHeader}>
                 <Ionicons name="business" size={40} color={theme.primary} />
               </View>
@@ -648,8 +672,8 @@ export default function InstituteLogin() {
                 <TouchableOpacity onPress={() => router.push('/(auth)/institute-register')}>
                   <Text style={styles.link}>Register New Institute</Text>
                 </TouchableOpacity>
-                <TouchableOpacity onPress={() => router.push('/(auth)/teacher-login')}>
-                  <Text style={styles.link}>Switch to Teacher Login</Text>
+                <TouchableOpacity onPress={() => router.push('/(auth)/role-selection')}>
+                  <Text style={styles.link}>Change Role</Text>
                 </TouchableOpacity>
               </View>
             </Animated.View>
@@ -696,10 +720,32 @@ export default function InstituteLogin() {
                         keyboardType="email-address"
                         autoCapitalize="none"
                         value={forgotEmail}
-                        onChangeText={setForgotEmail}
+                        onChangeText={(text) => {
+                          setForgotEmail(text);
+                          if (emailError) setEmailError('');
+                        }}
                         editable={!forgotLoading}
                       />
                     </View>
+
+                    {emailError ? (
+                      <View style={{ 
+                        backgroundColor: '#FFE5E5', 
+                        padding: 12, 
+                        borderRadius: 12, 
+                        marginBottom: 20, 
+                        borderLeftWidth: 4, 
+                        borderLeftColor: '#E74C3C',
+                        flexDirection: 'row',
+                        alignItems: 'center'
+                      }}>
+                        <Ionicons name="alert-circle" size={18} color="#C73030" style={{ marginRight: 8 }} />
+                        <Text style={{ color: '#C73030', fontSize: 13, fontWeight: '600', flex: 1 }}>
+                          {emailError}
+                        </Text>
+                      </View>
+                    ) : null}
+
                     <TouchableOpacity 
                       style={styles.button} 
                       onPress={handleSendOTP}
@@ -803,13 +849,26 @@ export default function InstituteLogin() {
                           ref={otpRefs.current[index]}
                           style={[
                             styles.otpInput,
-                            forgotOTP[index] && { borderColor: theme.primary, backgroundColor: theme.primary + '10' }
+                            forgotOTP[index] && { borderColor: theme.primary, backgroundColor: theme.primary + '08' },
+                            focusedIndex === index && { 
+                              borderColor: theme.primary, 
+                              borderWidth: 2.5,
+                              backgroundColor: theme.primary + '10',
+                              transform: [{ scale: 1.05 }],
+                              shadowColor: theme.primary,
+                              shadowOffset: { width: 0, height: 4 },
+                              shadowOpacity: 0.2,
+                              shadowRadius: 8,
+                              elevation: 5
+                            }
                           ]}
-                          placeholder="0"
-                          placeholderTextColor={theme.textLight}
+                          placeholder="-"
+                          placeholderTextColor={theme.textLight + '50'}
                           keyboardType="numeric"
                           maxLength={1}
                           value={forgotOTP[index] || ''}
+                          onFocus={() => setFocusedIndex(index)}
+                          onBlur={() => setFocusedIndex(null)}
                           onChangeText={(text) => {
                             if (/^\d*$/.test(text)) {
                               const newOtp = forgotOTP.split('');
@@ -821,7 +880,7 @@ export default function InstituteLogin() {
                               if (text && index < 5) {
                                 setTimeout(() => {
                                   otpRefs.current[index + 1]?.current?.focus();
-                                }, 100);
+                                }, 10);
                               }
                             }
                           }}
@@ -830,7 +889,7 @@ export default function InstituteLogin() {
                             if (e.nativeEvent.key === 'Backspace' && !forgotOTP[index] && index > 0) {
                               setTimeout(() => {
                                 otpRefs.current[index - 1]?.current?.focus();
-                              }, 50);
+                              }, 10);
                             }
                           }}
                           editable={!forgotLoading && otpTimer > 0}
@@ -838,18 +897,45 @@ export default function InstituteLogin() {
                         />
                       ))}
                     </View>
-                    <View style={{ marginTop: 15, marginBottom: 20 }}>
-                      <Text style={[styles.timerText, { marginBottom: 5 }]}>
-                        ⏱️ OTP expires in {Math.floor(otpTimer / 60)}:{String(otpTimer % 60).padStart(2, '0')}
-                      </Text>
-                      {otpTimer < 60 && (
-                        <Text style={{ textAlign: 'center', color: '#E74C3C', fontSize: 12, fontWeight: '600' }}>
-                          ⚠️ Expiring soon!
+                    <View style={{ marginTop: 20, marginBottom: 25 }}>
+                      <View style={{ 
+                        flexDirection: 'row', 
+                        alignItems: 'center', 
+                        justifyContent: 'center',
+                        backgroundColor: otpTimer < 60 ? '#FFE5E5' : theme.background,
+                        paddingVertical: 8,
+                        paddingHorizontal: 15,
+                        borderRadius: 12,
+                        alignSelf: 'center'
+                      }}>
+                        <Ionicons 
+                          name="time-outline" 
+                          size={16} 
+                          color={otpTimer < 60 ? '#E74C3C' : theme.textLight} 
+                          style={{ marginRight: 6 }} 
+                        />
+                        <Text style={{ 
+                          color: otpTimer < 60 ? '#E74C3C' : theme.textLight, 
+                          fontSize: 13, 
+                          fontWeight: '700' 
+                        }}>
+                          Expires in {Math.floor(otpTimer / 60)}:{String(otpTimer % 60).padStart(2, '0')}
                         </Text>
-                      )}
+                      </View>
+                      
                       {otpError && (
-                        <View style={{ backgroundColor: '#FFE5E5', padding: 12, borderRadius: 10, marginTop: 12, borderLeftWidth: 4, borderLeftColor: '#E74C3C' }}>
-                          <Text style={{ color: '#C73030', fontSize: 12, fontWeight: '600' }}>
+                        <View style={{ 
+                          backgroundColor: '#FFE5E5', 
+                          padding: 14, 
+                          borderRadius: 14, 
+                          marginTop: 20, 
+                          borderLeftWidth: 4, 
+                          borderLeftColor: '#E74C3C',
+                          flexDirection: 'row',
+                          alignItems: 'center'
+                        }}>
+                          <Ionicons name="alert-circle" size={20} color="#C73030" style={{ marginRight: 10 }} />
+                          <Text style={{ color: '#C73030', fontSize: 13, fontWeight: '600', flex: 1 }}>
                             {otpError}
                           </Text>
                         </View>
@@ -860,17 +946,25 @@ export default function InstituteLogin() {
                       onPress={handleVerifyOTP}
                       disabled={forgotOTP.length !== 6 || forgotLoading}
                     >
-                      {forgotLoading ? <ActivityIndicator color="#fff" /> : <Text style={styles.buttonText}>Verify OTP</Text>}
+                      {forgotLoading ? (
+                        <ActivityIndicator color="#fff" />
+                      ) : (
+                        <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+                          <Text style={styles.buttonText}>Verify & Continue</Text>
+                          <Ionicons name="arrow-forward" size={20} color="#fff" style={{ marginLeft: 8 }} />
+                        </View>
+                      )}
                     </TouchableOpacity>
                     <TouchableOpacity 
-                      style={styles.secondaryButton} 
+                      style={[styles.secondaryButton, { borderStyle: 'dashed' }]} 
                       onPress={() => {
                         setForgotPasswordStep('email');
                         setForgotOTP('');
+                        setEmailError('');
                       }}
                       disabled={forgotLoading}
                     >
-                      <Text style={styles.secondaryButtonText}>↩️ Change Email</Text>
+                      <Text style={styles.secondaryButtonText}>↩️ Change Email Address</Text>
                     </TouchableOpacity>
                   </>
                 )}

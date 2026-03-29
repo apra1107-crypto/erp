@@ -9,7 +9,13 @@ export default {
     "userInterfaceStyle": "automatic",
     "newArchEnabled": true,
     "ios": {
-      "supportsTablet": true
+      "supportsTablet": true,
+      "bundleIdentifier": "com.atul004.klassin",
+      "infoPlist": {
+        "NSAppTransportSecurity": {
+          "NSAllowsArbitraryLoads": true
+        }
+      }
     },
     "android": {
       "adaptiveIcon": {
@@ -19,7 +25,8 @@ export default {
       "edgeToEdgeEnabled": true,
       "predictiveBackGestureEnabled": false,
       "package": "com.atul004.klassin",
-      "googleServicesFile": process.env.GOOGLE_SERVICES_JSON || "./google-services.json"
+      "googleServicesFile": process.env.GOOGLE_SERVICES_JSON || "./google-services.json",
+      "usesCleartextTraffic": true
     },
     "web": {
       "output": "static",
@@ -39,7 +46,9 @@ export default {
           }
         }
       ],
-      "@react-native-community/datetimepicker"
+      "@react-native-community/datetimepicker",
+      // Custom plugin to ensure singleTask launchMode for Android deep linking
+      "./plugins/withSingleTaskAndroidLaunchMode.js"
     ],
     "experiments": {
       "typedRoutes": true,

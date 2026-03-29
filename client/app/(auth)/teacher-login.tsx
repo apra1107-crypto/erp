@@ -337,6 +337,8 @@ export default function TeacherLogin() {
             onChangeText={setCode}
             maxLength={6}
             autoCapitalize="none"
+            autoCorrect={false}
+            keyboardType="default"
           />
         </View>
 

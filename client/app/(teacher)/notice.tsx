@@ -269,7 +269,7 @@ export default function NoticeScreen() {
 
         fab: {
             position: 'absolute',
-            bottom: Math.max(30, insets.bottom + 10),
+            bottom: 20,
             right: 25,
             width: 60,
             height: 60,

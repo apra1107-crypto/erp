@@ -12,7 +12,7 @@ const razorpay = new Razorpay({
 // Subscription Order
 export const createOrder = async (req, res) => {
     try {
-        const { months, amount, currency = 'INR' } = req.body;
+        const { months, amount, instituteId, instituteName, currency = 'INR' } = req.body;
         // months here represents the number of 30-day blocks
         const options = {
             amount: Math.round(amount * 100), // amount in smallest currency unit
@@ -20,6 +20,8 @@ export const createOrder = async (req, res) => {
             receipt: `sub_receipt_${Date.now()}`,
             notes: {
                 months: months,
+                instituteId: instituteId,
+                instituteName: instituteName,
                 type: 'subscription_renewal'
             }
         };
@@ -55,6 +57,10 @@ export const verifyPayment = async (req, res) => {
             .digest('hex');
 
         if (expectedSignature === razorpay_signature) {
+            // Calculate base amount (Total paid / 1.0236)
+            // This ensures only the actual subscription price is used for extension and logs
+            const baseAmountInRupees = (parseFloat(amount) / 100) / 1.0236;
+
             // Update subscription (Logic from processPayment)
             const currentRes = await db.query('SELECT subscription_end_date FROM subscription_settings WHERE institute_id = $1', [instituteId]);
 
@@ -84,7 +90,7 @@ export const verifyPayment = async (req, res) => {
                 RETURNING *
             `;
 
-            const actionDetails = `Razorpay: ₹${Math.round(amount/100)} for ${daysToAdd} Days (${months} Month/s)`;
+            const actionDetails = `Razorpay: ₹${Math.round(baseAmountInRupees)} for ${daysToAdd} Days (${months} Month/s)`;
             const result = await db.query(query, [newEndDate, instituteId, actionDetails]);
 
             // 1. Get Principal & Institute details for email
@@ -92,7 +98,7 @@ export const verifyPayment = async (req, res) => {
             if (instRes.rows.length > 0) {
                 const { principal_name, email, institute_name } = instRes.rows[0];
                 sendSubscriptionSuccessEmail(email, principal_name, institute_name, {
-                    amount: amount / 100,
+                    amount: baseAmountInRupees,
                     durationDays: daysToAdd,
                     months: months,
                     expiryDate: result.rows[0].subscription_end_date,
@@ -100,10 +106,9 @@ export const verifyPayment = async (req, res) => {
                 }).catch(err => console.error('Failed to send subscription email:', err));
             }
 
-            // Log payment (Convert amount from paise to rupees for logging)
-            const logAmount = parseFloat(amount) / 100;
+            // Log payment
             await db.query('INSERT INTO subscription_logs (institute_id, action_type, details, amount) VALUES ($1, $2, $3, $4)',
-                [instituteId, 'PAYMENT', `Razorpay Payment (${razorpay_payment_id}) - ${daysToAdd} Days`, logAmount]);
+                [instituteId, 'PAYMENT', `Razorpay Payment (${razorpay_payment_id}) - ${daysToAdd} Days`, baseAmountInRupees]);
 
             // Notify via Socket
             emitToAdmin('payment_received', {
@@ -140,12 +145,35 @@ export const createFeeOrder = async (req, res) => {
             return res.status(400).json({ error: 'Missing required fee payment details' });
         }
 
+        // Fetch student details and institute name for metadata
+        const studentRes = await db.query(
+            `SELECT s.name, s.father_name, s.dob::TEXT, s.mobile, s.email, s.address, s.institute_id, i.institute_name 
+             FROM students s 
+             JOIN institutes i ON s.institute_id = i.id 
+             WHERE s.id = $1`,
+            [studentId]
+        );
+
+        if (studentRes.rows.length === 0) {
+            return res.status(404).json({ error: 'Student not found' });
+        }
+
+        const student = studentRes.rows[0];
+
         const options = {
             amount: Math.round(amount * 100),
             currency: 'INR',
             receipt: `fee_receipt_${studentId}_${month}_${year}_${Date.now()}`,
             notes: {
                 studentId,
+                studentName: student.name,
+                fatherName: student.father_name,
+                dob: student.dob,
+                mobile: student.mobile,
+                email: student.email,
+                address: student.address,
+                instituteId: student.institute_id,
+                instituteName: student.institute_name,
                 month,
                 year,
                 type: 'monthly_fee'
@@ -184,6 +212,10 @@ export const verifyFeePayment = async (req, res) => {
             .digest('hex');
 
         if (expectedSignature === razorpay_signature) {
+            // Calculate base amount (Total paid / 1.0236)
+            // This ensures only the actual fee is recorded, not the platform charge
+            const baseAmount = parseFloat(amount) / 1.0236;
+
             // 1. Get student session info
             const studentRes = await db.query('SELECT institute_id, session_id, name FROM students WHERE id = $1', [studentId]);
             if (studentRes.rows.length === 0) return res.status(404).json({ error: 'Student not found' });
@@ -203,7 +235,8 @@ export const verifyFeePayment = async (req, res) => {
             try {
                 const monthsNames = ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"];
                 const notifTitle = 'Fee Payment Received';
-                const safeAmount = parseFloat(amount || 0).toLocaleString();
+                // Show the base amount in notifications
+                const safeAmount = parseFloat(baseAmount || 0).toLocaleString();
                 const notifBody = `₹${safeAmount} received from ${name} for ${monthsNames[month - 1]} ${year}.`;
 
                 // Socket Notification to Principal
@@ -212,7 +245,7 @@ export const verifyFeePayment = async (req, res) => {
                     studentName: name,
                     month,
                     year,
-                    amount,
+                    amount: baseAmount,
                     paymentId: razorpay_payment_id,
                     type: 'MONTHLY',
                     title: notifTitle,
@@ -280,11 +313,37 @@ export const createOneTimeFeeOrder = async (req, res) => {
             return res.status(400).json({ error: 'Missing required details' });
         }
 
+        // Fetch student details and institute name for metadata
+        const studentRes = await db.query(
+            `SELECT s.name, s.father_name, s.dob::TEXT, s.mobile, s.email, s.address, i.institute_name 
+             FROM students s 
+             JOIN institutes i ON s.institute_id = i.id 
+             WHERE s.id = $1`,
+            [studentId]
+        );
+
+        if (studentRes.rows.length === 0) {
+            return res.status(404).json({ error: 'Student not found' });
+        }
+
+        const student = studentRes.rows[0];
+
         const options = {
             amount: Math.round(amount * 100),
             currency: 'INR',
             receipt: `ot_receipt_${paymentId}_${Date.now()}`,
-            notes: { studentId, paymentId, type: 'one_time_fee' }
+            notes: { 
+                studentId, 
+                studentName: student.name,
+                fatherName: student.father_name,
+                dob: student.dob,
+                mobile: student.mobile,
+                email: student.email,
+                address: student.address,
+                instituteName: student.institute_name,
+                paymentId, 
+                type: 'one_time_fee' 
+            }
         };
 
         const order = await razorpay.orders.create(options);
@@ -318,11 +377,14 @@ export const verifyOneTimeFeePayment = async (req, res) => {
             .digest('hex');
 
         if (expectedSignature === razorpay_signature) {
+            // Calculate base amount (Total paid / 1.0236)
+            const baseAmount = parseFloat(amount) / 1.0236;
+
             const currentRes = await db.query('SELECT due_amount, paid_amount, reason FROM one_time_fee_payments p JOIN one_time_fee_groups g ON p.group_id = g.id WHERE p.id = $1', [paymentId]);
             if (currentRes.rows.length === 0) return res.status(404).json({ error: 'Payment record not found' });
 
             const { due_amount, paid_amount, reason } = currentRes.rows[0];
-            const newPaidAmount = parseFloat(paid_amount) + parseFloat(amount);
+            const newPaidAmount = parseFloat(paid_amount) + parseFloat(baseAmount);
             let status = 'partial';
             if (newPaidAmount >= parseFloat(due_amount)) status = 'paid';
 
@@ -334,7 +396,7 @@ export const verifyOneTimeFeePayment = async (req, res) => {
             await db.query(
                 `INSERT INTO one_time_fee_transactions (payment_id, amount, payment_method, transaction_id, collected_by)
                  VALUES ($1, $2, 'Razorpay', $3, 'Online')`,
-                [paymentId, amount, razorpay_payment_id]
+                [paymentId, baseAmount, razorpay_payment_id]
             );
 
             const studentRes = await db.query('SELECT institute_id, name FROM students WHERE id = $1', [studentId]);
@@ -343,13 +405,13 @@ export const verifyOneTimeFeePayment = async (req, res) => {
             // 3. Notify Principal & Special Teachers
             try {
                 const notifTitle = 'One-Time Fee Received';
-                const safeAmount = parseFloat(amount || 0).toLocaleString();
+                const safeAmount = parseFloat(baseAmount || 0).toLocaleString();
                 const notifBody = `₹${safeAmount} received from ${name} for ${reason || 'Fee'}.`;
 
                 emitToPrincipal(institute_id, 'fee_payment_received', {
                     studentId,
                     studentName: name,
-                    amount,
+                    amount: baseAmount,
                     paymentId: razorpay_payment_id,
                     type: 'ONE-TIME',
                     title: notifTitle,

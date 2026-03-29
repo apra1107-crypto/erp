@@ -5,6 +5,7 @@ import {
     getProfile, updateProfile, updatePushToken, sendTestNotification, 
     getStudentDashboardData, getMyFees, getStudentFeesData 
 } from '../controllers/studentAuthController.js';
+import { generateFeeReceiptPDF } from '../controllers/feeReceiptController.js';
 import { protect } from '../middlewares/auth.js';
 
 const router = express.Router();
@@ -20,6 +21,7 @@ router.get('/profile', protect, getProfile);
 router.get('/dashboard', protect, getStudentDashboardData);
 router.get('/fees', protect, getMyFees);
 router.get('/fees-full', protect, getStudentFeesData);
+router.post('/generate-fee-receipt', protect, generateFeeReceiptPDF);
 router.put('/profile', protect, upload.single('photo'), updateProfile);
 router.put('/update-token', protect, updatePushToken);
 router.post('/test-notification', protect, sendTestNotification);

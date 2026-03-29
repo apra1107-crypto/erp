@@ -62,7 +62,7 @@ export default function OneTimeFeesTab({ }: OneTimeFeesTabProps) {
     const [collectAmount, setCollectAmount] = useState('');
 
     const getToken = async () => {
-        return await AsyncStorage.getItem('teacherToken') || await AsyncStorage.getItem('token');
+        return await AsyncStorage.getItem('principalToken') || await AsyncStorage.getItem('teacherToken') || await AsyncStorage.getItem('token');
     };
 
     useEffect(() => {
@@ -415,8 +415,8 @@ export default function OneTimeFeesTab({ }: OneTimeFeesTabProps) {
         viewDetailsText: { fontSize: 12, fontWeight: '800' },
 
         // Wizard Styles
-        modalOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.5)', justifyContent: 'flex-end' },
-        modalContent: { backgroundColor: theme.card, borderTopLeftRadius: 30, borderTopRightRadius: 30, maxHeight: SCREEN_HEIGHT * 0.9, height: SCREEN_HEIGHT * 0.85 },
+        modalOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.5)', justifyContent: 'center', padding: 20 },
+        modalContent: { backgroundColor: theme.card, borderRadius: 30, maxHeight: SCREEN_HEIGHT * 0.9, height: SCREEN_HEIGHT * 0.85, overflow: 'hidden' },
         modalHeader: { padding: 20, borderBottomWidth: 1, borderBottomColor: theme.border, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
         modalTitle: { fontSize: 18, fontWeight: '800', color: theme.text },
         

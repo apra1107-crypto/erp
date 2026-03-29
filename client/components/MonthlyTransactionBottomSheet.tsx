@@ -4,7 +4,7 @@ import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
 import { useTheme } from '../context/ThemeContext';
 import axios from 'axios';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { API_ENDPOINTS } from '../constants/Config';
+import { API_ENDPOINTS, BASE_URL } from '../constants/Config';
 import { LinearGradient } from 'expo-linear-gradient';
 
 const { height: SCREEN_HEIGHT, width: SCREEN_WIDTH } = Dimensions.get('window');
@@ -22,7 +22,6 @@ const months = [
 
 export default function MonthlyTransactionBottomSheet({ isOpen, onClose, data }: MonthlyTransactionBottomSheetProps) {
     const { theme, isDark } = useTheme();
-    const visible = isOpen; // Local alias for internal React Native compatibility
     const [activeTab, setActiveTab] = useState<'monthly' | 'onetime'>('monthly');
     const [loading, setLoading] = useState(true);
     const [historyData, setHistoryData] = useState<any>(null);
@@ -54,7 +53,7 @@ export default function MonthlyTransactionBottomSheet({ isOpen, onClose, data }:
         setLoading(true);
         try {
             const teacherToken = await AsyncStorage.getItem('teacherToken');
-            const principalToken = await AsyncStorage.getItem('token');
+            const principalToken = await AsyncStorage.getItem('principalToken') || await AsyncStorage.getItem('token');
             const token = teacherToken || principalToken;
 
             const response = await axios.get(`${API_ENDPOINTS.PRINCIPAL}/student/${studentId}/fees-full`, {
@@ -94,10 +93,11 @@ export default function MonthlyTransactionBottomSheet({ isOpen, onClose, data }:
         historyLabel: { fontSize: 18, fontWeight: '900', color: theme.text, letterSpacing: -0.5 },
         
         statusBadge: { paddingHorizontal: 10, paddingVertical: 5, borderRadius: 10 },
+        statusBadgeText: { fontSize: 10, fontWeight: '900', textTransform: 'uppercase' },
         paidBadge: { backgroundColor: '#10b98120' },
         unpaidBadge: { backgroundColor: '#ef444420' },
-        paidText: { color: '#10b981', fontSize: 10, fontWeight: '900', textTransform: 'uppercase' },
-        unpaidText: { color: '#ef4444', fontSize: 10, fontWeight: '900', textTransform: 'uppercase' },
+        paidText: { color: '#10b981' },
+        unpaidText: { color: '#ef4444' },
         
         amtContainer: { backgroundColor: isDark ? '#222' : '#f1f5f9', padding: 15, borderRadius: 18, flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
         amtLabel: { fontSize: 11, fontWeight: '800', color: theme.textLight, textTransform: 'uppercase', letterSpacing: 0.5 },
@@ -113,22 +113,50 @@ export default function MonthlyTransactionBottomSheet({ isOpen, onClose, data }:
         emptyText: { color: theme.textLight, marginTop: 15, fontSize: 16, fontWeight: '700', textAlign: 'center' }
     });
 
+    const getFullImageUrl = (url: string | null | undefined): string | null => {
+        if (!url) return null;
+        if (url.startsWith('http')) return url;
+        return `${BASE_URL}${url.startsWith('/') ? '' : '/'}${url}`;
+    };
+
+    const isAfterAdmission = (month: number, year: number, admissionDateStr: string | null) => {
+        if (!admissionDateStr) return true;
+        
+        let admissionDate: Date;
+        if (admissionDateStr.includes('-')) {
+            const parts = admissionDateStr.split('-');
+            if (parts[0].length === 4) {
+                admissionDate = new Date(parseInt(parts[0]), parseInt(parts[1]) - 1, 1);
+            } else {
+                admissionDate = new Date(parseInt(parts[2]), parseInt(parts[1]) - 1, 1);
+            }
+        } else {
+            admissionDate = new Date(admissionDateStr);
+        }
+
+        const cycleDate = new Date(year, month - 1, 1);
+        return cycleDate >= admissionDate;
+    };
+
     const renderMonthlyTab = () => {
         if (!historyData) return null;
         const { payments = [], extra_charges = [], activated_months = [], fee_structure, student } = historyData;
 
-        if (activated_months.length === 0) {
+        const admissionDate = student?.admission_date || data?.admission_date;
+        const filteredCycles = activated_months.filter((cycle: any) => isAfterAdmission(cycle.month, cycle.year, admissionDate));
+
+        if (filteredCycles.length === 0) {
             return (
                 <View style={styles.emptyState}>
                     <Ionicons name="calendar-outline" size={60} color={theme.border} />
-                    <Text style={styles.emptyText}>No monthly fees have been activated yet.</Text>
+                    <Text style={styles.emptyText}>No billing history available after student's admission date.</Text>
                 </View>
             );
         }
 
         return (
             <ScrollView style={styles.content} showsVerticalScrollIndicator={false}>
-                {activated_months.map((cycle: any, idx: number) => {
+                {filteredCycles.map((cycle: any, idx: number) => {
                     const payment = payments.find((p: any) => p.month === cycle.month && p.year === cycle.year);
                     const isPaid = payment?.status === 'paid';
                     const extraForMonth = extra_charges.filter((ec: any) => ec.month === cycle.month && ec.year === cycle.year);
@@ -150,42 +178,42 @@ export default function MonthlyTransactionBottomSheet({ isOpen, onClose, data }:
                                         )}
                                     </View>
                                     <View style={[styles.statusBadge, isPaid ? styles.paidBadge : styles.unpaidBadge]}>
-                                    <Text style={isPaid ? styles.paidText : styles.unpaidText}>{isPaid ? 'PAID' : 'UNPAID'}</Text>
+                                        <Text style={[styles.statusBadgeText, isPaid ? styles.paidText : styles.unpaidText]}>{isPaid ? 'PAID' : 'UNPAID'}</Text>
+                                    </View>
                                 </View>
-                            </View>
 
-                            <View style={styles.amtContainer}>
-                                <View>
-                                    <Text style={styles.amtLabel}>Total Amount</Text>
-                                    <Text style={[styles.amtValue, isPaid && { color: '#10b981' }]}>₹{totalForMonth.toLocaleString()}</Text>
+                                <View style={styles.amtContainer}>
+                                    <View>
+                                        <Text style={styles.amtLabel}>Total Amount</Text>
+                                        <Text style={[styles.amtValue, isPaid && { color: '#10b981' }]}>₹{totalForMonth.toLocaleString()}</Text>
+                                    </View>
+                                    {isPaid && (
+                                        <View style={{ alignItems: 'flex-end' }}>
+                                            <Text style={styles.amtLabel}>Collected By</Text>
+                                            <Text style={{ fontSize: 13, fontWeight: '800', color: theme.text }}>{payment.collected_by || 'Institute'}</Text>
+                                        </View>
+                                    )}
                                 </View>
-                                {isPaid && (
-                                    <View style={{ alignItems: 'flex-end' }}>
-                                        <Text style={styles.amtLabel}>Collected By</Text>
-                                        <Text style={{ fontSize: 13, fontWeight: '800', color: theme.text }}>{payment.collected_by || 'Institute'}</Text>
+
+                                {extraForMonth.length > 0 && (
+                                    <View style={styles.extraSection}>
+                                        <Text style={styles.extraTitle}>Breakdown</Text>
+                                        <View style={styles.extraRow}>
+                                            <Text style={styles.extraText}>Base Tuition & Transport</Text>
+                                            <Text style={styles.extraAmt}>₹{baseAmt.toLocaleString()}</Text>
+                                        </View>
+                                        {extraForMonth.map((ec: any, i: number) => (
+                                            <View key={i} style={styles.extraRow}>
+                                                <Text style={styles.extraText}>{ec.reason}</Text>
+                                                <Text style={styles.extraAmt}>+ ₹{parseFloat(ec.amount).toLocaleString()}</Text>
+                                            </View>
+                                        ))}
                                     </View>
                                 )}
                             </View>
-
-                            {extraForMonth.length > 0 && (
-                                <View style={styles.extraSection}>
-                                    <Text style={styles.extraTitle}>Breakdown</Text>
-                                    <View style={styles.extraRow}>
-                                        <Text style={styles.extraText}>Base Tuition & Transport</Text>
-                                        <Text style={styles.extraAmt}>₹{baseAmt.toLocaleString()}</Text>
-                                    </View>
-                                    {extraForMonth.map((ec: any, i: number) => (
-                                        <View key={i} style={styles.extraRow}>
-                                            <Text style={styles.extraText}>{ec.reason}</Text>
-                                            <Text style={styles.extraAmt}>+ ₹{parseFloat(ec.amount).toLocaleString()}</Text>
-                                        </View>
-                                    ))}
-                                </View>
-                            )}
                         </View>
-                    </View>
-                );
-            })}
+                    );
+                })}
                 <View style={{ height: 30 }} />
             </ScrollView>
         );
@@ -225,38 +253,38 @@ export default function MonthlyTransactionBottomSheet({ isOpen, onClose, data }:
                                         )}
                                     </View>
                                     <View style={[styles.statusBadge, isPaid ? styles.paidBadge : styles.unpaidBadge, isPartial && { backgroundColor: '#f59e0b20' }]}>
-                                    <Text style={[isPaid ? styles.paidText : styles.unpaidText, isPartial && { color: '#f59e0b' }]}>
-                                        {fee.status.toUpperCase()}
-                                    </Text>
+                                        <Text style={[styles.statusBadgeText, isPaid ? styles.paidText : styles.unpaidText, isPartial && { color: '#f59e0b' }]}>
+                                            {fee.status.toUpperCase()}
+                                        </Text>
+                                    </View>
                                 </View>
-                            </View>
 
-                            <View style={styles.amtContainer}>
-                                <View>
-                                    <Text style={styles.amtLabel}>Total Due</Text>
-                                    <Text style={styles.amtValue}>₹{parseFloat(fee.due_amount).toLocaleString()}</Text>
+                                <View style={styles.amtContainer}>
+                                    <View>
+                                        <Text style={styles.amtLabel}>Total Due</Text>
+                                        <Text style={styles.amtValue}>₹{parseFloat(fee.due_amount).toLocaleString()}</Text>
+                                    </View>
+                                    <View style={{ alignItems: 'flex-end' }}>
+                                        <Text style={[styles.amtLabel, { color: '#10b981' }]}>Collected</Text>
+                                        <Text style={[styles.amtValue, { color: '#10b981' }]}>₹{parseFloat(fee.paid_amount).toLocaleString()}</Text>
+                                    </View>
                                 </View>
-                                <View style={{ alignItems: 'flex-end' }}>
-                                    <Text style={[styles.amtLabel, { color: '#10b981' }]}>Collected</Text>
-                                    <Text style={[styles.amtValue, { color: '#10b981' }]}>₹{parseFloat(fee.paid_amount).toLocaleString()}</Text>
-                                </View>
+                                
+                                {fee.breakdown && fee.breakdown.length > 0 && (
+                                    <View style={styles.extraSection}>
+                                        <Text style={styles.extraTitle}>Fee Breakdown</Text>
+                                        {fee.breakdown.map((item: any, i: number) => (
+                                            <View key={i} style={styles.extraRow}>
+                                                <Text style={styles.extraText}>{item.reason}</Text>
+                                                <Text style={styles.extraAmt}>₹{parseFloat(item.amount).toLocaleString()}</Text>
+                                            </View>
+                                        ))}
+                                    </View>
+                                )}
                             </View>
-                            
-                            {fee.breakdown && fee.breakdown.length > 0 && (
-                                <View style={styles.extraSection}>
-                                    <Text style={styles.extraTitle}>Fee Breakdown</Text>
-                                    {fee.breakdown.map((item: any, i: number) => (
-                                        <View key={i} style={styles.extraRow}>
-                                            <Text style={styles.extraText}>{item.reason}</Text>
-                                            <Text style={styles.extraAmt}>₹{parseFloat(item.amount).toLocaleString()}</Text>
-                                        </View>
-                                    ))}
-                                </View>
-                            )}
                         </View>
-                    </View>
-                );
-            })}
+                    );
+                })}
                 <View style={{ height: 30 }} />
             </ScrollView>
         );
@@ -276,8 +304,15 @@ export default function MonthlyTransactionBottomSheet({ isOpen, onClose, data }:
                     </View>
 
                     <View style={styles.studentMiniBox}>
-                        <View style={styles.avatar}>
-                            <Text style={styles.avatarText}>{studentName?.charAt(0)}</Text>
+                        <View style={[styles.avatar, { overflow: 'hidden' }]}>
+                            {data?.photo_url || data?.student?.photo_url ? (
+                                <Image 
+                                    source={{ uri: getFullImageUrl(data.photo_url || data.student.photo_url) as string }} 
+                                    style={{ width: '100%', height: '100%', resizeMode: 'cover' }} 
+                                />
+                            ) : (
+                                <Text style={styles.avatarText}>{studentName?.charAt(0)}</Text>
+                            )}
                         </View>
                         <View>
                             <Text style={styles.studentNameText}>{studentName}</Text>

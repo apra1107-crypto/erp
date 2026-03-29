@@ -31,9 +31,9 @@ export default function PrincipalLiveTracking() {
 
     const fetchData = async () => {
         try {
-            const token = await AsyncStorage.getItem('token');
+            const token = await AsyncStorage.getItem('principalToken') || await AsyncStorage.getItem('token');
             const storedSessionId = await AsyncStorage.getItem('selectedSessionId');
-            const userDataStr = await AsyncStorage.getItem('userData');
+            const userDataStr = await AsyncStorage.getItem('principalData') || await AsyncStorage.getItem('userData');
             const sessionId = storedSessionId || (userDataStr ? JSON.parse(userDataStr).current_session_id : null);
 
             const headers = { 

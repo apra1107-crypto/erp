@@ -246,6 +246,7 @@ const approveRequest = async (req, res) => {
 const getStudentAbsentRequests = async (req, res) => {
     try {
         const { studentId } = req.params;
+        const { month, year } = req.query;
         const instituteId = req.user.institute_id || req.user.id;
         let sessionId = req.user.current_session_id;
 
@@ -254,12 +255,18 @@ const getStudentAbsentRequests = async (req, res) => {
             sessionId = sessionResult.rows[0]?.current_session_id;
         }
 
-        const result = await pool.query(
-            `SELECT * FROM absent_requests 
-             WHERE student_id = $1 AND institute_id = $2 AND session_id = $3
-             ORDER BY date DESC`,
-            [studentId, instituteId, sessionId]
-        );
+        let query = `SELECT * FROM absent_requests 
+                    WHERE student_id = $1 AND institute_id = $2 AND session_id = $3`;
+        let params = [studentId, instituteId, sessionId];
+
+        if (month && year) {
+            query += ` AND EXTRACT(MONTH FROM date) = $4 AND EXTRACT(YEAR FROM date) = $5`;
+            params.push(parseInt(month), parseInt(year));
+        }
+
+        query += ` ORDER BY date DESC`;
+
+        const result = await pool.query(query, params);
 
         res.status(200).json({ requests: result.rows });
     } catch (error) {

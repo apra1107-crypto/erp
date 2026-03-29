@@ -15,6 +15,7 @@ import AddExtraChargeModal from '../../../components/AddExtraChargeModal';
 import OneTimeFeesTab from '../../../components/OneTimeFeesTab';
 import { generateReceiptPDF } from '../../../utils/receiptGenerator';
 import MonthlyTransactionBottomSheet from '../../../components/MonthlyTransactionBottomSheet';
+import FeeReceiptPreview from '../../../components/FeeReceiptPreview';
 
 if (Platform.OS === 'android' && UIManager.setLayoutAnimationEnabledExperimental) {
   UIManager.setLayoutAnimationEnabledExperimental(true);
@@ -48,6 +49,8 @@ export default function TeacherFees() {
     const [instituteData, setInstituteData] = useState<any>(null);
     const [showTransactionDetails, setShowTransactionDetails] = useState(false);
     const [selectedTransactionData, setSelectedTransactionData] = useState<any>(null);
+    const [showPreview, setShowPreview] = useState(false);
+    const [previewData, setPreviewData] = useState<any>(null);
 
     // Summary Stats
     const stats = useMemo(() => {
@@ -211,6 +214,24 @@ export default function TeacherFees() {
         }
     };
 
+    const handlePreviewMonthly = (student: any) => {
+        if (!instituteData) return;
+        const breakage = [
+            { label: 'Monthly Tuition Fee', amount: parseFloat(student.monthly_fees || 0) },
+            ...(student.transport_facility ? [{ label: 'Transport Fee', amount: parseFloat(student.transport_fees || 0) }] : []),
+            ...(student.extra_charges || []).map((ec: any) => ({ label: ec.reason, amount: parseFloat(ec.amount) }))
+        ];
+
+        setPreviewData({
+            institute: instituteData,
+            student,
+            payment: { ...student, month: selectedMonth, year: selectedYear },
+            breakage,
+            type: 'MONTHLY'
+        });
+        setShowPreview(true);
+    };
+
     const handleExtraCharge = async (charges: any[], studentIds: number[]) => {
         try {
             const token = await AsyncStorage.getItem('teacherToken');
@@ -316,6 +337,12 @@ export default function TeacherFees() {
                             </TouchableOpacity>
                             <TouchableOpacity 
                                 style={styles.iconBtn}
+                                onPress={() => handlePreviewMonthly(item)}
+                            >
+                                <Ionicons name="eye-outline" size={20} color={theme.primary} />
+                            </TouchableOpacity>
+                            <TouchableOpacity 
+                                style={styles.iconBtn}
                                 onPress={() => handleDownloadMonthly(item)}
                                 disabled={processing}
                             >
@@ -370,9 +397,9 @@ export default function TeacherFees() {
         filterRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 8 },
         miniInputGroup: { flexDirection: 'row', gap: 6, flex: 0.8 },
         filterInput: { flex: 1, height: 36, backgroundColor: theme.card, borderRadius: 10, paddingHorizontal: 10, fontSize: 12, borderWidth: 1, borderColor: theme.border },
-        statusToggleGroup: { flexDirection: 'row', backgroundColor: theme.card, borderRadius: 10, padding: 3, borderWidth: 1, borderColor: theme.border, flex: 1.2 },
-        statusBtn: { flex: 1, height: 30, borderRadius: 8, justifyContent: 'center', alignItems: 'center' },
-        statusBtnText: { fontSize: 9, fontWeight: '800' },
+        statusToggleGroup: { flexDirection: 'row', backgroundColor: isDark ? '#ffffff08' : '#00000005', borderRadius: 12, padding: 4, flex: 1.2 },
+        statusBtn: { flex: 1, height: 32, borderRadius: 10, justifyContent: 'center', alignItems: 'center' },
+        statusBtnText: { fontSize: 10, fontWeight: '900', letterSpacing: 0.5 },
 
         listContent: { paddingHorizontal: 20, paddingBottom: 40 },
         studentCard: { borderRadius: 24, marginBottom: 16, borderWidth: 1, overflow: 'hidden', elevation: 2 },
@@ -534,14 +561,13 @@ export default function TeacherFees() {
                                         key={status}
                                         style={[
                                             styles.statusBtn, 
-                                            filters.status === status && { backgroundColor: theme.primary, borderColor: theme.primary }
+                                            filters.status === status && { backgroundColor: theme.primary }
                                         ]}
                                         onPress={() => setFilters({...filters, status: status as any})}
                                     >
                                         <Text style={[
                                             styles.statusBtnText, 
-                                            filters.status === status && { color: '#fff' },
-                                            { color: theme.textLight }
+                                            { color: filters.status === status ? '#fff' : theme.textLight }
                                         ]}>
                                             {status.toUpperCase()}
                                         </Text>
@@ -585,11 +611,17 @@ export default function TeacherFees() {
                 monthName={`${months[selectedMonth - 1]} ${selectedYear}`}
             />
 
-            {/* <MonthlyTransactionBottomSheet 
+            <MonthlyTransactionBottomSheet 
                 isOpen={showTransactionDetails}
                 onClose={() => setShowTransactionDetails(false)}
                 data={selectedTransactionData}
-            /> */}
+            />
+
+            <FeeReceiptPreview 
+                isOpen={showPreview}
+                onClose={() => setShowPreview(false)}
+                data={previewData}
+            />
         </View>
     );
 }

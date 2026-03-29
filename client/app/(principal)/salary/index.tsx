@@ -37,7 +37,7 @@ export default function SalaryManagementScreen() {
     const fetchSalaries = async () => {
         try {
             setLoading(true);
-            const token = await AsyncStorage.getItem('token');
+            const token = await AsyncStorage.getItem('principalToken') || await AsyncStorage.getItem('token');
             const userData = await AsyncStorage.getItem('userData');
             const sessionId = userData ? JSON.parse(userData).current_session_id : null;
 
@@ -80,7 +80,7 @@ export default function SalaryManagementScreen() {
                     onPress: async () => {
                         try {
                             setPaying(teacher.id);
-                            const token = await AsyncStorage.getItem('token');
+                            const token = await AsyncStorage.getItem('principalToken') || await AsyncStorage.getItem('token');
                             const userData = await AsyncStorage.getItem('userData');
                             const sessionId = userData ? JSON.parse(userData).current_session_id : null;
 

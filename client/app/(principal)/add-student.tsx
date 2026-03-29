@@ -120,7 +120,7 @@ export default function AddStudent() {
 
     try {
       setLoading(true);
-      const token = await AsyncStorage.getItem('token');
+      const token = await AsyncStorage.getItem('principalToken') || await AsyncStorage.getItem('token');
       const sessionId = await AsyncStorage.getItem('selectedSessionId');
 
       const formDataToSend = new FormData();
@@ -285,6 +285,7 @@ export default function AddStudent() {
       flex: 1,
       textAlignVertical: 'top',
       paddingTop: 12,
+      color: theme.text,
     },
     row: {
       flexDirection: 'row',
@@ -314,7 +315,7 @@ export default function AddStudent() {
       elevation: 4,
     },
     genderText: {
-      fontSize: 14,
+      fontSize: 12,
       fontWeight: '700',
       color: theme.textLight,
     },
@@ -386,311 +387,716 @@ export default function AddStudent() {
     },
   }), [theme, isDark]);
 
-  return (
-    <>
-      <View style={styles.container}>
-        <StatusBar barStyle={theme.statusBarStyle} backgroundColor="transparent" translucent={true} />
+    return (
 
-        <ScrollView 
-          style={styles.content} 
-          showsVerticalScrollIndicator={false} 
-          contentContainerStyle={{ paddingBottom: Math.max(40, insets.top + insets.bottom + 20), paddingTop: insets.top + 10 }}
-        >
-          {/* Free Flow Header */}
-          <View style={styles.header}>
-            <TouchableOpacity style={styles.backButtonHeader} onPress={() => router.back()}>
-              <Ionicons name="chevron-back" size={24} color={theme.text} />
-            </TouchableOpacity>
-            <Text style={styles.headerTitle}>Add Student</Text>
-            <TouchableOpacity
-              style={[styles.saveButtonHeader, loading && { opacity: 0.7 }]}
-              onPress={handleSubmit}
-              disabled={loading}
+      <>
+
+        <View style={styles.container}>
+
+          <StatusBar barStyle={theme.statusBarStyle} backgroundColor="transparent" translucent={true} />
+
+  
+
+          <KeyboardAvoidingView
+
+            behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+
+            style={{ flex: 1 }}
+
+            keyboardVerticalOffset={Platform.OS === 'ios' ? 0 : 0}
+
+          >
+
+            <ScrollView 
+
+              style={styles.content} 
+
+              showsVerticalScrollIndicator={false} 
+
+              contentContainerStyle={{ paddingBottom: Math.max(40, insets.top + insets.bottom + 20), paddingTop: insets.top + 10 }}
+
             >
-              {loading ? (
-                <ActivityIndicator size="small" color="#fff" />
-              ) : (
-                <Text style={styles.saveButtonText}>Save</Text>
-              )}
-            </TouchableOpacity>
-          </View>
 
-          <View style={styles.photoContainer}>
-            <TouchableOpacity style={styles.photoButton} onPress={pickImage}>
-              {photo ? (
-                <Image source={{ uri: photo.uri }} style={styles.photoImage} />
-              ) : (
-                <View style={styles.photoPlaceholder}>
-                  <Ionicons name="camera-outline" size={40} color={theme.primary} />
-                  <Text style={styles.photoText}>Add Photo</Text>
-                </View>
-              )}
-            </TouchableOpacity>
-          </View>
+              {/* Free Flow Header */}
 
-          <View style={styles.section}>
-            <Text style={styles.sectionTitle}>Basic Information</Text>
-            <View style={styles.inputCard}>
-              <View style={styles.inputGroup}>
-                <Text style={styles.label}>Full Name *</Text>
-                <View style={styles.inputWrapper}>
-                  <Ionicons name="person-outline" size={20} color={theme.primary} style={styles.inputIcon} />
-                  <TextInput
-                    style={styles.input}
-                    placeholder="e.g. John Doe"
-                    placeholderTextColor={theme.textLight}
-                    value={formData.name}
-                    onChangeText={(text) => setFormData({ ...formData, name: text })}
-                  />
-                </View>
-              </View>
+              <View style={styles.header}>
 
-              <View style={styles.row}>
-                <View style={[styles.inputGroup, { flex: 0.48 }]}>
-                  <Text style={styles.label}>Date of Birth *</Text>
-                  <TouchableOpacity style={styles.dateButton} onPress={() => setShowDatePicker(true)}>
-                    <Ionicons name="calendar-outline" size={20} color={theme.primary} style={styles.inputIcon} />
-                    <Text style={styles.dateText}>{formatDate(formData.dob)}</Text>
-                  </TouchableOpacity>
-                </View>
+                <TouchableOpacity style={styles.backButtonHeader} onPress={() => router.back()}>
 
-                <View style={[styles.inputGroup, { flex: 0.48 }]}>
-                  <Text style={styles.label}>Gender *</Text>
-                  <View style={styles.genderContainer}>
-                    <TouchableOpacity
-                      style={[styles.genderButton, formData.gender === 'Male' && styles.genderButtonActive]}
-                      onPress={() => setFormData({ ...formData, gender: 'Male' })}
-                    >
-                      <Text style={[styles.genderText, formData.gender === 'Male' && styles.genderTextActive]}>Male</Text>
-                    </TouchableOpacity>
-                    <TouchableOpacity
-                      style={[styles.genderButton, formData.gender === 'Female' && styles.genderButtonActive]}
-                      onPress={() => setFormData({ ...formData, gender: 'Female' })}
-                    >
-                      <Text style={[styles.genderText, formData.gender === 'Female' && styles.genderTextActive]}>Female</Text>
-                    </TouchableOpacity>
-                  </View>
-                </View>
-              </View>
-            </View>
-          </View>
+                  <Ionicons name="chevron-back" size={24} color={theme.text} />
 
-          <View style={styles.section}>
-            <Text style={styles.sectionTitle}>Academic Details</Text>
-            <View style={styles.inputCard}>
-              <View style={styles.row}>
-                <View style={[styles.inputGroup, { flex: 0.48 }]}>
-                  <Text style={styles.label}>Class *</Text>
-                  <View style={styles.inputWrapper}>
-                    <Ionicons name="school-outline" size={20} color={theme.primary} style={styles.inputIcon} />
-                    <TextInput
-                      style={styles.input}
-                      placeholder="e.g. 10"
-                      placeholderTextColor={theme.textLight}
-                      value={formData.class}
-                      onChangeText={(text) => setFormData({ ...formData, class: text })}
-                    />
-                  </View>
-                </View>
-                <View style={[styles.inputGroup, { flex: 0.48 }]}>
-                  <Text style={styles.label}>Section *</Text>
-                  <View style={styles.inputWrapper}>
-                    <Ionicons name="grid-outline" size={20} color={theme.primary} style={styles.inputIcon} />
-                    <TextInput
-                      style={styles.input}
-                      placeholder="e.g. A"
-                      placeholderTextColor={theme.textLight}
-                      value={formData.section}
-                      onChangeText={(text) => setFormData({ ...formData, section: text })}
-                    />
-                  </View>
-                </View>
-              </View>
-
-              <View style={styles.inputGroup}>
-                <Text style={styles.label}>Roll Number *</Text>
-                <View style={styles.inputWrapper}>
-                  <Ionicons name="list-outline" size={20} color={theme.primary} style={styles.inputIcon} />
-                  <TextInput
-                    style={styles.input}
-                    placeholder="e.g. 101"
-                    placeholderTextColor={theme.textLight}
-                    value={formData.roll_no}
-                    onChangeText={(text) => setFormData({ ...formData, roll_no: text })}
-                  />
-                </View>
-              </View>
-
-              <View style={styles.inputGroup}>
-                <Text style={styles.label}>Admission Date *</Text>
-                <TouchableOpacity style={styles.dateButton} onPress={() => setShowAdmissionDatePicker(true)}>
-                  <Ionicons name="calendar-outline" size={20} color={theme.primary} style={styles.inputIcon} />
-                  <Text style={styles.dateText}>{formatDate(formData.admission_date)}</Text>
                 </TouchableOpacity>
-              </View>
-            </View>
-          </View>
 
-          {showAdmissionDatePicker && (
-            <DateTimePicker
-              value={formData.admission_date}
-              mode="date"
-              display="default"
-              onChange={(event, selectedDate) => {
-                setShowAdmissionDatePicker(false);
-                if (selectedDate) {
-                  setFormData({ ...formData, admission_date: selectedDate });
-                }
-              }}
-            />
-          )}
+                <Text style={styles.headerTitle}>Add Student</Text>
 
-          <View style={styles.section}>
-            <Text style={styles.sectionTitle}>Parents & Contact</Text>
-            <View style={styles.inputCard}>
-              <View style={styles.inputGroup}>
-                <Text style={styles.label}>Father's Name *</Text>
-                <View style={styles.inputWrapper}>
-                  <Ionicons name="person-outline" size={20} color={theme.primary} style={styles.inputIcon} />
-                  <TextInput
-                    style={styles.input}
-                    placeholder="Father's full name"
-                    placeholderTextColor={theme.textLight}
-                    value={formData.father_name}
-                    onChangeText={(text) => setFormData({ ...formData, father_name: text })}
-                  />
-                </View>
+                <TouchableOpacity
+
+                  style={[styles.saveButtonHeader, loading && { opacity: 0.7 }]}
+
+                  onPress={handleSubmit}
+
+                  disabled={loading}
+
+                >
+
+                  {loading ? (
+
+                    <ActivityIndicator size="small" color="#fff" />
+
+                  ) : (
+
+                    <Text style={styles.saveButtonText}>Save</Text>
+
+                  )}
+
+                </TouchableOpacity>
+
               </View>
 
-              <View style={styles.inputGroup}>
-                <Text style={styles.label}>Mother's Name *</Text>
-                <View style={styles.inputWrapper}>
-                  <Ionicons name="person-outline" size={20} color={theme.primary} style={styles.inputIcon} />
-                  <TextInput
-                    style={styles.input}
-                    placeholder="Mother's full name"
-                    placeholderTextColor={theme.textLight}
-                    value={formData.mother_name}
-                    onChangeText={(text) => setFormData({ ...formData, mother_name: text })}
-                  />
-                </View>
+  
+
+              <View style={styles.photoContainer}>
+
+                <TouchableOpacity style={styles.photoButton} onPress={pickImage}>
+
+                  {photo ? (
+
+                    <Image source={{ uri: photo.uri }} style={styles.photoImage} />
+
+                  ) : (
+
+                    <View style={styles.photoPlaceholder}>
+
+                      <Ionicons name="camera-outline" size={40} color={theme.primary} />
+
+                      <Text style={styles.photoText}>Add Photo</Text>
+
+                    </View>
+
+                  )}
+
+                </TouchableOpacity>
+
               </View>
 
-              <View style={styles.inputGroup}>
-                <Text style={styles.label}>Mobile Number *</Text>
-                <View style={styles.inputWrapper}>
-                  <Ionicons name="call-outline" size={20} color={theme.primary} style={styles.inputIcon} />
-                  <TextInput
-                    style={styles.input}
-                    placeholder="10-digit mobile"
-                    placeholderTextColor={theme.textLight}
-                    keyboardType="phone-pad"
-                    value={formData.mobile}
-                    onChangeText={(text) => setFormData({ ...formData, mobile: text })}
-                  />
-                </View>
-              </View>
+  
 
-              <View style={styles.inputGroup}>
-                <Text style={styles.label}>Email Address *</Text>
-                <View style={styles.inputWrapper}>
-                  <Ionicons name="mail-outline" size={20} color={theme.primary} style={styles.inputIcon} />
-                  <TextInput
-                    style={styles.input}
-                    placeholder="email@example.com"
-                    placeholderTextColor={theme.textLight}
-                    keyboardType="email-address"
-                    autoCapitalize="none"
-                    value={formData.email}
-                    onChangeText={(text) => setFormData({ ...formData, email: text })}
-                  />
-                </View>
-              </View>
+              <View style={styles.section}>
 
-              <View style={styles.inputGroup}>
-                <Text style={styles.label}>Residential Address *</Text>
-                <View style={[styles.inputWrapper, { height: 100, alignItems: 'flex-start' }]}>
-                  <Ionicons name="location-outline" size={20} color={theme.primary} style={[styles.inputIcon, { marginTop: 15 }]} />
-                  <TextInput
-                    style={styles.textArea}
-                    placeholder="Complete address"
-                    placeholderTextColor={theme.textLight}
-                    multiline
-                    numberOfLines={4}
-                    value={formData.address}
-                    onChangeText={(text) => setFormData({ ...formData, address: text })}
-                  />
-                </View>
-              </View>
-            </View>
-          </View>
+                <Text style={styles.sectionTitle}>Basic Information</Text>
 
-          <View style={styles.section}>
-            <Text style={styles.sectionTitle}>Financial Details</Text>
-            <View style={styles.inputCard}>
-              <View style={styles.inputGroup}>
-                <Text style={styles.label}>Monthly Tuition Fee *</Text>
-                <View style={styles.inputWrapper}>
-                  <Text style={{ fontSize: 16, color: theme.textLight, marginRight: 5 }}>₹</Text>
-                  <TextInput
-                    style={styles.input}
-                    placeholder="e.g. 1500"
-                    placeholderTextColor={theme.textLight}
-                    keyboardType="numeric"
-                    value={formData.monthly_fees}
-                    onChangeText={(text) => setFormData({ ...formData, monthly_fees: text })}
-                  />
-                </View>
-              </View>
+                <View style={styles.inputCard}>
 
-              {formData.transport_facility && (
-                <View style={styles.inputGroup}>
-                  <Text style={styles.label}>Monthly Transport Fee *</Text>
-                  <View style={styles.inputWrapper}>
-                    <Text style={{ fontSize: 16, color: theme.textLight, marginRight: 5 }}>₹</Text>
-                    <TextInput
-                      style={styles.input}
-                      placeholder="e.g. 500"
-                      placeholderTextColor={theme.textLight}
-                      keyboardType="numeric"
-                      value={formData.transport_fees}
-                      onChangeText={(text) => setFormData({ ...formData, transport_fees: text })}
-                    />
+                  <View style={styles.inputGroup}>
+
+                    <Text style={styles.label}>Full Name *</Text>
+
+                    <View style={styles.inputWrapper}>
+
+                      <Ionicons name="person-outline" size={20} color={theme.primary} style={styles.inputIcon} />
+
+                      <TextInput
+
+                        style={styles.input}
+
+                        placeholder="e.g. John Doe"
+
+                        placeholderTextColor={theme.textLight}
+
+                        value={formData.name}
+
+                        onChangeText={(text) => setFormData({ ...formData, name: text })}
+
+                      />
+
+                    </View>
+
                   </View>
+
+  
+
+                  <View style={styles.row}>
+
+                    <View style={[styles.inputGroup, { flex: 0.48 }]}>
+
+                      <Text style={styles.label}>Date of Birth *</Text>
+
+                      <TouchableOpacity style={styles.dateButton} onPress={() => setShowDatePicker(true)}>
+
+                        <Ionicons name="calendar-outline" size={20} color={theme.primary} style={styles.inputIcon} />
+
+                        <Text style={styles.dateText}>{formatDate(formData.dob)}</Text>
+
+                      </TouchableOpacity>
+
+                    </View>
+
+  
+
+                                        <View style={[styles.inputGroup, { flex: 0.48 }]}>
+
+  
+
+                                          <Text style={styles.label}>Gender *</Text>
+
+  
+
+                                          <View style={styles.genderContainer}>
+
+  
+
+                                            <TouchableOpacity
+
+  
+
+                                              style={[styles.genderButton, formData.gender === 'Male' && styles.genderButtonActive]}
+
+  
+
+                                              onPress={() => setFormData({ ...formData, gender: 'Male' })}
+
+  
+
+                                            >
+
+  
+
+                                              <Text style={[styles.genderText, formData.gender === 'Male' && styles.genderTextActive]}>Male</Text>
+
+  
+
+                                            </TouchableOpacity>
+
+  
+
+                                            <TouchableOpacity
+
+  
+
+                                              style={[styles.genderButton, formData.gender === 'Female' && styles.genderButtonActive]}
+
+  
+
+                                              onPress={() => setFormData({ ...formData, gender: 'Female' })}
+
+  
+
+                                            >
+
+  
+
+                                              <Text style={[styles.genderText, formData.gender === 'Female' && styles.genderTextActive]}>Female</Text>
+
+  
+
+                                            </TouchableOpacity>
+
+  
+
+                                            <TouchableOpacity
+
+  
+
+                                              style={[styles.genderButton, formData.gender === 'Other' && styles.genderButtonActive]}
+
+  
+
+                                              onPress={() => setFormData({ ...formData, gender: 'Other' })}
+
+  
+
+                                            >
+
+  
+
+                                              <Text style={[styles.genderText, formData.gender === 'Other' && styles.genderTextActive]}>Other</Text>
+
+  
+
+                                            </TouchableOpacity>
+
+  
+
+                                          </View>
+
+  
+
+                                        </View>
+
+                  </View>
+
                 </View>
+
+              </View>
+
+  
+
+              <View style={styles.section}>
+
+                <Text style={styles.sectionTitle}>Academic Details</Text>
+
+                <View style={styles.inputCard}>
+
+                  <View style={styles.row}>
+
+                    <View style={[styles.inputGroup, { flex: 0.48 }]}>
+
+                      <Text style={styles.label}>Class *</Text>
+
+                      <View style={styles.inputWrapper}>
+
+                        <Ionicons name="school-outline" size={20} color={theme.primary} style={styles.inputIcon} />
+
+                        <TextInput
+
+                          style={styles.input}
+
+                          placeholder="e.g. 10"
+
+                          placeholderTextColor={theme.textLight}
+
+                          value={formData.class}
+
+                          onChangeText={(text) => setFormData({ ...formData, class: text })}
+
+                        />
+
+                      </View>
+
+                    </View>
+
+                    <View style={[styles.inputGroup, { flex: 0.48 }]}>
+
+                      <Text style={styles.label}>Section *</Text>
+
+                      <View style={styles.inputWrapper}>
+
+                        <Ionicons name="grid-outline" size={20} color={theme.primary} style={styles.inputIcon} />
+
+                        <TextInput
+
+                          style={styles.input}
+
+                          placeholder="e.g. A"
+
+                          placeholderTextColor={theme.textLight}
+
+                          value={formData.section}
+
+                          onChangeText={(text) => setFormData({ ...formData, section: text })}
+
+                        />
+
+                      </View>
+
+                    </View>
+
+                  </View>
+
+  
+
+                  <View style={styles.inputGroup}>
+
+                    <Text style={styles.label}>Roll Number *</Text>
+
+                    <View style={styles.inputWrapper}>
+
+                      <Ionicons name="list-outline" size={20} color={theme.primary} style={styles.inputIcon} />
+
+                      <TextInput
+
+                        style={styles.input}
+
+                        placeholder="e.g. 101"
+
+                        placeholderTextColor={theme.textLight}
+
+                        value={formData.roll_no}
+
+                        onChangeText={(text) => setFormData({ ...formData, roll_no: text })}
+
+                      />
+
+                    </View>
+
+                  </View>
+
+  
+
+                  <View style={styles.inputGroup}>
+
+                    <Text style={styles.label}>Admission Date *</Text>
+
+                    <TouchableOpacity style={styles.dateButton} onPress={() => setShowAdmissionDatePicker(true)}>
+
+                      <Ionicons name="calendar-outline" size={20} color={theme.primary} style={styles.inputIcon} />
+
+                      <Text style={styles.dateText}>{formatDate(formData.admission_date)}</Text>
+
+                    </TouchableOpacity>
+
+                  </View>
+
+                </View>
+
+              </View>
+
+  
+
+              {showAdmissionDatePicker && (
+
+                <DateTimePicker
+
+                  value={formData.admission_date}
+
+                  mode="date"
+
+                  display="default"
+
+                  onChange={(event, selectedDate) => {
+
+                    setShowAdmissionDatePicker(false);
+
+                    if (selectedDate) {
+
+                      setFormData({ ...formData, admission_date: selectedDate });
+
+                    }
+
+                  }}
+
+                />
+
               )}
-            </View>
-          </View>
 
-          <View style={styles.switchContainer}>
-            <View>
-              <Text style={styles.switchLabel}>Transport Facility</Text>
-              <Text style={{ fontSize: 10, fontWeight: '800', color: formData.transport_facility ? '#27AE60' : theme.textLight, marginTop: 4 }}>
-                  {formData.transport_facility ? 'YES, ENABLED' : 'NO, DISABLED'}
-              </Text>
-            </View>
-            <ModernToggle 
-              active={formData.transport_facility}
-              onToggle={() => setFormData({ ...formData, transport_facility: !formData.transport_facility })}
-              theme={{ isDark }}
-            />
-          </View>
+  
 
-          {showDatePicker && (
-            <DateTimePicker
-              value={formData.dob}
-              mode="date"
-              display="default"
-              onChange={(event, selectedDate) => {
-                setShowDatePicker(false);
-                if (selectedDate) {
-                  setFormData({ ...formData, dob: selectedDate });
-                }
-              }}
-            />
-          )}
-        </ScrollView>
-      </View>
-    </>
-  );
-}
+              <View style={styles.section}>
+
+                <Text style={styles.sectionTitle}>Parents & Contact</Text>
+
+                <View style={styles.inputCard}>
+
+                  <View style={styles.inputGroup}>
+
+                    <Text style={styles.label}>Father's Name *</Text>
+
+                    <View style={styles.inputWrapper}>
+
+                      <Ionicons name="person-outline" size={20} color={theme.primary} style={styles.inputIcon} />
+
+                      <TextInput
+
+                        style={styles.input}
+
+                        placeholder="Father's full name"
+
+                        placeholderTextColor={theme.textLight}
+
+                        value={formData.father_name}
+
+                        onChangeText={(text) => setFormData({ ...formData, father_name: text })}
+
+                      />
+
+                    </View>
+
+                  </View>
+
+  
+
+                  <View style={styles.inputGroup}>
+
+                    <Text style={styles.label}>Mother's Name *</Text>
+
+                    <View style={styles.inputWrapper}>
+
+                      <Ionicons name="person-outline" size={20} color={theme.primary} style={styles.inputIcon} />
+
+                      <TextInput
+
+                        style={styles.input}
+
+                        placeholder="Mother's full name"
+
+                        placeholderTextColor={theme.textLight}
+
+                        value={formData.mother_name}
+
+                        onChangeText={(text) => setFormData({ ...formData, mother_name: text })}
+
+                      />
+
+                    </View>
+
+                  </View>
+
+  
+
+                  <View style={styles.inputGroup}>
+
+                    <Text style={styles.label}>Mobile Number *</Text>
+
+                    <View style={styles.inputWrapper}>
+
+                      <Ionicons name="call-outline" size={20} color={theme.primary} style={styles.inputIcon} />
+
+                      <TextInput
+
+                        style={styles.input}
+
+                        placeholder="10-digit mobile"
+
+                        placeholderTextColor={theme.textLight}
+
+                        keyboardType="phone-pad"
+
+                        value={formData.mobile}
+
+                        onChangeText={(text) => setFormData({ ...formData, mobile: text })}
+
+                      />
+
+                    </View>
+
+                  </View>
+
+  
+
+                  <View style={styles.inputGroup}>
+
+                    <Text style={styles.label}>Email Address *</Text>
+
+                    <View style={styles.inputWrapper}>
+
+                      <Ionicons name="mail-outline" size={20} color={theme.primary} style={styles.inputIcon} />
+
+                      <TextInput
+
+                        style={styles.input}
+
+                        placeholder="email@example.com"
+
+                        placeholderTextColor={theme.textLight}
+
+                        keyboardType="email-address"
+
+                        autoCapitalize="none"
+
+                        value={formData.email}
+
+                        onChangeText={(text) => setFormData({ ...formData, email: text })}
+
+                      />
+
+                    </View>
+
+                  </View>
+
+  
+
+                                    <View style={styles.inputGroup}>
+
+  
+
+                                      <Text style={styles.label}>Residential Address *</Text>
+
+  
+
+                                      <View style={[styles.inputWrapper, { height: 120, alignItems: 'flex-start' }]}>
+
+  
+
+                                        <Ionicons name="location-outline" size={20} color={theme.primary} style={[styles.inputIcon, { marginTop: 15 }]} />
+
+  
+
+                                        <TextInput
+
+  
+
+                                          style={[styles.textArea, { height: '100%', width: '100%' }]}
+
+  
+
+                                          placeholder="Complete address"
+
+  
+
+                                          placeholderTextColor={theme.textLight}
+
+  
+
+                                          multiline
+
+  
+
+                                          numberOfLines={4}
+
+  
+
+                                          value={formData.address}
+
+  
+
+                                          onChangeText={(text) => setFormData({ ...formData, address: text })}
+
+  
+
+                                        />
+
+  
+
+                                      </View>
+
+  
+
+                                    </View>
+
+                </View>
+
+              </View>
+
+  
+
+              <View style={styles.section}>
+
+                <Text style={styles.sectionTitle}>Financial Details</Text>
+
+                <View style={styles.inputCard}>
+
+                  <View style={styles.inputGroup}>
+
+                    <Text style={styles.label}>Monthly Tuition Fee *</Text>
+
+                    <View style={styles.inputWrapper}>
+
+                      <Text style={{ fontSize: 16, color: theme.textLight, marginRight: 5 }}>₹</Text>
+
+                      <TextInput
+
+                        style={styles.input}
+
+                        placeholder="e.g. 1500"
+
+                        placeholderTextColor={theme.textLight}
+
+                        keyboardType="numeric"
+
+                        value={formData.monthly_fees}
+
+                        onChangeText={(text) => setFormData({ ...formData, monthly_fees: text })}
+
+                      />
+
+                    </View>
+
+                  </View>
+
+  
+
+                  {formData.transport_facility && (
+
+                    <View style={styles.inputGroup}>
+
+                      <Text style={styles.label}>Monthly Transport Fee *</Text>
+
+                      <View style={styles.inputWrapper}>
+
+                        <Text style={{ fontSize: 16, color: theme.textLight, marginRight: 5 }}>₹</Text>
+
+                        <TextInput
+
+                          style={styles.input}
+
+                          placeholder="e.g. 500"
+
+                          placeholderTextColor={theme.textLight}
+
+                          keyboardType="numeric"
+
+                          value={formData.transport_fees}
+
+                          onChangeText={(text) => setFormData({ ...formData, transport_fees: text })}
+
+                        />
+
+                      </View>
+
+                    </View>
+
+                  )}
+
+                </View>
+
+              </View>
+
+  
+
+              <View style={styles.switchContainer}>
+
+                <View>
+
+                  <Text style={styles.switchLabel}>Transport Facility</Text>
+
+                  <Text style={{ fontSize: 10, fontWeight: '800', color: formData.transport_facility ? '#27AE60' : theme.textLight, marginTop: 4 }}>
+
+                      {formData.transport_facility ? 'YES, ENABLED' : 'NO, DISABLED'}
+
+                  </Text>
+
+                </View>
+
+                <ModernToggle 
+
+                  active={formData.transport_facility}
+
+                  onToggle={() => setFormData({ ...formData, transport_facility: !formData.transport_facility })}
+
+                  theme={{ isDark }}
+
+                />
+
+              </View>
+
+  
+
+              {showDatePicker && (
+
+                <DateTimePicker
+
+                  value={formData.dob}
+
+                  mode="date"
+
+                  display="default"
+
+                  onChange={(event, selectedDate) => {
+
+                    setShowDatePicker(false);
+
+                    if (selectedDate) {
+
+                      setFormData({ ...formData, dob: selectedDate });
+
+                    }
+
+                  }}
+
+                />
+
+              )}
+
+            </ScrollView>
+
+          </KeyboardAvoidingView>
+
+        </View>
+
+      </>
+
+    );
+
+  }
+
+  

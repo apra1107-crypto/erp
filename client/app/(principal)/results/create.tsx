@@ -58,7 +58,7 @@ export default function CreateMarksheet() {
 
         try {
             setLoading(true);
-            const token = await AsyncStorage.getItem('token');
+            const token = await AsyncStorage.getItem('principalToken') || await AsyncStorage.getItem('token');
             const payload = {
                 ...formData,
                 subjects_blueprint: subjects,

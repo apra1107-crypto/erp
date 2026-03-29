@@ -9,6 +9,7 @@ import {
     addExtraCharge, getStudentFeesFull,
     getBankAccounts, addBankAccount, updateBankAccount, deleteBankAccount
 } from '../controllers/principalController.js';
+import { generateFeeReceiptPDF } from '../controllers/feeReceiptController.js';
 
 import { protect, principalOnly, staffOnly, principalOrSpecialTeacher } from '../middlewares/auth.js';
 
@@ -31,6 +32,7 @@ router.get('/bank-accounts', protect, principalOnly, getBankAccounts);
 router.post('/bank-accounts', protect, principalOnly, addBankAccount);
 router.put('/bank-accounts/:id', protect, principalOnly, updateBankAccount);
 router.delete('/bank-accounts/:id', protect, principalOnly, deleteBankAccount);
+router.post('/generate-fee-receipt', protect, staffOnly, generateFeeReceiptPDF);
 router.get('/student/list', protect, staffOnly, getStudents);
 router.get('/student/fees-status', protect, principalOrSpecialTeacher, getFeesStatus);
 router.get('/student/monthly-fees-activation', protect, principalOrSpecialTeacher, getMonthlyActivationStatus);

@@ -1,6 +1,7 @@
 import express from 'express';
 import multer from 'multer';
 import { addStudent, getStudents, searchEntities, getStats, getAttendanceListBySection, getDashboard } from '../controllers/principalController.js';
+import { generateFeeReceiptPDF } from '../controllers/feeReceiptController.js';
 import { protect, teacherOnly, staffOnly } from '../middlewares/auth.js';
 
 const router = express.Router();
@@ -10,6 +11,9 @@ const upload = multer({ storage: multer.memoryStorage() });
 router.post('/student/add', protect, teacherOnly, upload.single('photo'), addStudent);
 router.get('/student/list', protect, teacherOnly, getStudents);
 router.get('/search', protect, teacherOnly, searchEntities);
+
+// Fees routes for teachers
+router.post('/generate-fee-receipt', protect, staffOnly, generateFeeReceiptPDF);
 
 // Stats routes for teachers
 router.get('/dashboard', protect, staffOnly, getDashboard);

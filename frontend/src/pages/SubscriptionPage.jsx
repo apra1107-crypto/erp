@@ -122,12 +122,18 @@ const SubscriptionPage = ({ onRefreshStatus }) => {
             const userData = JSON.parse(localStorage.getItem('userData') || '{}');
             const instituteId = userData.id || localStorage.getItem('instituteId');
 
+            const baseAmount = minutes * planPrice;
+            const platformFee = baseAmount * 0.0236;
+            const finalTotal = baseAmount + platformFee;
+
             // 1. Create Order on Backend
             const orderResponse = await axios.post(
                 `${API_ENDPOINTS.SUBSCRIPTION}/${instituteId}/razorpay/order`,
                 {
                     months: minutes,
-                    amount: minutes * planPrice
+                    amount: finalTotal, // Send final total with charges
+                    instituteId: instituteId,
+                    instituteName: userData.institute_name
                 },
                 {
                     headers: { Authorization: `Bearer ${token}` }
@@ -208,6 +214,10 @@ const SubscriptionPage = ({ onRefreshStatus }) => {
         );
     }
 
+    const subtotal = minutes * planPrice;
+    const platformFee = subtotal * 0.0236;
+    const finalTotal = subtotal + platformFee;
+
     return (
         <div className="sub-bento-wrapper">
             <h1 className="sub-page-title">Subscription & Billing</h1>
@@ -281,17 +291,21 @@ const SubscriptionPage = ({ onRefreshStatus }) => {
                     <div className="bill-preview">
                         <div className="bill-row">
                             <span>Subtotal</span>
-                            <span>₹{Math.round(minutes * planPrice)}</span>
+                            <span>₹{subtotal.toLocaleString('en-IN')}</span>
+                        </div>
+                        <div className="bill-row" style={{ fontSize: '0.85rem', color: '#94a3b8' }}>
+                            <span>Platform Fee (2% + GST)</span>
+                            <span>₹{platformFee.toFixed(2)}</span>
                         </div>
                         <div className="bill-divider"></div>
                         <div className="bill-row total">
                             <span>Total</span>
-                            <span>₹{Math.round(minutes * planPrice)}</span>
+                            <span>₹{finalTotal.toLocaleString('en-IN', { minimumFractionDigits: 2 })}</span>
                         </div>
                     </div>
 
                     <button className="action-pay-btn" onClick={handlePayment}>
-                        Proceed to Pay
+                        Proceed to Pay ₹{finalTotal.toLocaleString('en-IN', { maximumFractionDigits: 0 })}
                         <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><line x1="5" y1="12" x2="19" y2="12"></line><polyline points="12 5 19 12 12 19"></polyline></svg>
                     </button>
                 </div>

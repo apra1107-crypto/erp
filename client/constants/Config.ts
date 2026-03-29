@@ -1,6 +1,6 @@
 import { Platform } from 'react-native';
 
-export const BASE_URL = `https://klassin.co.in`;
+export const BASE_URL = 'http://10.69.149.252:5000';
 
 export const API_ENDPOINTS = {
     AUTH: {
@@ -22,6 +22,7 @@ export const API_ENDPOINTS = {
     SUBSCRIPTION: `${BASE_URL}/api/subscription`,
     ROUTINE: `${BASE_URL}/api/routine`,
     ADMIT_CARD: `${BASE_URL}/api/manage-admit-cards`,
+    ID_CARD: `${BASE_URL}/api/id-cards`,
     EXAM: `${BASE_URL}/api/exam`,
     ACADEMIC_SESSIONS: `${BASE_URL}/api/academic-sessions`,
     PROMOTION: `${BASE_URL}/api/promotion`,

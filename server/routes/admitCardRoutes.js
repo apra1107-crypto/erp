@@ -5,7 +5,9 @@ import {
     getStudentsForAdmitCard, 
     deleteAdmitCard, 
     toggleAdmitCardVisibility,
-    getMyAdmitCards 
+    getMyAdmitCards,
+    generateBulkAdmitCardPDF,
+    generateStudentAdmitCardPDF
 } from '../controllers/admitCardController.js';
 import { protect, staffOnly, studentOnly } from '../middlewares/auth.js';
 
@@ -15,6 +17,7 @@ router.use(protect);
 
 // Student route
 router.get('/my-cards', studentOnly, getMyAdmitCards);
+router.get('/generate-student-pdf/:id', studentOnly, generateStudentAdmitCardPDF);
 
 // Staff routes
 router.use(staffOnly);
@@ -23,5 +26,6 @@ router.get('/list', getAdmitCards);
 router.post('/students', getStudentsForAdmitCard);
 router.patch('/visibility/:id', toggleAdmitCardVisibility);
 router.delete('/:id', deleteAdmitCard);
+router.post('/generate-bulk-pdf/:id', generateBulkAdmitCardPDF);
 
 export default router;

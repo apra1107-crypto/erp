@@ -45,24 +45,25 @@ export const createHomework = async (req, res) => {
             date: date
         });
 
-        // 2. Send Push Notifications in background
-        pool.query(
+        // 2. Send Push Notifications
+        const studentTokensRes = await pool.query(
             `SELECT push_token FROM students 
              WHERE institute_id = $1 AND class = $2 AND section = $3 AND push_token IS NOT NULL AND push_token != ''`,
             [instituteId, class_name, section]
-        ).then(studentTokensRes => {
-            const tokens = studentTokensRes.rows.map(r => r.push_token);
-            if (tokens.length > 0) {
-                const title = `New Homework: ${subject}`;
-                const body = `${postedByName} added homework for ${subject}. Check it out!`;
-                sendPushNotification(tokens, title, body, { 
-                    type: 'homework', 
-                    homeworkId: newHomework.id,
-                    subject,
-                    teacher_name: postedByName 
-                }).catch(err => console.error('BG Push Error:', err));
-            }
-        });
+        );
+
+        const tokens = studentTokensRes.rows.map(r => r.push_token);
+
+        if (tokens.length > 0) {
+            const title = `New Homework: ${subject}`;
+            const body = `${postedByName} added homework for ${subject}. Check it out!`;
+            await sendPushNotification(tokens, title, body, { 
+                type: 'homework', 
+                homeworkId: newHomework.id,
+                subject,
+                teacher_name: postedByName 
+            });
+        }
 
         res.status(201).json({ message: 'Homework created successfully', homework: newHomework });
     } catch (error) {
@@ -236,24 +237,25 @@ export const updateHomework = async (req, res) => {
             isUpdate: true
         });
 
-        // 2. Push Notification in BG
-        pool.query(
+        // 2. Push Notification
+        const studentTokensRes = await pool.query(
             `SELECT push_token FROM students 
              WHERE institute_id = $1 AND class = $2 AND section = $3 AND push_token IS NOT NULL AND push_token != ''`,
             [instituteId, updatedHW.class, updatedHW.section]
-        ).then(studentTokensRes => {
-            const tokens = studentTokensRes.rows.map(r => r.push_token);
-            if (tokens.length > 0) {
-                const title = `Homework Updated: ${subject}`;
-                const body = `${postedByName} updated the homework for ${subject}.`;
-                sendPushNotification(tokens, title, body, { 
-                    type: 'homework', 
-                    homeworkId: updatedHW.id,
-                    subject,
-                    teacher_name: postedByName 
-                }).catch(err => console.error('BG Push Error:', err));
-            }
-        });
+        );
+
+        const tokens = studentTokensRes.rows.map(r => r.push_token);
+
+        if (tokens.length > 0) {
+            const title = `Homework Updated: ${subject}`;
+            const body = `${postedByName} updated the homework for ${subject}.`;
+            await sendPushNotification(tokens, title, body, { 
+                type: 'homework', 
+                homeworkId: updatedHW.id,
+                subject,
+                teacher_name: postedByName 
+            });
+        }
 
         res.json({ message: 'Homework updated successfully', homework: updatedHW });
     } catch (error) {

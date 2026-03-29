@@ -6,9 +6,8 @@ import { useRouter, useLocalSearchParams } from 'expo-router';
 import axios from 'axios';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import Toast from 'react-native-toast-message';
-import { captureRef } from 'react-native-view-shot';
 import * as MediaLibrary from 'expo-media-library';
-import * as Print from 'expo-print';
+import * as FileSystem from 'expo-file-system/legacy';
 import * as Sharing from 'expo-sharing';
 
 import { useTheme } from '../../../context/ThemeContext';
@@ -16,7 +15,7 @@ import { API_ENDPOINTS, BASE_URL } from '../../../constants/Config';
 import IDCardPreview from '../../../components/IDCardPreview';
 
 const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get('window');
-const MAX_SELECTION = 20; // Increased for PDF support
+const MAX_SELECTION = 100; // Increased for Server-side PDF support
 
 export default function IDCardStudentSelection() {
     const { classSection, className, section } = useLocalSearchParams();
@@ -35,10 +34,6 @@ export default function IDCardStudentSelection() {
     const [processing, setProcessing] = useState(false);
     const [processStatus, setProcessStatus] = useState({ current: 0, total: 0 });
     const [showExportModal, setShowExportModal] = useState(false);
-    
-    // Capture Ref & Student for off-screen rendering
-    const captureViewRef = useRef<View>(null);
-    const [captureStudent, setCaptureStudent] = useState<any>(null);
 
     useEffect(() => {
         fetchStudents();
@@ -47,7 +42,7 @@ export default function IDCardStudentSelection() {
     const fetchStudents = async () => {
         try {
             setLoading(true);
-            const token = await AsyncStorage.getItem('token');
+            const token = await AsyncStorage.getItem('principalToken') || await AsyncStorage.getItem('token');
             const [studentRes, profileRes] = await Promise.all([
                 axios.get(`${API_ENDPOINTS.PRINCIPAL}/student/list`, { headers: { Authorization: `Bearer ${token}` } }),
                 axios.get(`${API_ENDPOINTS.PRINCIPAL}/profile`, { headers: { Authorization: `Bearer ${token}` } })
@@ -101,245 +96,48 @@ export default function IDCardStudentSelection() {
         return `${BASE_URL}${url.startsWith('/') ? '' : '/'}${url}`;
     };
 
-    const toBase64 = async (url: string | null | undefined) => {
-        if (!url) return null;
-        try {
-            const fullUrl = getFullImageUrl(url);
-            if (!fullUrl) return null;
-            const response = await fetch(fullUrl);
-            const blob = await response.blob();
-            return new Promise((resolve, reject) => {
-                const reader = new FileReader();
-                reader.onloadend = () => resolve(reader.result);
-                reader.onerror = reject;
-                reader.readAsDataURL(blob);
-            });
-        } catch (e) {
-            console.warn("Base64 conversion failed for:", url);
-            return null;
-        }
-    };
-
     const handleGeneratePDF = async () => {
         setShowExportModal(false);
         if (selectedIds.size === 0) return;
 
         try {
             setProcessing(true);
-            const selectedStudents = students.filter(s => selectedIds.has(s.id));
-            setProcessStatus({ current: 0, total: selectedStudents.length });
+            setProcessStatus({ current: 0, total: selectedIds.size });
 
-            const instLogoB64 = await toBase64(instituteData?.logo_url || instituteData?.institute_logo);
-            const processedStudents = [];
-
-            for (let i = 0; i < selectedStudents.length; i++) {
-                setProcessStatus({ current: i + 1, total: selectedStudents.length });
-                const student = selectedStudents[i];
-                const photoB64 = student.photo_url ? await toBase64(student.photo_url) : null;
-                processedStudents.push({ ...student, photoB64 });
-            }
-
-            const instAddress = [
-                instituteData?.institute_address || instituteData?.address,
-                instituteData?.landmark,
-                instituteData?.district,
-                instituteData?.state,
-                instituteData?.pincode
-            ].filter(Boolean).join(' ');
-
-            let htmlContent = `
-                <html>
-                <head>
-                    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-                    <style>
-                        @page { size: A4; margin: 0; }
-                        body { font-family: 'Helvetica', Arial, sans-serif; margin: 0; padding: 0; background: #fff; }
-                        .page-container {
-                            width: 210mm;
-                            height: 297mm;
-                            padding: 20mm 15mm;
-                            box-sizing: border-box;
-                            page-break-after: always;
-                            display: flex;
-                            flex-direction: column;
-                            align-items: center;
-                        }
-                        
-                        .id-card {
-                            width: 175mm;
-                            height: 105mm;
-                            margin-bottom: 15mm;
-                            background: #fff;
-                            border: 1.5px solid #000;
-                            border-radius: 12px;
-                            overflow: hidden;
-                            position: relative;
-                            box-sizing: border-box;
-                        }
-
-                        .header-strip {
-                            background: linear-gradient(to right, #667eea, #764ba2);
-                            height: 15mm;
-                            display: flex;
-                            align-items: center;
-                            justify-content: center;
-                            padding: 0 15px;
-                            gap: 12px;
-                            -webkit-print-color-adjust: exact;
-                        }
-
-                        .inst-logo { width: 10mm; height: 10mm; border-radius: 50%; background: #fff; object-fit: contain; }
-                        .inst-name { color: #fff; font-size: 18px; font-weight: 900; text-transform: uppercase; margin: 0; letter-spacing: 0.5px; }
-
-                        .sub-header {
-                            background: #fff;
-                            border-bottom: 1px solid #e2e8f0;
-                            padding: 5px;
-                            text-align: center;
-                            font-size: 8px;
-                            font-weight: 900;
-                            color: #000;
-                            text-transform: uppercase;
-                        }
-
-                        .card-body {
-                            padding: 15px 25px;
-                            display: flex;
-                            gap: 25px;
-                        }
-
-                        .left-col { flex: 1; }
-                        .label { font-size: 7px; font-weight: 900; color: #000; text-transform: uppercase; margin-bottom: 2px; }
-                        .student-name-val { font-size: 20px; font-weight: 900; color: #000; text-transform: uppercase; margin-bottom: 10px; }
-                        
-                        .stats-row { display: flex; gap: 20px; border-bottom: 1px solid #e2e8f0; padding-bottom: 8px; margin-bottom: 12px; }
-                        .stat-val { font-size: 14px; font-weight: 900; color: #000; }
-
-                        .details-grid { display: flex; flex-wrap: wrap; gap: 10px; }
-                        .detail-item { width: 45%; }
-                        .detail-val { font-size: 11px; font-weight: 900; color: #000; }
-
-                        .right-col { width: 130px; display: flex; flex-direction: column; align-items: center; }
-                        .photo-box { width: 115px; height: 130px; border: 1.5px solid #e2e8f0; border-radius: 8px; background: #f8fafc; overflow: hidden; }
-                        .photo-img { width: 100%; height: 100%; object-fit: cover; }
-
-                        .footer-strip {
-                            position: absolute;
-                            bottom: 0;
-                            width: 100%;
-                            height: 10mm;
-                            border-top: 1.5px solid #e2e8f0;
-                            display: flex;
-                            align-items: center;
-                            justify-content: center;
-                            font-size: 13px;
-                            font-weight: 900;
-                            letter-spacing: 2px;
-                            color: #000;
-                        }
-                    </style>
-                </head>
-                <body>
-            `;
-
-            for (let i = 0; i < processedStudents.length; i += 2) {
-                htmlContent += `<div class="page-container">`;
-                
-                const s1 = processedStudents[i];
-                htmlContent += `
-                    <div class="id-card">
-                        <div class="header-strip">
-                            ${instLogoB64 ? `<img src="${instLogoB64}" class="inst-logo" />` : ''}
-                            <h1 class="inst-name">${instituteData?.institute_name || 'INSTITUTE'}</h1>
-                        </div>
-                        <div class="sub-header">${instAddress}</div>
-                        <div class="card-body">
-                            <div class="left-col">
-                                <div class="label">Student Name</div>
-                                <div class="student-name-val">${s1.name}</div>
-                                <div class="stats-row">
-                                    <div style="flex:1"><div class="label">Class</div><div class="stat-val">${s1.class}</div></div>
-                                    <div style="flex:1"><div class="label">Sec</div><div class="stat-val">${s1.section}</div></div>
-                                    <div style="flex:1"><div class="label">Roll</div><div class="stat-val">${s1.roll_no || 'TBD'}</div></div>
-                                </div>
-                                <div class="details-grid">
-                                    <div class="detail-item"><div class="label">Father</div><div class="detail-val">${s1.father_name}</div></div>
-                                    <div class="detail-item"><div class="label">Mother</div><div class="detail-val">${s1.mother_name || 'N/A'}</div></div>
-                                    <div class="detail-item"><div class="label">DOB</div><div class="detail-val">${s1.dob || 'N/A'}</div></div>
-                                    <div class="detail-item"><div class="label">Contact</div><div class="detail-val">${s1.mobile}</div></div>
-                                    <div style="width: 100%; margin-top: 5px;">
-                                        <div class="label">Address</div>
-                                        <div class="detail-val" style="font-size: 9px; line-height: 1.2;">${s1.address}</div>
-                                    </div>
-                                </div>
-                            </div>
-                            <div class="right-col">
-                                <div class="photo-box">
-                                    ${s1.photoB64 ? `<img src="${s1.photoB64}" class="photo-img" />` : '<div style="height:100%;display:flex;align-items:center;justify-content:center;font-size:10px;font-weight:900;color:#94a3b8;">NO PHOTO</div>'}
-                                </div>
-                            </div>
-                        </div>
-                        <div class="footer-strip">STUDENT IDENTITY CARD</div>
-                    </div>
-                `;
-
-                if (processedStudents[i + 1]) {
-                    const s2 = processedStudents[i + 1];
-                    htmlContent += `
-                        <div class="id-card">
-                            <div class="header-strip">
-                                ${instLogoB64 ? `<img src="${instLogoB64}" class="inst-logo" />` : ''}
-                                <h1 class="inst-name">${instituteData?.institute_name || 'INSTITUTE'}</h1>
-                            </div>
-                            <div class="sub-header">${instAddress}</div>
-                            <div class="card-body">
-                                <div class="left-col">
-                                    <div class="label">Student Name</div>
-                                    <div class="student-name-val">${s2.name}</div>
-                                    <div class="stats-row">
-                                        <div style="flex:1"><div class="label">Class</div><div class="stat-val">${s2.class}</div></div>
-                                        <div style="flex:1"><div class="label">Sec</div><div class="stat-val">${s2.section}</div></div>
-                                        <div style="flex:1"><div class="label">Roll</div><div class="stat-val">${s2.roll_no || 'TBD'}</div></div>
-                                    </div>
-                                    <div class="details-grid">
-                                        <div class="detail-item"><div class="label">Father</div><div class="detail-val">${s2.father_name}</div></div>
-                                        <div class="detail-item"><div class="label">Mother</div><div class="detail-val">${s2.mother_name || 'N/A'}</div></div>
-                                        <div class="detail-item"><div class="label">DOB</div><div class="detail-val">${s2.dob || 'N/A'}</div></div>
-                                        <div class="detail-item"><div class="label">Contact</div><div class="detail-val">${s2.mobile}</div></div>
-                                        <div style="width: 100%; margin-top: 5px;">
-                                            <div class="label">Address</div>
-                                            <div class="detail-val" style="font-size: 9px; line-height: 1.2;">${s2.address}</div>
-                                        </div>
-                                    </div>
-                                </div>
-                                <div class="right-col">
-                                    <div class="photo-box">
-                                        ${s2.photoB64 ? `<img src="${s2.photoB64}" class="photo-img" />` : '<div style="height:100%;display:flex;align-items:center;justify-content:center;font-size:10px;font-weight:900;color:#94a3b8;">NO PHOTO</div>'}
-                                    </div>
-                                </div>
-                            </div>
-                            <div class="footer-strip">STUDENT IDENTITY CARD</div>
-                        </div>
-                    `;
-                }
-                
-                htmlContent += `</div>`;
-            }
-
-            htmlContent += `</body></html>`;
-
-            const { uri } = await Print.printToFileAsync({ html: htmlContent });
-            await Sharing.shareAsync(uri, {
-                mimeType: 'application/pdf',
-                dialogTitle: 'Student ID Cards Bundle',
-                UTI: 'com.adobe.pdf'
+            const token = await AsyncStorage.getItem('principalToken') || await AsyncStorage.getItem('token');
+            const response = await axios.post(`${API_ENDPOINTS.ID_CARD}/generate-bulk-pdf`, {
+                studentIds: Array.from(selectedIds)
+            }, {
+                headers: { Authorization: `Bearer ${token}` },
+                responseType: 'blob'
             });
+
+            // Convert Blob to Base64 to save as a local file
+            const reader = new FileReader();
+            reader.readAsDataURL(response.data);
+            reader.onloadend = async () => {
+                const base64data = (reader.result as string).split(',')[1];
+                const fileName = `ID_Cards_Bundle_${Date.now()}.pdf`;
+                const fileUri = `${FileSystem.cacheDirectory}${fileName}`;
+                
+                await FileSystem.writeAsStringAsync(fileUri, base64data, { encoding: 'base64' });
+
+                await Sharing.shareAsync(fileUri, {
+                    mimeType: 'application/pdf',
+                    dialogTitle: 'Student ID Cards Bundle',
+                    UTI: 'com.adobe.pdf'
+                });
+            };
 
             setSelectionMode(false);
             setSelectedIds(new Set());
-        } catch (error) {
-            console.error('PDF Error:', error);
-            Toast.show({ type: 'error', text1: 'Error', text2: 'Failed to generate PDF bundle' });
+        } catch (error: any) {
+            console.error('Server PDF Error:', error);
+            Toast.show({ 
+                type: 'error', 
+                text1: 'Generation Failed', 
+                text2: error.response?.data?.message || 'Server error generating professional IDs' 
+            });
         } finally {
             setProcessing(false);
         }
@@ -347,47 +145,67 @@ export default function IDCardStudentSelection() {
 
     const handleDownloadJPG = async () => {
         setShowExportModal(false);
+        if (selectedIds.size === 0) return;
+
         const { status } = await MediaLibrary.requestPermissionsAsync();
         if (status !== 'granted') {
-            Toast.show({ type: 'error', text1: 'Permission Denied', text2: 'Media library access is required.' });
+            Toast.show({ type: 'error', text1: 'Permission Denied', text2: 'Gallery access required.' });
             return;
         }
 
         try {
             setProcessing(true);
-            const selectedStudents = students.filter(s => selectedIds.has(s.id));
-            setProcessStatus({ current: 0, total: selectedStudents.length });
+            const ids = Array.from(selectedIds);
+            setProcessStatus({ current: 0, total: ids.length });
 
-            for (let i = 0; i < selectedStudents.length; i++) {
-                const student = selectedStudents[i];
-                setProcessStatus({ current: i + 1, total: selectedStudents.length });
+            const token = await AsyncStorage.getItem('principalToken') || await AsyncStorage.getItem('token');
+
+            for (let i = 0; i < ids.length; i++) {
+                setProcessStatus({ current: i + 1, total: ids.length });
                 
-                setCaptureStudent(student);
-                await new Promise(resolve => setTimeout(resolve, 600));
-
-                const uri = await captureRef(captureViewRef.current, {
-                    format: 'jpg',
-                    quality: 0.9,
-                    result: 'tmpfile'
+                const response = await axios.post(`${API_ENDPOINTS.ID_CARD}/generate-bulk-jpg`, {
+                    studentIds: [ids[i]] // Fetch one by one for raw JPG
+                }, {
+                    headers: { Authorization: `Bearer ${token}` },
+                    responseType: 'blob'
                 });
 
-                await MediaLibrary.saveToLibraryAsync(uri);
+                // Save individual JPG
+                const reader = new FileReader();
+                await new Promise((resolve, reject) => {
+                    reader.readAsDataURL(response.data);
+                    reader.onloadend = async () => {
+                        try {
+                            const base64data = (reader.result as string).split(',')[1];
+                            const fileName = `ID_Card_${ids[i]}_${Date.now()}.jpg`;
+                            const fileUri = `${FileSystem.cacheDirectory}${fileName}`;
+                            
+                            await FileSystem.writeAsStringAsync(fileUri, base64data, { encoding: 'base64' });
+                            await MediaLibrary.saveToLibraryAsync(fileUri);
+                            resolve(true);
+                        } catch (e) { reject(e); }
+                    };
+                    reader.onerror = reject;
+                });
             }
 
             Toast.show({ 
                 type: 'success', 
-                text1: 'Downloaded!', 
-                text2: `${selectedStudents.length} ID cards saved to Gallery.` 
+                text1: 'Success!', 
+                text2: `${ids.length} ID cards saved to Gallery.` 
             });
 
             setSelectionMode(false);
             setSelectedIds(new Set());
-        } catch (error) {
-            console.error('JPG Download Error:', error);
-            Toast.show({ type: 'error', text1: 'Error', text2: 'Failed to save individual images' });
+        } catch (error: any) {
+            console.error('Server JPG Error:', error);
+            Toast.show({ 
+                type: 'error', 
+                text1: 'Generation Failed', 
+                text2: 'Server error generating professional images' 
+            });
         } finally {
             setProcessing(false);
-            setCaptureStudent(null);
         }
     };
 
@@ -456,37 +274,44 @@ export default function IDCardStudentSelection() {
 
         footer: { 
             position: 'absolute', 
-            bottom: 0, 
+            bottom: 20, 
             left: 0, 
             right: 0, 
-            padding: 20, 
-            backgroundColor: theme.card, 
-            borderTopWidth: 1, 
-            borderTopColor: theme.border, 
+            paddingHorizontal: 20, 
+            backgroundColor: 'transparent', 
             flexDirection: 'row', 
-            gap: 15, 
-            paddingBottom: insets.bottom + 15, 
-            elevation: 25, 
-            shadowColor: '#000', 
-            shadowOffset: { width: 0, height: -12 }, 
-            shadowOpacity: 0.25, 
-            shadowRadius: 15 
+            gap: 12, 
+            zIndex: 1000
         },
-        selectAllBtn: { flex: 1, height: 60, borderRadius: 18, backgroundColor: isDark ? '#333' : '#f0f0f0', justifyContent: 'center', alignItems: 'center', borderWidth: 1, borderColor: theme.border },
+        selectAllBtn: { 
+            flex: 1, 
+            height: 56, 
+            borderRadius: 18, 
+            backgroundColor: theme.card, 
+            justifyContent: 'center', 
+            alignItems: 'center', 
+            borderWidth: 1, 
+            borderColor: theme.border,
+            elevation: 8,
+            shadowColor: '#000',
+            shadowOffset: { width: 0, height: 4 },
+            shadowOpacity: 0.15,
+            shadowRadius: 8
+        },
         generateBtn: { 
-            flex: 2, 
-            height: 60, 
+            flex: 1.5, 
+            height: 56, 
             borderRadius: 18, 
             backgroundColor: theme.primary, 
             justifyContent: 'center', 
             alignItems: 'center', 
             flexDirection: 'row', 
-            gap: 12, 
-            elevation: 10, 
+            gap: 10, 
+            elevation: 12, 
             shadowColor: theme.primary, 
-            shadowOffset: { width: 0, height: 5 }, 
+            shadowOffset: { width: 0, height: 6 }, 
             shadowOpacity: 0.4, 
-            shadowRadius: 10 
+            shadowRadius: 12 
         },
         btnText: { color: theme.text, fontWeight: '900', fontSize: 15 },
         genText: { color: '#fff', fontWeight: '900', fontSize: 17 },
@@ -558,7 +383,7 @@ export default function IDCardStudentSelection() {
                 <View style={styles.footer}>
                     <TouchableOpacity style={styles.selectAllBtn} onPress={toggleSelectAll}>
                         <Text style={[styles.btnText, { color: theme.text }]}>
-                            {selectedIds.size > 0 ? "Clear All" : `First ${Math.min(students.length, MAX_SELECTION)}`}
+                            {selectedIds.size > 0 ? "Clear Selection" : "Select All Students"}
                         </Text>
                     </TouchableOpacity>
                     <TouchableOpacity 
@@ -568,8 +393,8 @@ export default function IDCardStudentSelection() {
                     >
                         {processing ? <ActivityIndicator color="#fff" /> : (
                             <>
-                                <Ionicons name="share-social-outline" size={22} color="#fff" />
-                                <Text style={styles.genText}>Export Bundle ({selectedIds.size})</Text>
+                                <Ionicons name="cloud-download" size={22} color="#fff" />
+                                <Text style={styles.genText}>Download ({selectedIds.size})</Text>
                             </>
                         )}
                     </TouchableOpacity>
@@ -646,29 +471,6 @@ export default function IDCardStudentSelection() {
                     </TouchableOpacity>
                 </TouchableOpacity>
             </Modal>
-
-            {/* Hidden Off-screen Capture Component */}
-            <View 
-                ref={captureViewRef} 
-                style={styles.captureContainer}
-                collapsable={false}
-            >
-                {captureStudent && (
-                    <IDCardPreview 
-                        student={captureStudent} 
-                        institute={{
-                            name: instituteData?.institute_name,
-                            address: instituteData?.institute_address || instituteData?.address,
-                            landmark: instituteData?.landmark,
-                            district: instituteData?.district,
-                            state: instituteData?.state,
-                            pincode: instituteData?.pincode,
-                            logo_url: instituteData?.logo_url || instituteData?.institute_logo
-                        }}
-                        template="landscape"
-                    />
-                )}
-            </View>
 
             {/* Processing Overlay */}
             {processing && (

@@ -39,7 +39,7 @@ export default function AttendanceIndex() {
 
     const fetchAttendanceStatus = async () => {
         try {
-            const token = await AsyncStorage.getItem('token');
+            const token = await AsyncStorage.getItem('principalToken') || await AsyncStorage.getItem('token');
             const storedSessionId = await AsyncStorage.getItem('selectedSessionId');
             const userData = await AsyncStorage.getItem('userData');
             const sessionId = storedSessionId || (userData ? JSON.parse(userData).current_session_id : null);
@@ -62,7 +62,7 @@ export default function AttendanceIndex() {
 
     const fetchClassSections = async () => {
         try {
-            const token = await AsyncStorage.getItem('token');
+            const token = await AsyncStorage.getItem('principalToken') || await AsyncStorage.getItem('token');
             const storedSessionId = await AsyncStorage.getItem('selectedSessionId');
             const userData = await AsyncStorage.getItem('userData');
             const sessionId = storedSessionId || (userData ? JSON.parse(userData).current_session_id : null);

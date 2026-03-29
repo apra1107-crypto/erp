@@ -24,10 +24,10 @@ export default function TeacherStats() {
     const { theme, isDark } = useTheme();
     const insets = useSafeAreaInsets();
 
-    const [teacherData, setTeacherData] = useState<any>(null); // New state for teacherData
-    const isSpecialTeacher = teacherData?.special_permission || false; // Determine special permission from state
+    const [teacherData, setTeacherData] = useState<any>(null);
+    const isSpecialTeacher = teacherData?.special_permission || false;
 
-    const [activeTab, setActiveTab] = useState<TabType>(initialTab || 'students'); // Default to students or initialTab
+    const [activeTab, setActiveTab] = useState<TabType>(initialTab || 'students');
     const [stats, setStats] = useState<any>(null);
     const [loading, setLoading] = useState(true);
     const [refreshing, setRefreshing] = useState(false);
@@ -47,13 +47,15 @@ export default function TeacherStats() {
     const [detailTab, setDetailTab] = useState<'present' | 'absent'>('present');
 
     // Revenue Detail States
-    const [revenueDetailModalVisible, setRevenueDetailModalVisible] = useState(false);
-    const [revenueDetails, setRevenueDetails] = useState<any[]>([]);
-    const [loadingRevenueDetails, setLoadingRevenueDetails] = useState(false);
-    const [revenueDate, setRevenueDate] = useState(new Date());
+    const [revenueModalVisible, setRevenueModalVisible] = useState(false);
+    const [revenueSelectedDate, setRevenueSelectedDate] = useState(new Date());
+    const [revenueStudents, setRevenueStudents] = useState<any[]>([]);
+    const [revenueSummary, setRevenueSummary] = useState({ monthlyTotal: 0, monthName: '' });
+    const [loadingRevenueStudents, setLoadingRevenueStudents] = useState(false);
+    const [revenueType, setRevenueType] = useState<'monthly' | 'onetime'>('monthly');
+    const [showRevenueDatePicker, setShowRevenueDatePicker] = useState(false);
     const [activePicker, setActivePicker] = useState<'global' | 'revenue'>('global');
 
-    // Fetch teacherData on mount
     useEffect(() => {
         const loadTeacherData = async () => {
             try {
@@ -62,7 +64,7 @@ export default function TeacherStats() {
                     setTeacherData(JSON.parse(data));
                 }
             } catch (error) {
-                console.error("Failed to load teacher data from async storage", error);
+                console.error("Failed to load teacher data", error);
             }
         };
         loadTeacherData();
@@ -77,7 +79,6 @@ export default function TeacherStats() {
             const userData = userDataStr ? JSON.parse(userDataStr) : null;
             const activeSessionId = storedSessionId || (userData ? userData.current_session_id : null);
             
-            // Try to find session name if available in userData
             if (userData?.sessions) {
                 const s = userData.sessions.find((s: any) => s.id === (activeSessionId ? parseInt(activeSessionId) : null));
                 if (s) setActiveSessionName(s.name);
@@ -103,11 +104,10 @@ export default function TeacherStats() {
             setStats(response.data);
         } catch (error: any) {
             console.error('Error fetching teacher stats:', error);
-            const msg = error.response?.data?.error || error.response?.data?.message || error.message;
             Toast.show({
                 type: 'error',
                 text1: 'Error',
-                text2: msg || 'Failed to load statistics'
+                text2: 'Failed to load statistics'
             });
         } finally {
             setLoading(false);
@@ -120,6 +120,48 @@ export default function TeacherStats() {
             fetchStats();
         }, [fetchStats])
     );
+
+    const fetchDailyRevenueStudents = async () => {
+        try {
+            setLoadingRevenueStudents(true);
+            const token = await AsyncStorage.getItem('teacherToken');
+            const storedSessionId = await AsyncStorage.getItem('selectedSessionId');
+            const userDataStr = await AsyncStorage.getItem('teacherData');
+            const userData = userDataStr ? JSON.parse(userDataStr) : null;
+            const activeSessionId = storedSessionId || (userData ? userData.current_session_id : null);
+
+            const dateStr = revenueSelectedDate.toISOString().split('T')[0];
+            const response = await axios.get(
+                `${API_ENDPOINTS.PRINCIPAL}/daily-revenue-details?date=${dateStr}&type=${revenueType}`,
+                { 
+                    headers: { 
+                        Authorization: `Bearer ${token}`,
+                        'x-academic-session-id': activeSessionId?.toString()
+                    } 
+                }
+            );
+            
+            if (response.data.payments) {
+                setRevenueStudents(response.data.payments);
+                setRevenueSummary({
+                    monthlyTotal: response.data.monthlyTotal,
+                    monthName: response.data.monthName
+                });
+            } else {
+                setRevenueStudents(response.data);
+            }
+        } catch (error) {
+            console.error('Error fetching daily revenue:', error);
+        } finally {
+            setLoadingRevenueStudents(false);
+        }
+    };
+
+    useEffect(() => {
+        if (revenueModalVisible) {
+            fetchDailyRevenueStudents();
+        }
+    }, [revenueSelectedDate, revenueModalVisible, revenueType]);
 
     const fetchSectionDetails = async (className: string, section: string) => {
         try {
@@ -153,42 +195,6 @@ export default function TeacherStats() {
     const onRefresh = () => {
         setRefreshing(true);
         fetchStats();
-    };
-
-    const fetchRevenueDetails = async (date?: Date) => {
-        try {
-            setLoadingRevenueDetails(true);
-            setRevenueDetailModalVisible(true);
-            const targetDate = date || revenueDate;
-            const dateStr = targetDate.toISOString().split('T')[0];
-            const token = await AsyncStorage.getItem('teacherToken');
-            const storedSessionId = await AsyncStorage.getItem('selectedSessionId');
-            const userDataStr = await AsyncStorage.getItem('teacherData');
-            const userData = userDataStr ? JSON.parse(userDataStr) : null;
-            const activeSessionId = storedSessionId || (userData ? userData.current_session_id : null);
-            
-            const response = await axios.get(
-                `${API_ENDPOINTS.PRINCIPAL}/daily-revenue-details?date=${dateStr}`,
-                { 
-                    headers: { 
-                        Authorization: `Bearer ${token}`,
-                        'x-academic-session-id': activeSessionId?.toString()
-                    } 
-                }
-            );
-            setRevenueDetails(response.data);
-        } catch (error) {
-            console.error('Error fetching revenue details:', error);
-            Toast.show({ type: 'error', text1: 'Error', text2: 'Failed to load transaction details' });
-        } finally {
-            setLoadingRevenueDetails(false);
-        }
-    };
-
-    const changeMonth = (delta: number) => {
-        const newDate = new Date(selectedDate);
-        newDate.setDate(newDate.getDate() + delta);
-        setSelectedDate(newDate);
     };
 
     const styles = useMemo(() => StyleSheet.create({
@@ -259,7 +265,6 @@ export default function TeacherStats() {
         monthText: { fontSize: 16, fontWeight: '800', color: theme.text },
         navBtn: { padding: 8, borderRadius: 10, backgroundColor: theme.background, borderWidth: 1, borderColor: theme.border },
 
-        // Attendance Flashcard
         flashcard: {
             backgroundColor: theme.card,
             margin: 15,
@@ -326,7 +331,6 @@ export default function TeacherStats() {
             marginTop: 15,
         },
 
-        // Table Styles
         tableContainer: {
             marginTop: 20,
             borderWidth: 1,
@@ -377,18 +381,6 @@ export default function TeacherStats() {
         sectionName: { fontSize: 11, fontWeight: '800', color: theme.primary, marginBottom: 4 },
         sectionRatio: { fontSize: 13, fontWeight: '900', color: theme.text },
 
-        revenueCardContainer: { padding: 15 },
-        revenueStatsRow: { flexDirection: 'row', gap: 12 },
-        revenueStatCard: { flex: 1, padding: 20, borderRadius: 24, elevation: 4 },
-        revenueStatLabel: { fontSize: 10, fontWeight: '800', color: 'rgba(255,255,255,0.8)', marginBottom: 4, letterSpacing: 0.5 },
-        revenueStatValue: { fontSize: 18, fontWeight: '900', color: '#fff' },
-        
-        revenueMonthNavInner: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 10, marginBottom: 20, backgroundColor: theme.background, padding: 8, borderRadius: 15 },
-        navBtnSmall: { width: 32, height: 32, borderRadius: 10, backgroundColor: theme.card, justifyContent: 'center', alignItems: 'center', borderWidth: 1, borderColor: theme.border },
-        sectionSubTitle: { fontSize: 12, fontWeight: '900', color: theme.textLight, marginBottom: 15, textTransform: 'uppercase', letterSpacing: 1.5, textAlign: 'center' },
-        otRemainingBox: { marginTop: 12, padding: 15, borderRadius: 18, borderWidth: 1, borderStyle: 'dashed', alignItems: 'center' },
-
-        // Detail Modal Styles
         modalOverlay: {
             flex: 1,
             backgroundColor: 'rgba(0,0,0,0.5)',
@@ -455,7 +447,6 @@ export default function TeacherStats() {
             borderWidth: 1,
             borderColor: theme.border,
         },
-        cardTitle: { fontSize: 18, fontWeight: '900', color: theme.text, marginBottom: 20 },
         modalHandle: {
             width: 40,
             height: 5,
@@ -464,6 +455,22 @@ export default function TeacherStats() {
             alignSelf: 'center',
             marginTop: 12,
             marginBottom: 20,
+        },
+        revenueRow: {
+            flexDirection: 'row',
+            justifyContent: 'space-between',
+            alignItems: 'center',
+        },
+        progressBar: {
+            height: 8,
+            backgroundColor: isDark ? '#ffffff10' : '#00000005',
+            borderRadius: 4,
+            overflow: 'hidden',
+            marginTop: 5,
+        },
+        progressFill: {
+            height: '100%',
+            borderRadius: 4,
         },
     }), [theme, insets, isDark]);
 
@@ -475,7 +482,7 @@ export default function TeacherStats() {
         const getCount = (arr: any[], status: string) => parseInt(arr.find((a: any) => a.status === status)?.count || '0');
         const sPresent = getCount(studentToday, 'present');
         const sAbsent = getCount(studentToday, 'absent');
-        const sTotal = stats.students.total;
+        const sTotal = stats.students?.total || 0;
 
         const d = selectedDate;
         const dayName = d.toLocaleDateString('en-IN', { weekday: 'long' });
@@ -488,7 +495,7 @@ export default function TeacherStats() {
         });
 
         return (
-            <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={{ paddingBottom: 30 }} refreshControl={
+            <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={{ paddingBottom: insets.bottom + 60 }} refreshControl={
                 <RefreshControl refreshing={refreshing} onRefresh={onRefresh} colors={[theme.primary]} />
             }>
                 <View style={{ paddingHorizontal: 20, paddingTop: 20 }}>
@@ -497,7 +504,7 @@ export default function TeacherStats() {
 
                 <TouchableOpacity 
                     style={styles.monthSelector}
-                    onPress={() => { setActivePicker('global'); setShowDatePicker(true); }}
+                    onPress={() => { setShowDatePicker(true); }}
                 >
                     <View style={{ flexDirection: 'row', alignItems: 'center' }}>
                         <Ionicons name="calendar" size={22} color={theme.primary} />
@@ -599,14 +606,14 @@ export default function TeacherStats() {
         const getCount = (arr: any[], status: string) => parseInt(arr.find((a: any) => a.status === status)?.count || '0');
         const tPresent = getCount(teacherToday, 'present');
         const tAbsent = getCount(teacherToday, 'absent');
-        const tTotal = stats.teachers.total;
+        const tTotal = stats.teachers?.total || 0;
 
         const d = selectedDate;
         const dayName = d.toLocaleDateString('en-IN', { weekday: 'long' });
         const dateStr = d.toLocaleDateString('en-IN', { day: '2-digit', month: 'long', year: 'numeric' });
 
         return (
-            <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={{ paddingBottom: 30 }} refreshControl={
+            <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={{ paddingBottom: insets.bottom + 60 }} refreshControl={
                 <RefreshControl refreshing={refreshing} onRefresh={onRefresh} colors={[theme.primary]} />
             }>
                 <View style={{ paddingHorizontal: 20, paddingTop: 20 }}>
@@ -615,7 +622,7 @@ export default function TeacherStats() {
 
                 <TouchableOpacity 
                     style={styles.monthSelector}
-                    onPress={() => { setActivePicker('global'); setShowDatePicker(true); }}
+                    onPress={() => { setShowDatePicker(true); }}
                 >
                     <View style={{ flexDirection: 'row', alignItems: 'center' }}>
                         <Ionicons name="calendar" size={22} color={theme.primary} />
@@ -706,103 +713,139 @@ export default function TeacherStats() {
 
     const renderRevenueTab = () => {
         if (!stats?.revenue) return null;
-        const rev = stats.revenue.monthly;
-        const ot = stats.revenue.oneTime;
-        const remaining = (rev.expected || 0) - (rev.collected || 0);
-        const otRemaining = (ot.expected || 0) - (ot.collected || 0);
+        const rev = stats.revenue;
+        const months = ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"];
 
         return (
-            <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={{ paddingBottom: 30 }} refreshControl={
+            <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={{ paddingBottom: insets.bottom + 60 }} refreshControl={
                 <RefreshControl refreshing={refreshing} onRefresh={onRefresh} colors={[theme.primary]} />
             }>
                 <View style={{ paddingHorizontal: 20, paddingTop: 20 }}>
-                    <Text style={{ fontSize: 24, fontWeight: '900', color: theme.text }}>Institute Revenue</Text>
-                    <Text style={{ fontSize: 13, color: theme.textLight, marginTop: 4 }}>Financial overview across collection cycles</Text>
+                    <Text style={{ fontSize: 24, fontWeight: '900', color: theme.text }}>Financial Insights</Text>
                 </View>
 
-                {/* Container 1: Monthly Cycle + Date Selection */}
-                <View style={[styles.sectionCard, { marginTop: 20, padding: 15 }]}>
-                    <Text style={styles.sectionSubTitle}>Monthly Billing Cycle</Text>
-                    
-                    <View style={styles.revenueMonthNavInner}>
-                        <TouchableOpacity style={styles.navBtnSmall} onPress={() => {
-                            const d = new Date(selectedDate);
-                            d.setMonth(d.getMonth() - 1);
-                            setSelectedDate(d);
-                        }}>
-                            <Ionicons name="chevron-back" size={18} color={theme.text} />
-                        </TouchableOpacity>
-                        <View style={{ alignItems: 'center', minWidth: 120 }}>
-                            <Text style={{ fontSize: 15, fontWeight: '800', color: theme.primary }}>{selectedDate.toLocaleDateString('en-IN', { month: 'long', year: 'numeric' })}</Text>
+                {/* Monthly Collection Card */}
+                <TouchableOpacity 
+                    activeOpacity={0.9} 
+                    onPress={() => {
+                        setRevenueType('monthly');
+                        setRevenueSelectedDate(new Date());
+                        setRevenueModalVisible(true);
+                    }}
+                >
+                    <LinearGradient 
+                        colors={['#1e40af', '#1e3a8a']} 
+                        style={[styles.flashcard, { padding: 22, borderRadius: 28, marginBottom: 10 }]}
+                    >
+                        <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
+                            <Text style={{ color: 'rgba(255,255,255,0.7)', fontSize: 11, fontWeight: '800', letterSpacing: 1 }}>MONTHLY FEES COLLECTION</Text>
+                            
+                            <View style={{ flexDirection: 'row', alignItems: 'center', backgroundColor: 'rgba(255,255,255,0.1)', borderRadius: 12, padding: 4 }}>
+                                <TouchableOpacity 
+                                    onPress={(e) => {
+                                        e.stopPropagation();
+                                        const d = new Date(selectedDate);
+                                        d.setMonth(d.getMonth() - 1);
+                                        setSelectedDate(d);
+                                    }}
+                                    style={{ padding: 4 }}
+                                >
+                                    <Ionicons name="chevron-back" size={18} color="#fff" />
+                                </TouchableOpacity>
+                                
+                                <Text style={{ color: '#fff', fontSize: 12, fontWeight: '800', marginHorizontal: 8 }}>
+                                    {months[selectedDate.getMonth()]} {selectedDate.getFullYear().toString().slice(-2)}
+                                </Text>
+
+                                <TouchableOpacity 
+                                    onPress={(e) => {
+                                        e.stopPropagation();
+                                        const d = new Date(selectedDate);
+                                        d.setMonth(d.getMonth() + 1);
+                                        setSelectedDate(d);
+                                    }}
+                                    style={{ padding: 4 }}
+                                >
+                                    <Ionicons name="chevron-forward" size={18} color="#fff" />
+                                </TouchableOpacity>
+                            </View>
                         </View>
-                        <TouchableOpacity style={styles.navBtnSmall} onPress={() => {
-                            const d = new Date(selectedDate);
-                            d.setMonth(d.getMonth() + 1);
-                            setSelectedDate(d);
-                        }}>
-                            <Ionicons name="chevron-forward" size={18} color={theme.text} />
-                        </TouchableOpacity>
-                    </View>
-
-                    <View style={styles.revenueStatsRow}>
-                        <LinearGradient colors={['#3b82f6', '#1d4ed8']} style={styles.revenueStatCard}>
-                            <Ionicons name="pie-chart" size={16} color="#fff" style={{ marginBottom: 8 }} />
-                            <Text style={styles.revenueStatLabel}>EXPECTED</Text>
-                            <Text style={styles.revenueStatValue}>₹{(rev.expected || 0).toLocaleString()}</Text>
-                        </LinearGradient>
-
-                        <LinearGradient colors={['#10b981', '#059669']} style={[styles.revenueStatCard, { padding: 0 }]}>
-                            <TouchableOpacity 
-                                style={{ flex: 1, padding: 20 }}
-                                onPress={() => {
-                                    setRevenueDate(selectedDate);
-                                    fetchRevenueDetails(selectedDate);
-                                }}
-                            >
-                                <Ionicons name="checkmark-done" size={16} color="#fff" style={{ marginBottom: 8 }} />
-                                <Text style={styles.revenueStatLabel}>COLLECTED</Text>
-                                <Text style={styles.revenueStatValue}>₹{(rev.collected || 0).toLocaleString()}</Text>
-                            </TouchableOpacity>
-                        </LinearGradient>
-                    </View>
-
-                    <LinearGradient colors={['#ef4444', '#b91c1c']} style={[styles.revenueStatCard, { marginTop: 12, width: '100%', padding: 15 }]}>
-                        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
-                            <Ionicons name="time" size={20} color="#fff" />
+                        <Text style={{ color: '#fff', fontSize: 28, fontWeight: '900', marginTop: 8 }}>₹{(rev.monthly?.collected || 0).toLocaleString()}</Text>
+                        
+                        <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginTop: 15, paddingTop: 15, borderTopWidth: 1, borderTopColor: 'rgba(255,255,255,0.1)' }}>
                             <View>
-                                <Text style={styles.revenueStatLabel}>TOTAL REMAINING</Text>
-                                <Text style={[styles.revenueStatValue, { fontSize: 20 }]}>₹{remaining.toLocaleString()}</Text>
+                                <Text style={{ color: 'rgba(255,255,255,0.5)', fontSize: 9, fontWeight: '700' }}>EXPECTED</Text>
+                                <Text style={{ color: '#fff', fontSize: 14, fontWeight: '800' }}>₹{(rev.monthly?.expected || 0).toLocaleString()}</Text>
+                            </View>
+                            <View style={{ alignItems: 'flex-end' }}>
+                                <Text style={{ color: 'rgba(255,255,255,0.5)', fontSize: 9, fontWeight: '700' }}>DUE</Text>
+                                <Text style={{ color: '#f87171', fontSize: 14, fontWeight: '800' }}>₹{((rev.monthly?.expected || 0) - (rev.monthly?.collected || 0)).toLocaleString()}</Text>
                             </View>
                         </View>
                     </LinearGradient>
-                </View>
+                </TouchableOpacity>
 
-                {/* Container 2: One-Time Fees */}
-                <View style={[styles.sectionCard, { padding: 15 }]}>
-                    <Text style={styles.sectionSubTitle}>One-Time Fees</Text>
-                    <View style={styles.revenueStatsRow}>
-                        <LinearGradient colors={['#6366f1', '#4f46e5']} style={styles.revenueStatCard}>
-                            <Ionicons name="megaphone" size={16} color="#fff" style={{ marginBottom: 8 }} />
-                            <Text style={styles.revenueStatLabel}>EXPECTED</Text>
-                            <Text style={styles.revenueStatValue}>₹{(ot.expected || 0).toLocaleString()}</Text>
-                        </LinearGradient>
-
-                        <LinearGradient colors={['#8b5cf6', '#6d28d9']} style={styles.revenueStatCard}>
-                            <Ionicons name="wallet" size={16} color="#fff" style={{ marginBottom: 8 }} />
-                            <Text style={styles.revenueStatLabel}>COLLECTED</Text>
-                            <Text style={styles.revenueStatValue}>₹{(ot.collected || 0).toLocaleString()}</Text>
-                        </LinearGradient>
-                    </View>
-                    
-                    <LinearGradient colors={['#ef4444', '#b91c1c']} style={[styles.revenueStatCard, { marginTop: 12, width: '100%', padding: 15 }]}>
-                        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
-                            <Ionicons name="time" size={20} color="#fff" />
+                {/* One-Time Collection Card */}
+                <TouchableOpacity 
+                    activeOpacity={0.9} 
+                    onPress={() => {
+                        setRevenueType('onetime');
+                        const now = new Date();
+                        const isSelectedMonthCurrent = selectedDate.getMonth() === now.getMonth() && selectedDate.getFullYear() === now.getFullYear();
+                        if (isSelectedMonthCurrent) setRevenueSelectedDate(new Date());
+                        else setRevenueSelectedDate(new Date(selectedDate.getFullYear(), selectedDate.getMonth(), 1));
+                        setRevenueModalVisible(true);
+                    }}
+                >
+                    <LinearGradient 
+                        colors={['#831843', '#701a75']} 
+                        style={[styles.flashcard, { padding: 22, borderRadius: 28, marginTop: 5 }]}
+                    >
+                        <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
+                            <Text style={{ color: 'rgba(255,255,255,0.7)', fontSize: 11, fontWeight: '800', letterSpacing: 1 }}>ONE-TIME FEES COLLECTION</Text>
+                            <Ionicons name="flash" size={16} color="rgba(255,255,255,0.5)" />
+                        </View>
+                        <Text style={{ color: '#fff', fontSize: 28, fontWeight: '900', marginTop: 8 }}>₹{(rev.oneTime?.collected || 0).toLocaleString()}</Text>
+                        
+                        <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginTop: 15, paddingTop: 15, borderTopWidth: 1, borderTopColor: 'rgba(255,255,255,0.1)' }}>
                             <View>
-                                <Text style={styles.revenueStatLabel}>TOTAL REMAINING</Text>
-                                <Text style={[styles.revenueStatValue, { fontSize: 20 }]}>₹{otRemaining.toLocaleString()}</Text>
+                                <Text style={{ color: 'rgba(255,255,255,0.5)', fontSize: 9, fontWeight: '700' }}>TARGET</Text>
+                                <Text style={{ color: '#fff', fontSize: 14, fontWeight: '800' }}>₹{(rev.oneTime?.expected || 0).toLocaleString()}</Text>
+                            </View>
+                            <View style={{ alignItems: 'flex-end' }}>
+                                <Text style={{ color: 'rgba(255,255,255,0.5)', fontSize: 9, fontWeight: '700' }}>PENDING</Text>
+                                <Text style={{ color: '#f87171', fontSize: 14, fontWeight: '800' }}>₹{((rev.oneTime?.expected || 0) - (rev.oneTime?.collected || 0)).toLocaleString()}</Text>
                             </View>
                         </View>
                     </LinearGradient>
+                </TouchableOpacity>
+
+                <View style={{ paddingHorizontal: 20, marginTop: 25, marginBottom: 10 }}>
+                    <Text style={{ fontSize: 18, fontWeight: '900', color: theme.text }}>Detailed Breakdown</Text>
+                </View>
+
+                <View style={[styles.sectionCard, { marginTop: 0 }]}>
+                    <View style={{ gap: 15 }}>
+                        <View>
+                            <View style={styles.revenueRow}>
+                                <Text style={{ color: theme.text, fontWeight: '700', fontSize: 14 }}>Monthly Tuition Progress</Text>
+                                <Text style={{ color: theme.primary, fontWeight: '800' }}>{Math.round(((rev.monthly?.collected || 0) / (rev.monthly?.expected || 1)) * 100)}%</Text>
+                            </View>
+                            <View style={styles.progressBar}>
+                                <View style={[styles.progressFill, { width: `${Math.min(100, ((rev.monthly?.collected || 0) / (rev.monthly?.expected || 1)) * 100)}%`, backgroundColor: '#3b82f6' }]} />
+                            </View>
+                        </View>
+
+                        <View>
+                            <View style={styles.revenueRow}>
+                                <Text style={{ color: theme.text, fontWeight: '700', fontSize: 14 }}>One-Time Campaign Progress</Text>
+                                <Text style={{ color: '#ec4899', fontWeight: '800' }}>{Math.round(((rev.oneTime?.collected || 0) / (rev.oneTime?.expected || 1)) * 100)}%</Text>
+                            </View>
+                            <View style={styles.progressBar}>
+                                <View style={[styles.progressFill, { width: `${Math.min(100, ((rev.oneTime?.collected || 0) / (rev.oneTime?.expected || 1)) * 100)}%`, backgroundColor: '#ec4899' }]} />
+                            </View>
+                        </View>
+                    </View>
                 </View>
             </ScrollView>
         );
@@ -818,11 +861,9 @@ export default function TeacherStats() {
                 </TouchableOpacity>
                 <View>
                     <Text style={styles.headerTitle}>Stats</Text>
-                    {activeSessionName ? <Text style={{ fontSize: 10, color: theme.primary, fontWeight: '800', marginTop: -2 }}>{activeSessionName}</Text> : null}
                 </View>
             </View>
 
-            {/* Tabs */}
             <View style={styles.tabContainer}>
                 {(['students', 'teachers', ...(isSpecialTeacher ? ['revenue'] : [])] as TabType[]).map((tab) => (
                     <TouchableOpacity
@@ -849,13 +890,8 @@ export default function TeacherStats() {
                 )}
             </View>
 
-            {/* Detail Modal */}
-            <Modal
-                visible={detailModalVisible}
-                transparent={true}
-                animationType="slide"
-                onRequestClose={() => setDetailModalVisible(false)}
-            >
+            {/* Attendance Detail Modal */}
+            <Modal visible={detailModalVisible} transparent animationType="slide" onRequestClose={() => setDetailModalVisible(false)}>
                 <View style={styles.modalOverlay}>
                     <View style={styles.modalContent}>
                         <View style={styles.modalHandle} />
@@ -870,56 +906,23 @@ export default function TeacherStats() {
                         </View>
 
                         <View style={styles.modalTabs}>
-                            <TouchableOpacity 
-                                style={[
-                                    styles.mTab, 
-                                    { borderColor: theme.success },
-                                    detailTab === 'present' ? { backgroundColor: theme.success } : { backgroundColor: 'transparent' }
-                                ]}
-                                onPress={() => setDetailTab('present')}
-                            >
-                                <Text style={[styles.mTabText, { color: detailTab === 'present' ? '#fff' : theme.success }]}>
-                                    Present ({sectionStudents.filter(s => s.status === 'present').length})
-                                </Text>
+                            <TouchableOpacity style={[styles.mTab, { borderColor: theme.success }, detailTab === 'present' ? { backgroundColor: theme.success } : null]} onPress={() => setDetailTab('present')}>
+                                <Text style={[styles.mTabText, { color: detailTab === 'present' ? '#fff' : theme.success }]}>Present ({sectionStudents.filter(s => s.status === 'present').length})</Text>
                             </TouchableOpacity>
-                            <TouchableOpacity 
-                                style={[
-                                    styles.mTab, 
-                                    { borderColor: theme.danger },
-                                    detailTab === 'absent' ? { backgroundColor: theme.danger } : { backgroundColor: 'transparent' }
-                                ]}
-                                onPress={() => setDetailTab('absent')}
-                            >
-                                <Text style={[styles.mTabText, { color: detailTab === 'absent' ? '#fff' : theme.danger }]}>
-                                    Absent ({sectionStudents.filter(s => s.status === 'absent').length})
-                                </Text>
+                            <TouchableOpacity style={[styles.mTab, { borderColor: theme.danger }, detailTab === 'absent' ? { backgroundColor: theme.danger } : null]} onPress={() => setDetailTab('absent')}>
+                                <Text style={[styles.mTabText, { color: detailTab === 'absent' ? '#fff' : theme.danger }]}>Absent ({sectionStudents.filter(s => s.status === 'absent').length})</Text>
                             </TouchableOpacity>
                         </View>
 
-                        {loadingDetails ? (
-                            <ActivityIndicator size="large" color={theme.primary} style={{ marginTop: 50 }} />
-                        ) : (
+                        {loadingDetails ? <ActivityIndicator size="large" color={theme.primary} style={{ marginTop: 50 }} /> : (
                             <FlatList
-                                data={sectionStudents.filter(s => s.status === (detailTab === 'present' ? 'present' : 'absent'))}
+                                data={sectionStudents.filter(s => s.status === detailTab)}
                                 keyExtractor={(item) => item.id.toString()}
                                 renderItem={({ item }) => (
                                     <View style={styles.studentItem}>
-                                        <View style={styles.rollBadge}>
-                                            <Text style={styles.rollText}>{item.roll_no}</Text>
-                                        </View>
-                                        {item.photo_url ? (
-                                            <Image source={{ uri: item.photo_url }} style={{ width: 40, height: 40, borderRadius: 20, marginRight: 12 }} />
-                                        ) : (
-                                            <View style={{ width: 40, height: 40, borderRadius: 20, backgroundColor: theme.background, justifyContent: 'center', alignItems: 'center', marginRight: 12, borderWidth: 1, borderColor: theme.border }}>
-                                                <Ionicons name="person" size={20} color={theme.textLight} />
-                                            </View>
-                                        )}
+                                        <View style={styles.rollBadge}><Text style={styles.rollText}>{item.roll_no}</Text></View>
+                                        {item.photo_url ? <Image source={{ uri: item.photo_url }} style={{ width: 40, height: 40, borderRadius: 20, marginRight: 12 }} /> : <View style={{ width: 40, height: 40, borderRadius: 20, backgroundColor: theme.background, justifyContent: 'center', alignItems: 'center', marginRight: 12, borderWidth: 1, borderColor: theme.border }}><Ionicons name="person" size={20} color={theme.textLight} /></View>}
                                         <Text style={styles.studentName}>{item.name}</Text>
-                                    </View>
-                                )}
-                                ListEmptyComponent={() => (
-                                    <View style={{ padding: 40, alignItems: 'center' }}>
-                                        <Text style={{ color: theme.textLight }}>No students found in this list</Text>
                                     </View>
                                 )}
                             />
@@ -928,76 +931,49 @@ export default function TeacherStats() {
                 </View>
             </Modal>
 
-            {/* Revenue Detail Modal */}
-            <Modal
-                visible={revenueDetailModalVisible}
-                transparent={true}
-                animationType="slide"
-                onRequestClose={() => setRevenueDetailModalVisible(false)}
-            >
+            {/* Daily Revenue Detail Modal */}
+            <Modal visible={revenueModalVisible} transparent animationType="slide" onRequestClose={() => setRevenueModalVisible(false)}>
                 <View style={styles.modalOverlay}>
-                    <View style={styles.modalContent}>
+                    <View style={[styles.modalContent, { height: '85%' }]}>
                         <View style={styles.modalHandle} />
                         <View style={styles.modalHeader}>
                             <View>
                                 <Text style={styles.modalTitle}>Daily Collection</Text>
-                                <Text style={{ color: theme.textLight }}>Transaction Details</Text>
+                                <Text style={{ color: theme.textLight }}>{revenueType === 'monthly' ? 'Monthly Fee Breakdown' : 'One-Time Fee Breakdown'}</Text>
                             </View>
-                            <TouchableOpacity onPress={() => setRevenueDetailModalVisible(false)}>
-                                <Ionicons name="close-circle" size={32} color={theme.textLight} />
-                            </TouchableOpacity>
+                            <TouchableOpacity onPress={() => setRevenueModalVisible(false)}><Ionicons name="close-circle" size={32} color={theme.textLight} /></TouchableOpacity>
                         </View>
 
-                        {/* Date Selection In Modal */}
-                        <TouchableOpacity 
-                            style={[styles.monthSelector, { marginVertical: 15 }]}
-                            onPress={() => { setActivePicker('revenue'); setShowDatePicker(true); }}
-                        >
-                            <View style={{ flexDirection: 'row', alignItems: 'center' }}>
-                                <Ionicons name="calendar" size={20} color={theme.primary} />
-                                <Text style={[styles.monthText, { marginLeft: 10, fontSize: 14 }]}>
-                                    {revenueDate.toLocaleDateString('en-IN', { day: '2-digit', month: 'long', year: 'numeric' })}
-                                </Text>
-                            </View>
-                            <Text style={{ fontSize: 12, fontWeight: '800', color: theme.primary }}>CHANGE</Text>
+                        <TouchableOpacity style={styles.monthSelector} onPress={() => { setActivePicker('revenue'); setShowRevenueDatePicker(true); }}>
+                            <Ionicons name="calendar-outline" size={20} color={theme.primary} />
+                            <Text style={[styles.monthText, { marginHorizontal: 12 }]}>{revenueSelectedDate.toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' })}</Text>
+                            <Ionicons name="chevron-down" size={16} color={theme.textLight} />
                         </TouchableOpacity>
 
-                        {loadingRevenueDetails ? (
-                            <View style={{ flex: 1, justifyContent: 'center' }}>
-                                <ActivityIndicator size="large" color={theme.primary} />
+                        {!loadingRevenueStudents && (
+                            <View style={{ paddingHorizontal: 20, marginBottom: 20 }}>
+                                <View style={{ backgroundColor: theme.primary + '10', padding: 15, borderRadius: 18, flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', borderWidth: 1, borderColor: theme.primary + '30' }}>
+                                    <View><Text style={{ fontSize: 10, fontWeight: '900', color: theme.primary, textTransform: 'uppercase' }}>Daily Collection</Text><Text style={{ fontSize: 18, fontWeight: '900', color: theme.text, marginTop: 2 }}>₹{revenueStudents.reduce((sum, s) => sum + parseFloat(s.amount || 0), 0).toLocaleString()}</Text></View>
+                                    <View style={{ height: 30, width: 1, backgroundColor: theme.primary + '20' }} />
+                                    <View style={{ alignItems: 'flex-end' }}><Text style={{ fontSize: 10, fontWeight: '900', color: theme.primary, textTransform: 'uppercase' }}>Total for {revenueSummary.monthName || 'Month'}</Text><Text style={{ fontSize: 18, fontWeight: '900', color: theme.text, marginTop: 2 }}>₹{(revenueSummary.monthlyTotal || 0).toLocaleString()}</Text></View>
+                                </View>
                             </View>
-                        ) : (
+                        )}
+
+                        {loadingRevenueStudents ? <ActivityIndicator size="large" color={theme.primary} style={{ marginTop: 50 }} /> : (
                             <FlatList
-                                data={revenueDetails}
-                                keyExtractor={(item, index) => index.toString()}
+                                data={revenueStudents}
+                                keyExtractor={(item, idx) => idx.toString()}
                                 contentContainerStyle={{ paddingBottom: 40 }}
                                 renderItem={({ item }) => (
-                                    <View style={[styles.studentItem, { borderBottomColor: theme.border + '50' }]}>
-                                        <View style={{ width: 40, height: 40, borderRadius: 20, backgroundColor: theme.primary + '10', justifyContent: 'center', alignItems: 'center', marginRight: 15 }}>
-                                            {item.photo_url ? (
-                                                <Image source={{ uri: item.photo_url }} style={{ width: 40, height: 40, borderRadius: 20 }} />
-                                            ) : (
-                                                <Text style={{ fontSize: 16, fontWeight: '900', color: theme.primary }}>{item.name[0]}</Text>
-                                            )}
-                                        </View>
-                                        <View style={{ flex: 1 }}>
-                                            <Text style={{ fontSize: 15, fontWeight: '800', color: theme.text }}>{item.name}</Text>
-                                            <Text style={{ fontSize: 11, color: theme.textLight }}>
-                                                Cl: {item.class}-{item.section} | Roll: {item.roll_no} | {item.fee_type}
-                                            </Text>
-                                        </View>
-                                        <View style={{ alignItems: 'flex-end' }}>
-                                            <Text style={{ fontSize: 16, fontWeight: '900', color: theme.success }}>₹{parseFloat(item.amount).toLocaleString()}</Text>
-                                            <Text style={{ fontSize: 10, color: theme.textLight }}>{new Date(item.paid_at).toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit' })}</Text>
-                                        </View>
+                                    <View style={styles.studentItem}>
+                                        <View style={styles.rollBadge}><Text style={styles.rollText}>{item.roll_no}</Text></View>
+                                        {item.photo_url ? <Image source={{ uri: item.photo_url }} style={{ width: 40, height: 40, borderRadius: 20, marginRight: 12 }} /> : <View style={{ width: 40, height: 40, borderRadius: 20, backgroundColor: theme.background, justifyContent: 'center', alignItems: 'center', marginRight: 12, borderWidth: 1, borderColor: theme.border }}><Ionicons name="person" size={20} color={theme.textLight} /></View>}
+                                        <View style={{ flex: 1 }}><Text style={styles.studentName}>{item.name}</Text><Text style={{ fontSize: 12, color: theme.textLight }}>Class {item.class}-{item.section} • {item.fee_type}</Text></View>
+                                        <View style={{ alignItems: 'flex-end' }}><Text style={{ fontSize: 16, fontWeight: '900', color: theme.success }}>₹{parseFloat(item.amount).toLocaleString()}</Text><Text style={{ fontSize: 9, color: theme.textLight }}>{new Date(item.paid_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</Text></View>
                                     </View>
                                 )}
-                                ListEmptyComponent={() => (
-                                    <View style={{ padding: 40, alignItems: 'center' }}>
-                                        <Ionicons name="receipt-outline" size={60} color={theme.border} />
-                                        <Text style={{ color: theme.textLight, marginTop: 15, fontWeight: '700' }}>No transactions for this date</Text>
-                                    </View>
-                                )}
+                                ListEmptyComponent={() => <View style={{ padding: 40, alignItems: 'center' }}><Ionicons name="receipt-outline" size={64} color={theme.border} /><Text style={{ color: theme.textLight, marginTop: 15, fontSize: 16 }}>No collections on this date</Text></View>}
                             />
                         )}
                     </View>
@@ -1006,24 +982,32 @@ export default function TeacherStats() {
 
             {showDatePicker && (
                 <DateTimePicker
-                    value={activePicker === 'global' ? selectedDate : revenueDate}
+                    value={activePicker === 'global' ? selectedDate : revenueSelectedDate}
                     mode="date"
                     display="default"
                     maximumDate={new Date()}
                     onChange={(event, date) => {
                         setShowDatePicker(false);
                         if (date) {
-                            if (activePicker === 'global') {
-                                setSelectedDate(date);
-                            } else {
-                                setRevenueDate(date);
-                                fetchRevenueDetails(date);
-                            }
+                            if (activePicker === 'global') setSelectedDate(date);
+                            else { setRevenueSelectedDate(date); fetchDailyRevenueStudents(); }
                         }
                     }}
                 />
             )}
-
+            
+            {showRevenueDatePicker && (
+                <DateTimePicker
+                    value={revenueSelectedDate}
+                    mode="date"
+                    display="default"
+                    maximumDate={new Date()}
+                    onChange={(event, date) => {
+                        setShowRevenueDatePicker(false);
+                        if (date) { setRevenueSelectedDate(date); fetchDailyRevenueStudents(); }
+                    }}
+                />
+            )}
         </View>
     );
 }

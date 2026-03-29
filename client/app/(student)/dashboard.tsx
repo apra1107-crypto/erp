@@ -1,3 +1,5 @@
+import * as FileSystem from 'expo-file-system/legacy';
+import * as Sharing from 'expo-sharing';
 import { useState, useEffect, useMemo, useCallback, useRef } from 'react';
 import { View, Text, StyleSheet, TouchableOpacity, ActivityIndicator, Image, ScrollView, Modal, TextInput, Dimensions, KeyboardAvoidingView, Platform, StatusBar, LayoutAnimation, RefreshControl, UIManager, FlatList, Pressable } from 'react-native';
 
@@ -125,16 +127,70 @@ export default function StudentDashboard() {
     const router = useRouter();
 
     const [studentData, setStudentData] = useState<any>(null);
-
+    const [isDownloading, setIsDownloading] = useState(false);
     const [loading, setLoading] = useState(true);
+
+    const downloadResultPDF = async (examId: number) => {
+        try {
+            setIsDownloading(true);
+            const token = await AsyncStorage.getItem('studentToken');
+            
+            // 1. Call the student-specific PDF generation endpoint
+            const response = await axios.post(
+                `${API_ENDPOINTS.EXAM}/${examId}/generate-student-pdf`,
+                {}, // No body needed, studentId is taken from token
+                {
+                    headers: { Authorization: `Bearer ${token}` },
+                    responseType: 'arraybuffer',
+                    timeout: 60000 
+                }
+            );
+
+            // 2. Convert ArrayBuffer to Base64
+            // @ts-ignore
+            const base64data = btoa(
+                new Uint8Array(response.data)
+                    .reduce((data, byte) => data + String.fromCharCode(byte), '')
+            );
+
+            const fileName = `marksheet_${examId}_${Date.now()}.pdf`;
+            const fileUri = `${FileSystem.cacheDirectory}${fileName}`;
+
+            // 3. Write to local storage
+            await FileSystem.writeAsStringAsync(fileUri, base64data, {
+                encoding: 'base64',
+            });
+
+            // 4. Trigger Native Sharing
+            await Sharing.shareAsync(fileUri, {
+                UTI: '.pdf',
+                mimeType: 'application/pdf',
+                dialogTitle: 'My Marksheet'
+            });
+
+        } catch (error: any) {
+            console.error('Student PDF Download Error:', error.message);
+            Alert.alert('Error', 'Failed to download marksheet. Please try again later.');
+        } finally {
+            setIsDownloading(false);
+        }
+    };
 
     const [refreshing, setRefreshing] = useState(false);
 
     const { isDark, theme, toggleTheme } = useTheme();
 
-    const { socket } = useSocket();
+    const { socket, lastConnectedAt } = useSocket();
 
     const insets = useSafeAreaInsets();
+
+    // PRODUCTION SYNC: Re-fetch data when socket reconnects to catch missed events
+    useEffect(() => {
+        if (lastConnectedAt > 0) {
+            console.log('🔄 Socket reconnected, syncing dashboard data...');
+            fetchDashboardData();
+        }
+    }, [lastConnectedAt]);
 
 
 
@@ -446,12 +502,14 @@ export default function StudentDashboard() {
 
             // 1. Fetch fresh profile for the selected session
             const profileUrl = `${API_URL}/profile`;
+            console.log(`[StudentDashboard] Attempting profile fetch: ${profileUrl} with token: ${token ? 'exists' : 'null'}`);
             const profileRes = await axios.get(profileUrl, {
                 headers: { 
                     Authorization: `Bearer ${token}`,
                     'x-academic-session-id': sessionId?.toString()
                 }
             });
+            console.log('[StudentDashboard] Profile fetch success');
 
             if (profileRes.data.student) {
                 const freshData = { ...profileRes.data.student, authToken: token };
@@ -474,7 +532,15 @@ export default function StudentDashboard() {
         }
     }, [studentData]);
 
+    // Account Switcher / Add Account States
     const [showAccountModal, setShowAccountModal] = useState(false);
+    const [addAccountStep, setAddAccountStep] = useState<'LIST' | 'PHONE' | 'INSTITUTE' | 'STUDENT' | 'CODE'>('LIST');
+    const [newPhone, setNewPhone] = useState('');
+    const [foundInstitutes, setFoundInstitutes] = useState<any[]>([]);
+    const [selectedInst, setSelectedInst] = useState<any>(null);
+    const [foundStudents, setFoundStudents] = useState<any[]>([]);
+    const [isProcessing, setIsProcessing] = useState(false);
+
     const [showProfileMenu, setShowProfileMenu] = useState(false);
     const [allAccounts, setAllAccounts] = useState<any[]>([]);
     const [savedAccounts, setSavedAccounts] = useState<any[]>([]);
@@ -485,6 +551,104 @@ export default function StudentDashboard() {
     const [teachers, setTeachers] = useState<any[]>([]);
     const [isRoutineModalOpen, setIsRoutineModalOpen] = useState(false);
     const studentScrollRef = useRef<ScrollView>(null);
+
+    const resetAddAccount = () => {
+        setAddAccountStep('LIST');
+        setNewPhone('');
+        setFoundInstitutes([]);
+        setSelectedInst(null);
+        setFoundStudents([]);
+        setTargetAccount(null);
+        setAccessCode('');
+        setIsProcessing(false);
+    };
+
+    const handleVerifyPhone = async () => {
+        if (newPhone.length < 10) {
+            Toast.show({ type: 'error', text1: 'Invalid Phone', text2: 'Please enter 10-digit mobile number' });
+            return;
+        }
+        setIsProcessing(true);
+        try {
+            const res = await axios.post(`${API_URL}/verify-phone`, { mobile: newPhone });
+            setFoundInstitutes(res.data.institutes);
+            setAddAccountStep('INSTITUTE');
+        } catch (error: any) {
+            Toast.show({ type: 'error', text1: 'Not Found', text2: error.response?.data?.message || 'No records for this number' });
+        } finally {
+            setIsProcessing(false);
+        }
+    };
+
+    const handleSelectInstitute = async (inst: any) => {
+        setSelectedInst(inst);
+        setIsProcessing(true);
+        try {
+            const res = await axios.post(`${API_URL}/get-students`, { mobile: newPhone, institute_id: inst.id });
+            setFoundStudents(res.data.students);
+            setAddAccountStep('STUDENT');
+        } catch (error) {
+            Toast.show({ type: 'error', text1: 'Error', text2: 'Failed to fetch students' });
+        } finally {
+            setIsProcessing(false);
+        }
+    };
+
+    const handleSelectStudentForAdd = (student: any) => {
+        setTargetAccount(student);
+        setAddAccountStep('CODE');
+    };
+
+    const handleNewCodeVerify = async () => {
+        if (accessCode.length !== 6) {
+            Toast.show({ type: 'error', text1: 'Invalid Code', text2: 'Please enter 6-digit code' });
+            return;
+        }
+        setIsProcessing(true);
+        try {
+            const response = await axios.post(`${API_URL}/verify-code`, {
+                student_id: targetAccount.id,
+                access_code: accessCode
+            });
+            const { token, student } = response.data;
+            const studentWithToken = { ...student, authToken: token };
+            
+            // 1. Update core identity
+            await AsyncStorage.setItem('studentToken', token);
+            await AsyncStorage.setItem('studentData', JSON.stringify(studentWithToken));
+            
+            // 2. Add to saved accounts list
+            let updatedSaved = [...savedAccounts];
+            const existingIdx = updatedSaved.findIndex(acc => acc.id === student.id);
+            if (existingIdx !== -1) {
+                updatedSaved[existingIdx] = studentWithToken;
+            } else {
+                updatedSaved.push(studentWithToken);
+            }
+            await AsyncStorage.setItem('studentAccounts', JSON.stringify(updatedSaved));
+            
+            setSavedAccounts(updatedSaved);
+            setStudentData(studentWithToken);
+            resetAddAccount();
+            setShowAccountModal(false);
+            
+            await onRefresh();
+
+            Toast.show({
+                type: 'success',
+                text1: 'Account Added',
+                text2: `Successfully linked ${student.name}`
+            });
+        } catch (error: any) {
+            Toast.show({
+                type: 'error',
+                text1: 'Verification Failed',
+                text2: error.response?.data?.message || 'Invalid code'
+            });
+        } finally {
+            setIsProcessing(false);
+        }
+    };
 
     const fetchDashboardData = async (forcedSessionId?: number) => {
         try {
@@ -960,6 +1124,7 @@ export default function StudentDashboard() {
             await AsyncStorage.removeItem('studentToken');
             await AsyncStorage.removeItem('studentData');
             await AsyncStorage.removeItem('studentAccounts');
+            await AsyncStorage.removeItem('selectedSessionId');
             router.replace('/(auth)/student-login');
         } catch (error) {
             console.error('Logout error:', error);
@@ -975,7 +1140,7 @@ export default function StudentDashboard() {
             justifyContent: 'space-between',
             paddingLeft: 5,
             paddingRight: 12,
-            paddingTop: insets.top + 10,
+            paddingTop: insets.top,
             paddingBottom: 10,
             zIndex: 100,
         },
@@ -1169,7 +1334,7 @@ export default function StudentDashboard() {
         },
 
         // Modal
-        modalOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.4)', justifyContent: 'flex-end' },
+        modalOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.4)', justifyContent: 'flex-end', paddingBottom: 60 },
         modalContent: { backgroundColor: theme.card, borderTopLeftRadius: 35, borderTopRightRadius: 35, paddingHorizontal: 20, paddingBottom: 40, maxHeight: SCREEN_HEIGHT * 0.85 },
         modalHeader: { alignItems: 'center', paddingVertical: 20 },
         modalHandle: { width: 45, height: 6, backgroundColor: theme.border, borderRadius: 3, marginBottom: 15 },
@@ -1188,9 +1353,19 @@ export default function StudentDashboard() {
         accMeta: { fontSize: 12, color: theme.primary, fontWeight: '700', marginTop: 5 },
         lockBadge: { flexDirection: 'row', alignItems: 'center', backgroundColor: theme.warning + '12', paddingHorizontal: 12, paddingVertical: 6, borderRadius: 14 },
         lockText: { fontSize: 12, fontWeight: '800', color: theme.warning, marginLeft: 5 },
-        addAccountBtn: { flexDirection: 'row', alignItems: 'center', padding: 18, marginTop: 12, borderStyle: 'dotted', borderWidth: 2, borderColor: theme.primary, borderRadius: 24 },
-        addIconCircle: { width: 40, height: 40, borderRadius: 20, backgroundColor: theme.primary + '10', justifyContent: 'center', alignItems: 'center', marginRight: 15 },
-        addAccountText: { color: theme.primary, fontWeight: '800', fontSize: 16 },
+        addAccountBtn: { 
+            flexDirection: 'row', 
+            alignItems: 'center', 
+            padding: 14, 
+            marginTop: 18, 
+            borderStyle: 'dashed', 
+            borderWidth: 1.5, 
+            borderColor: theme.primary, 
+            borderRadius: 18,
+            backgroundColor: theme.primary + '05'
+        },
+        addIconCircle: { width: 32, height: 32, borderRadius: 16, backgroundColor: theme.primary + '10', justifyContent: 'center', alignItems: 'center', marginRight: 12 },
+        addAccountText: { color: theme.primary, fontWeight: '800', fontSize: 14 },
         modalLogoutBtn: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', padding: 16, borderTopWidth: 1, borderTopColor: theme.border, marginTop: 10 },
         modalLogoutText: { color: theme.danger, fontWeight: '800', fontSize: 16, marginLeft: 10 },
 
@@ -1442,7 +1617,7 @@ export default function StudentDashboard() {
             <ScrollView
                 style={styles.content}
                 showsVerticalScrollIndicator={false}
-                contentContainerStyle={{ paddingBottom: 40 }}
+                contentContainerStyle={{ paddingBottom: 40 + insets.bottom }} // Add insets.bottom here
                 refreshControl={
                     <RefreshControl 
                         refreshing={refreshing} 
@@ -1516,7 +1691,8 @@ export default function StudentDashboard() {
 
                                     return slots.map((slotConfig: any, pIdx: number) => {
                                         const slotData = todayData[pIdx] || {};
-                                        const teacherName = teachers.find(t => String(t.id) === String(slotData.teacherId))?.name;
+                                        const teacherObj = teachers.find(t => String(t.id) === String(slotData.teacherId));
+                                        const teacherName = teacherObj?.name || 'Faculty';
 
                                         const now = new Date();
                                         const currentTime = now.getHours() * 60 + now.getMinutes();
@@ -1543,7 +1719,6 @@ export default function StudentDashboard() {
                                         }
 
                                         const gradient = PREMIUM_GRADIENTS[pIdx % PREMIUM_GRADIENTS.length];
-                                        const teacherObj = teachers.find(t => String(t.id) === String(slotData.teacherId));
 
                                         return (
                                             <TouchableOpacity 
@@ -1602,7 +1777,7 @@ export default function StudentDashboard() {
                                                             )}
                                                         </View>
                                                         <Text style={{ fontSize: 12, fontWeight: '800', color: 'rgba(255,255,255,0.95)', flex: 1 }} numberOfLines={1}>
-                                                            {teacherName || 'Faculty'}
+                                                            {teacherName}
                                                         </Text>
                                                     </View>
                                                 </LinearGradient>
@@ -1864,69 +2039,208 @@ export default function StudentDashboard() {
                 visible={showAccountModal}
                 transparent={true}
                 animationType="slide"
-                onRequestClose={() => setShowAccountModal(false)}
+                onRequestClose={() => {
+                    if (addAccountStep !== 'LIST') {
+                        setAddAccountStep('LIST');
+                    } else {
+                        setShowAccountModal(false);
+                    }
+                }}
             >
-                <TouchableOpacity
-                    style={styles.modalOverlay}
-                    activeOpacity={1}
-                    onPress={() => setShowAccountModal(false)}
+                <KeyboardAvoidingView 
+                    behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+                    style={{ flex: 1 }}
                 >
-                    <View style={styles.modalContent}>
-                        <View style={styles.modalHeader}>
-                            <View style={styles.modalHandle} />
-                            <Text style={styles.modalTitle}>Multi-Institute Access</Text>
-                            <Text style={styles.modalSubtitle}>Select student profile to manage</Text>
-                        </View>
+                    <TouchableOpacity
+                        style={styles.modalOverlay}
+                        activeOpacity={1}
+                        onPress={() => {
+                            if (addAccountStep === 'LIST') setShowAccountModal(false);
+                        }}
+                    >
+                        <View style={styles.modalContent}>
+                            <View style={styles.modalHeader}>
+                                <View style={styles.modalHandle} />
+                                <Text style={styles.modalTitle}>
+                                    {addAccountStep === 'LIST' ? 'Multi-Institute Access' :
+                                     addAccountStep === 'PHONE' ? 'Link Account' :
+                                     addAccountStep === 'INSTITUTE' ? 'Select Institute' :
+                                     addAccountStep === 'STUDENT' ? 'Select Profile' : 'Verify Access'}
+                                </Text>
+                                <Text style={styles.modalSubtitle}>
+                                    {addAccountStep === 'LIST' ? 'Select student profile to manage' :
+                                     addAccountStep === 'PHONE' ? 'Enter registered mobile number' :
+                                     addAccountStep === 'INSTITUTE' ? 'Choose school for this student' :
+                                     addAccountStep === 'STUDENT' ? 'Select identity to link' : 'Enter 6-digit access code'}
+                                </Text>
+                            </View>
 
-                        <ScrollView style={styles.accountList} showsVerticalScrollIndicator={false}>
-                            {fetchingAccounts ? (
-                                <ActivityIndicator style={{ margin: 20 }} color={theme.primary} />
-                            ) : (
-                                allAccounts.map((acc) => {
-                                    const isActive = acc.id === studentData.id;
-                                    const isLoggedIn = savedAccounts.some(s => s.id === acc.id);
+                            <ScrollView 
+                                style={styles.accountList} 
+                                showsVerticalScrollIndicator={false}
+                                keyboardShouldPersistTaps="handled"
+                            >
+                                {addAccountStep === 'LIST' && (
+                                    <>
+                                        {fetchingAccounts ? (
+                                            <ActivityIndicator style={{ margin: 20 }} color={theme.primary} />
+                                        ) : (
+                                            allAccounts.map((acc) => {
+                                                const isActive = acc.id === studentData.id;
+                                                const isLoggedIn = savedAccounts.some(s => s.id === acc.id);
 
-                                    return (
-                                        <TouchableOpacity
-                                            key={acc.id}
-                                            style={[styles.accItem, isActive && styles.accItemActive]}
-                                            onPress={() => handleSwitchPress(acc)}
-                                            activeOpacity={0.7}
+                                                return (
+                                                    <TouchableOpacity
+                                                        key={acc.id}
+                                                        style={[styles.accItem, isActive && styles.accItemActive]}
+                                                        onPress={() => handleSwitchPress(acc)}
+                                                        activeOpacity={0.7}
+                                                    >
+                                                        <View style={styles.accAvatarWrapper}>
+                                                            {acc.photo_url ? (
+                                                                <Image source={{ uri: acc.photo_url }} style={styles.accAvatar} />
+                                                            ) : (
+                                                                <View style={[styles.accAvatar, { backgroundColor: theme.primary + '15' }]}>
+                                                                    <Text style={[styles.accAvatarInitial, { color: theme.primary }]}>{acc.name[0]}</Text>
+                                                                </View>
+                                                            )}
+                                                            {isLoggedIn && !isActive && <View style={styles.loggedInDot} />}
+                                                        </View>
+
+                                                        <View style={styles.accInfo}>
+                                                            <Text style={styles.accName}>{acc.name}</Text>
+                                                            <Text style={styles.accSchool}>{acc?.institute_name || 'Institute'}</Text>
+                                                            <Text style={styles.accMeta}>Class {acc.class} • {acc.section}</Text>
+                                                        </View>
+
+                                                        {isActive ? (
+                                                            <Ionicons name="checkmark-circle" size={24} color={theme.success} />
+                                                        ) : isLoggedIn ? (
+                                                            <Ionicons name="swap-horizontal" size={20} color={theme.textLight} />
+                                                        ) : (
+                                                            <View style={styles.lockBadge}>
+                                                                <Ionicons name="lock-closed" size={14} color={theme.warning} />
+                                                                <Text style={styles.lockText}>Verify</Text>
+                                                            </View>
+                                                        )}
+                                                    </TouchableOpacity>
+                                                );
+                                            })
+                                        )}
+                                        <TouchableOpacity 
+                                            style={styles.addAccountBtn}
+                                            onPress={() => setAddAccountStep('PHONE')}
                                         >
-                                            <View style={styles.accAvatarWrapper}>
-                                                {acc.photo_url ? (
-                                                    <Image source={{ uri: acc.photo_url }} style={styles.accAvatar} />
-                                                ) : (
-                                                    <View style={[styles.accAvatar, { backgroundColor: theme.primary + '15' }]}>
-                                                        <Text style={[styles.accAvatarInitial, { color: theme.primary }]}>{acc.name[0]}</Text>
-                                                    </View>
-                                                )}
-                                                {isLoggedIn && !isActive && <View style={styles.loggedInDot} />}
+                                            <View style={styles.addIconCircle}>
+                                                <Ionicons name="add" size={24} color={theme.primary} />
                                             </View>
-
-                                            <View style={styles.accInfo}>
-                                                <Text style={styles.accName}>{acc.name}</Text>
-                                                <Text style={styles.accSchool}>{acc?.institute_name || 'Institute'}</Text>
-                                                <Text style={styles.accMeta}>Class {acc.class} • {acc.section}</Text>
-                                            </View>
-
-                                            {isActive ? (
-                                                <Ionicons name="checkmark-circle" size={24} color={theme.success} />
-                                            ) : isLoggedIn ? (
-                                                <Ionicons name="swap-horizontal" size={20} color={theme.textLight} />
-                                            ) : (
-                                                <View style={styles.lockBadge}>
-                                                    <Ionicons name="lock-closed" size={14} color={theme.warning} />
-                                                    <Text style={styles.lockText}>Verify</Text>
-                                                </View>
-                                            )}
+                                            <Text style={styles.addAccountText}>Link Another Account</Text>
                                         </TouchableOpacity>
-                                    );
-                                })
-                            )}
-                        </ScrollView>
-                    </View>
-                </TouchableOpacity>
+                                    </>
+                                )}
+
+                                {addAccountStep === 'PHONE' && (
+                                    <View style={{ padding: 10 }}>
+                                        <View style={styles.inputWrapper}>
+                                            <Ionicons name="call-outline" size={22} color={theme.primary} style={styles.inputIcon} />
+                                            <TextInput
+                                                style={styles.modernInput}
+                                                placeholder="Mobile Number"
+                                                placeholderTextColor={theme.textLight}
+                                                keyboardType="phone-pad"
+                                                maxLength={10}
+                                                value={newPhone}
+                                                onChangeText={setNewPhone}
+                                                autoFocus
+                                            />
+                                        </View>
+                                        <TouchableOpacity 
+                                            style={[styles.verifyBtn, isProcessing && { opacity: 0.7 }]}
+                                            onPress={handleVerifyPhone}
+                                            disabled={isProcessing}
+                                        >
+                                            {isProcessing ? <ActivityIndicator color="#fff" /> : <Text style={styles.verifyBtnText}>Find Institutes</Text>}
+                                        </TouchableOpacity>
+                                        <TouchableOpacity 
+                                            style={{ marginTop: 20, alignItems: 'center' }}
+                                            onPress={() => setAddAccountStep('LIST')}
+                                        >
+                                            <Text style={{ color: theme.textLight, fontWeight: '700' }}>Cancel</Text>
+                                        </TouchableOpacity>
+                                    </View>
+                                )}
+
+                                {addAccountStep === 'INSTITUTE' && (
+                                    <View style={{ gap: 12 }}>
+                                        {foundInstitutes.map((inst) => (
+                                            <TouchableOpacity 
+                                                key={inst.id} 
+                                                style={[styles.accItem, { paddingVertical: 15 }]}
+                                                onPress={() => handleSelectInstitute(inst)}
+                                            >
+                                                <Image source={{ uri: inst.logo_url }} style={{ width: 40, height: 40, borderRadius: 10 }} resizeMode="contain" />
+                                                <View style={{ marginLeft: 15, flex: 1 }}>
+                                                    <Text style={[styles.accName, { fontSize: 16 }]}>{inst.institute_name}</Text>
+                                                    <Text style={styles.accSchool} numberOfLines={1}>{inst.address}</Text>
+                                                </View>
+                                                <Ionicons name="chevron-forward" size={18} color={theme.textLight} />
+                                            </TouchableOpacity>
+                                        ))}
+                                    </View>
+                                )}
+
+                                {addAccountStep === 'STUDENT' && (
+                                    <View style={{ gap: 12 }}>
+                                        {foundStudents.map((stu) => (
+                                            <TouchableOpacity 
+                                                key={stu.id} 
+                                                style={[styles.accItem, { paddingVertical: 15 }]}
+                                                onPress={() => handleSelectStudentForAdd(stu)}
+                                            >
+                                                <View style={styles.accAvatar}>
+                                                    <Text style={{ color: theme.primary, fontWeight: '900' }}>{stu.name[0]}</Text>
+                                                </View>
+                                                <View style={{ marginLeft: 15, flex: 1 }}>
+                                                    <Text style={[styles.accName, { fontSize: 16 }]}>{stu.name}</Text>
+                                                    <Text style={styles.accSchool}>Roll: {stu.roll_no} • Class {stu.class}</Text>
+                                                </View>
+                                                <Ionicons name="add-circle-outline" size={24} color={theme.primary} />
+                                            </TouchableOpacity>
+                                        ))}
+                                    </View>
+                                )}
+
+                                {addAccountStep === 'CODE' && (
+                                    <View style={{ padding: 10 }}>
+                                        <Text style={{ textAlign: 'center', color: theme.primary, fontWeight: '800', marginBottom: 20 }}>
+                                            Link: {targetAccount?.name}
+                                        </Text>
+                                        <View style={styles.inputWrapper}>
+                                            <Ionicons name="key-outline" size={22} color={theme.primary} style={styles.inputIcon} />
+                                            <TextInput
+                                                style={styles.modernInput}
+                                                placeholder="6-digit access code"
+                                                placeholderTextColor={theme.textLight}
+                                                keyboardType="numeric"
+                                                maxLength={6}
+                                                value={accessCode}
+                                                onChangeText={setAccessCode}
+                                                autoFocus
+                                            />
+                                        </View>
+                                        <TouchableOpacity 
+                                            style={[styles.verifyBtn, isProcessing && { opacity: 0.7 }]}
+                                            onPress={handleNewCodeVerify}
+                                            disabled={isProcessing}
+                                        >
+                                            {isProcessing ? <ActivityIndicator color="#fff" /> : <Text style={styles.verifyBtnText}>Verify & Link</Text>}
+                                        </TouchableOpacity>
+                                    </View>
+                                )}
+                            </ScrollView>
+                        </View>
+                    </TouchableOpacity>
+                </KeyboardAvoidingView>
             </Modal>
 
             {/* ACCESS CODE VERIFICATION MODAL */}

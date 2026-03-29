@@ -56,7 +56,7 @@ export default function TakeAttendance() {
     const fetchData = async () => {
         setLoading(true);
         try {
-            const token = await AsyncStorage.getItem('token');
+            const token = await AsyncStorage.getItem('principalToken') || await AsyncStorage.getItem('token');
             const storedSessionId = await AsyncStorage.getItem('selectedSessionId');
             const userData = await AsyncStorage.getItem('userData');
             const sessionId = storedSessionId || (userData ? JSON.parse(userData).current_session_id : null);
@@ -67,47 +67,20 @@ export default function TakeAttendance() {
                 'x-academic-session-id': sessionId?.toString()
             };
 
-            // Fetch students
-            const studentsRes = await axios.get(
-                `${API_ENDPOINTS.PRINCIPAL}/student/list?class=${className}&section=${section}&date=${dateStr}`,
+            // ONE SINGLE CALL for all data
+            const res = await axios.get(
+                `${API_ENDPOINTS.ATTENDANCE}/sync?class=${className}&section=${section}&date=${dateStr}`,
                 { headers }
             );
 
-            const allStudents = studentsRes.data.students || [];
-            // Strictly filter by class and section again to be safe
-            const filtered = allStudents.filter((s: any) => String(s.class).trim() === String(className).trim() && String(s.section).trim() === String(section).trim());
-            setStudents(filtered);
+            // BATCH STATE UPDATE - One single render cycle
+            setStudents(res.data.students || []);
+            setAttendance(res.data.attendance || {});
+            setLogs(res.data.logs || []);
+            setAbsentRequests(res.data.absentRequests || []);
 
-            // Fetch existing attendance - handle empty case
-            const attendanceRes = await axios.get(
-                `${API_ENDPOINTS.PRINCIPAL}/attendance/view?class=${className}&section=${section}&date=${dateStr}`,
-                { headers }
-            );
-
-            const existingAttendance = attendanceRes.data.attendance || [];
-            const attendanceMap: { [key: number]: 'present' | 'absent' } = {};
-            existingAttendance.forEach((a: any) => {
-                attendanceMap[a.student_id] = a.status;
-            });
-            setAttendance(attendanceMap);
-
-            // Fetch logs - handle empty case
-            const logsRes = await axios.get(
-                `${API_ENDPOINTS.PRINCIPAL}/attendance/logs?class=${className}&section=${section}&date=${dateStr}`,
-                { headers }
-            );
-
-            setLogs(logsRes.data.logs || []);
-
-            // Fetch absent requests - handle empty case
-            const requestsRes = await axios.get(
-                `${API_ENDPOINTS.ABSENT_REQUEST}/view?class=${className}&section=${section}&date=${dateStr}`,
-                { headers }
-            );
-            setAbsentRequests(requestsRes.data.requests || []);
         } catch (error) {
-            console.error('Error fetching attendance data:', error);
-            // Don't toast here if it's just empty data, only if real failure
+            console.error('Error fetching attendance dashboard data:', error);
         } finally {
             setLoading(false);
         }
@@ -116,7 +89,7 @@ export default function TakeAttendance() {
     const handleApproveRequest = async (requestId: number) => {
         setApproving(true);
         try {
-            const token = await AsyncStorage.getItem('token');
+            const token = await AsyncStorage.getItem('principalToken') || await AsyncStorage.getItem('token');
             const storedSessionId = await AsyncStorage.getItem('selectedSessionId');
             const userData = await AsyncStorage.getItem('userData');
             const sessionId = storedSessionId || (userData ? JSON.parse(userData).current_session_id : null);
@@ -169,7 +142,7 @@ export default function TakeAttendance() {
 
         setSaving(true);
         try {
-            const token = await AsyncStorage.getItem('token');
+            const token = await AsyncStorage.getItem('principalToken') || await AsyncStorage.getItem('token');
             const storedSessionId = await AsyncStorage.getItem('selectedSessionId');
             const userData = await AsyncStorage.getItem('userData');
             const sessionId = storedSessionId || (userData ? JSON.parse(userData).current_session_id : null);
@@ -684,12 +657,15 @@ export default function TakeAttendance() {
             {/* Save Button */}
             {students.length > 0 && (
                 <TouchableOpacity
-                    style={[styles.saveButton, saving && { opacity: 0.7 }]}
+                    style={[styles.saveButton, saving && { opacity: 0.7, backgroundColor: theme.textLight }]}
                     onPress={handleSave}
                     disabled={saving}
                 >
                     {saving ? (
-                        <ActivityIndicator color="#fff" />
+                        <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+                            <ActivityIndicator color="#fff" size="small" style={{ marginRight: 10 }} />
+                            <Text style={styles.saveButtonText}>Saving...</Text>
+                        </View>
                     ) : (
                         <Text style={styles.saveButtonText}>Save Attendance</Text>
                     )}

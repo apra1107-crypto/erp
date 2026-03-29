@@ -10,6 +10,7 @@ import axios from 'axios';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import Toast from 'react-native-toast-message';
 import { useTheme } from '../../../context/ThemeContext';
+import DateTimePicker from '@react-native-community/datetimepicker';
 import { API_ENDPOINTS } from '../../../constants/Config';
 
 const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get('window');
@@ -32,6 +33,9 @@ export default function PrincipalClassHomework() {
     const [saving, setSaving] = useState(false);
     const [editingId, setEditingId] = useState<number | null>(null);
 
+    // State for Date Picker
+    const [showDatePicker, setShowDatePicker] = useState(false);
+
     // Completion List State
     const [showCompletions, setShowCompletions] = useState(false);
     const [completionData, setCompletionData] = useState<{done: any[], pending: any[]}>({done: [], pending: []});
@@ -42,7 +46,7 @@ export default function PrincipalClassHomework() {
     const fetchHomework = useCallback(async () => {
         try {
             setLoading(true);
-            const token = await AsyncStorage.getItem('token');
+            const token = await AsyncStorage.getItem('principalToken') || await AsyncStorage.getItem('token');
             const storedSessionId = await AsyncStorage.getItem('selectedSessionId');
             const data = await AsyncStorage.getItem('userData');
             const parsedData = data ? JSON.parse(data) : null;
@@ -81,7 +85,7 @@ export default function PrincipalClassHomework() {
 
         try {
             setSaving(true);
-            const token = await AsyncStorage.getItem('token');
+            const token = await AsyncStorage.getItem('principalToken') || await AsyncStorage.getItem('token');
             const storedSessionId = await AsyncStorage.getItem('selectedSessionId');
             const data = await AsyncStorage.getItem('userData');
             const parsedData = data ? JSON.parse(data) : null;
@@ -121,7 +125,7 @@ export default function PrincipalClassHomework() {
             { text: "Cancel", style: "cancel" },
             { text: "Delete", style: "destructive", onPress: async () => {
                 try {
-                    const token = await AsyncStorage.getItem('token');
+                    const token = await AsyncStorage.getItem('principalToken') || await AsyncStorage.getItem('token');
                     await axios.delete(`${API_ENDPOINTS.HOMEWORK}/delete/${id}`, { headers: { Authorization: `Bearer ${token}` } });
                     Toast.show({ type: 'success', text1: 'Deleted', text2: 'Homework removed successfully' });
                     fetchHomework();
@@ -135,7 +139,7 @@ export default function PrincipalClassHomework() {
             setSelectedHW(hw);
             setLoadingCompletions(true);
             setShowCompletions(true);
-            const token = await AsyncStorage.getItem('token');
+            const token = await AsyncStorage.getItem('principalToken') || await AsyncStorage.getItem('token');
             const response = await axios.get(`${API_ENDPOINTS.HOMEWORK}/completions/${hw.id}`, {
                 headers: { Authorization: `Bearer ${token}` }
             });
@@ -162,14 +166,32 @@ export default function PrincipalClassHomework() {
 
     const styles = useMemo(() => StyleSheet.create({
         container: { flex: 1, backgroundColor: theme.background },
-        header: {
-            backgroundColor: theme.card,
-            paddingTop: insets.top + 10, paddingBottom: 15, paddingHorizontal: 20,
-            flexDirection: 'row', alignItems: 'center', borderBottomWidth: 1, borderBottomColor: theme.border,
-        },
+                header: {
+                    // backgroundColor: theme.card, // Removed as requested
+                    paddingTop: insets.top + 10,
+                    paddingBottom: 15,
+                    paddingHorizontal: 20,
+                    flexDirection: 'row',
+                    alignItems: 'center',
+                    // borderBottomWidth: 1, // Removed as requested
+                    // borderBottomColor: theme.border, // Removed as requested
+                },
         backBtn: { padding: 5, marginRight: 15 },
         headerTitle: { fontSize: 20, fontWeight: '900', color: theme.text },
-        dateSelector: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', padding: 15, backgroundColor: theme.card, margin: 20, borderRadius: 20, borderWidth: 1, borderColor: theme.border },
+        dateSelector: {
+            position: 'absolute', // Position it absolutely
+            top: insets.top -109, // Position it higher, just below the status bar
+            right: 20,             // Position from the right edge
+            zIndex: 10,            // Ensure it's above other content
+            // Remove margin and other layout properties that conflict with absolute positioning
+            margin: 0,
+            //paddingVertical: 5,
+            paddingHorizontal: 10,
+            backgroundColor: 'transparent', // Let the inner TouchableOpacity define its background
+            borderWidth: 0,
+            alignItems: 'center',
+            justifyContent: 'center',
+        },
         dateText: { fontSize: 16, fontWeight: '800', color: theme.text },
         navBtn: { padding: 8, borderRadius: 10, backgroundColor: theme.background, borderWidth: 1, borderColor: theme.border },
         content: { flex: 1, paddingHorizontal: 20 },
@@ -184,7 +206,7 @@ export default function PrincipalClassHomework() {
         countText: { fontSize: 12, fontWeight: '900', color: theme.primary },
         fab: { 
             position: 'absolute', 
-            bottom: Math.max(30, insets.bottom + 10), 
+            bottom: 30, 
             right: 20, 
             width: 60, 
             height: 60, 
@@ -256,11 +278,32 @@ export default function PrincipalClassHomework() {
                 <TouchableOpacity style={styles.backBtn} onPress={() => router.back()}><Ionicons name="arrow-back" size={24} color={theme.text} /></TouchableOpacity>
                 <Text style={styles.headerTitle}>Class {className}-{section} HW</Text>
             </View>
-            <View style={styles.dateSelector}>
-                <TouchableOpacity style={styles.navBtn} onPress={() => changeDate(-1)}><Ionicons name="chevron-back" size={20} color={theme.text} /></TouchableOpacity>
-                <Text style={styles.dateText}>{selectedDate.toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' })}</Text>
-                <TouchableOpacity style={styles.navBtn} onPress={() => changeDate(1)}><Ionicons name="chevron-forward" size={20} color={theme.text} /></TouchableOpacity>
+            <View style={{ alignItems: 'center', marginVertical: 15 }}>
+                <TouchableOpacity 
+                    style={[styles.dateSelector, { backgroundColor: theme.card, paddingHorizontal: 20, paddingVertical: 12, borderRadius: 20, borderWidth: 1, borderColor: theme.border, flexDirection: 'row', justifyContent: 'center', alignItems: 'center' }]} 
+                    onPress={() => setShowDatePicker(true)}
+                >
+                    <Ionicons name="calendar-outline" size={20} color={theme.primary} style={{ marginRight: 8 }} />
+                    <Text style={[styles.dateText, { color: theme.primary, fontWeight: '800', fontSize: 16 }]}>
+                        {selectedDate.toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' })}
+                    </Text>
+                    <Ionicons name="chevron-down" size={16} color={theme.textLight} style={{ marginLeft: 8 }} />
+                </TouchableOpacity>
             </View>
+            
+            {showDatePicker && (
+                <DateTimePicker
+                    value={selectedDate}
+                    mode="date"
+                    display="default"
+                    onChange={(event, date) => {
+                        setShowDatePicker(false);
+                        if (date) {
+                            setSelectedDate(date);
+                        }
+                    }}
+                />
+            )}
             <ScrollView style={styles.content} refreshControl={<RefreshControl refreshing={refreshing} onRefresh={() => {setRefreshing(true); fetchHomework();}} colors={[theme.primary]} />}>
                 {loading ? <ActivityIndicator size="large" color={theme.primary} style={{ marginTop: 50 }} /> : homeworkList.length > 0 ? homeworkList.map((item, idx) => (
                     <View key={idx} style={styles.homeworkCard}>

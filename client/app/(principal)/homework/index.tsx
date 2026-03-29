@@ -24,7 +24,7 @@ export default function PrincipalHomeworkClassSelection() {
     const fetchAllClasses = async () => {
         try {
             setLoading(true);
-            const token = await AsyncStorage.getItem('token'); // Principal token
+            const token = await AsyncStorage.getItem('principalToken') || await AsyncStorage.getItem('token'); // Principal token
             const storedSessionId = await AsyncStorage.getItem('selectedSessionId');
             const userData = await AsyncStorage.getItem('userData');
             const sessionId = storedSessionId || (userData ? JSON.parse(userData).current_session_id : null);
@@ -73,14 +73,14 @@ export default function PrincipalHomeworkClassSelection() {
     const styles = useMemo(() => StyleSheet.create({
         container: { flex: 1, backgroundColor: theme.background },
         header: {
-            backgroundColor: theme.card,
+            // backgroundColor: theme.card, // Removed for free-flow style
             paddingTop: insets.top + 10,
             paddingBottom: 15,
             paddingHorizontal: 20,
             flexDirection: 'row',
             alignItems: 'center',
-            borderBottomWidth: 1,
-            borderBottomColor: theme.border,
+            // borderBottomWidth: 1, // Removed for free-flow style
+            // borderBottomColor: theme.border, // Removed for free-flow style
         },
         backBtn: { padding: 5, marginRight: 15 },
         headerTitle: { fontSize: 20, fontWeight: '900', color: theme.text },

@@ -10,6 +10,7 @@ const SOCKET_URL = BASE_URL;
 export interface SocketContextType {
     socket: Socket | null;
     isConnected: boolean;
+    lastConnectedAt: number; // For components to detect new connections/reconnects
     joinRoom: (room: string) => void;
     leaveRoom: (room: string) => void;
 }
@@ -17,6 +18,7 @@ export interface SocketContextType {
 const SocketContext = createContext<SocketContextType>({
     socket: null,
     isConnected: false,
+    lastConnectedAt: 0,
     joinRoom: () => { },
     leaveRoom: () => { },
 });
@@ -26,23 +28,24 @@ export const useSocket = () => useContext(SocketContext);
 export const SocketProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
     const [socket, setSocket] = useState<Socket | null>(null);
     const [isConnected, setIsConnected] = useState(false);
+    const [lastConnectedAt, setLastConnectedAt] = useState(0);
 
     useEffect(() => {
         let newSocket: Socket | null = null;
 
         const connectSocket = async () => {
             try {
-                // Determine user type (Student, Teacher, or Principal)
-                // We check studentData first, but teachers/principals might store tokens differently
-                // For simplicity, we just connect. Auth is needed for rooms mostly.
-
                 newSocket = io(SOCKET_URL, {
                     transports: ['websocket'],
+                    reconnection: true,
+                    reconnectionAttempts: Infinity,
+                    reconnectionDelay: 1000,
                 });
 
                 newSocket.on('connect', () => {
                     console.log('✅ Connected to socket server');
                     setIsConnected(true);
+                    setLastConnectedAt(Date.now());
 
                     // Auto-join for students if data exists
                     AsyncStorage.getItem('studentData').then(data => {
@@ -51,7 +54,6 @@ export const SocketProvider: React.FC<{ children: React.ReactNode }> = ({ childr
                             if (studentData.institute_id && studentData.class && studentData.section) {
                                 const room = `${studentData.institute_id}-${studentData.class}-${studentData.section}`;
                                 newSocket?.emit('join_room', room);
-                                console.log(`👤 Student joined room: ${room}`);
                             }
                         }
                     });
@@ -80,24 +82,17 @@ export const SocketProvider: React.FC<{ children: React.ReactNode }> = ({ childr
     const joinRoom = (room: string) => {
         if (socket && isConnected) {
             socket.emit('join_room', room);
-            console.log(`➡️ Manual join room: ${room}`);
         }
     };
 
     const leaveRoom = (room: string) => {
         if (socket && isConnected) {
-            // Socket.io client doesn't have a standard 'leave' emission usually handled by server
-            // But we can implement a custom event if needed, or just stop listening
-            // Standard way is server-side leave, or just ignoring events.
-            // For now, let's assume we just join new rooms.
-            // Actually, best practice is to emit 'leave_room' and handle on server.
-            // But our server only has 'join_room'.
-            // Let's just allow joining for now. Multi-room presence is fine.
+            socket.emit('leave_room', room);
         }
     };
 
     return (
-        <SocketContext.Provider value={{ socket, isConnected, joinRoom, leaveRoom }}>
+        <SocketContext.Provider value={{ socket, isConnected, lastConnectedAt, joinRoom, leaveRoom }}>
             {children}
         </SocketContext.Provider>
     );

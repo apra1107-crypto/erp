@@ -34,7 +34,9 @@ const TeacherAttendanceBottomSheet = ({ visible, onClose, teacher, role = 'princ
     const fetchAttendance = async () => {
         setLoading(true);
         try {
-            const token = await AsyncStorage.getItem(role === 'teacher' ? 'teacherToken' : 'token');
+            const token = role === 'teacher' 
+                ? await AsyncStorage.getItem('teacherToken') 
+                : (await AsyncStorage.getItem('principalToken') || await AsyncStorage.getItem('token'));
             const storedSessionId = await AsyncStorage.getItem('selectedSessionId');
             const month = attendanceMonth.getMonth() + 1;
             const year = attendanceMonth.getFullYear();
@@ -66,10 +68,12 @@ const TeacherAttendanceBottomSheet = ({ visible, onClose, teacher, role = 'princ
         const daysInMonth = new Date(year, month + 1, 0).getDate();
 
         const days = [];
+        // Lead empty cells
         for (let i = 0; i < firstDay; i++) {
             days.push({ isEmpty: true });
         }
 
+        // Actual dates
         for (let i = 1; i <= daysInMonth; i++) {
             const dateStr = `${year}-${String(month + 1).padStart(2, '0')}-${String(i).padStart(2, '0')}`;
             const attendance = attendanceData.find(a => a.date?.split('T')[0] === dateStr);
@@ -80,6 +84,13 @@ const TeacherAttendanceBottomSheet = ({ visible, onClose, teacher, role = 'princ
                 status: attendance?.status || null
             });
         }
+        
+        // Trail empty cells to complete the 7-column grid
+        const totalCells = Math.ceil(days.length / 7) * 7;
+        while (days.length < totalCells) {
+            days.push({ isEmpty: true });
+        }
+
         return days;
     };
 

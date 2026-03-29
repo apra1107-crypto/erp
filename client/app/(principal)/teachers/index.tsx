@@ -30,7 +30,7 @@ export default function TeacherList() {
 
     const fetchTeachers = async () => {
         try {
-            const token = await AsyncStorage.getItem('token');
+            const token = await AsyncStorage.getItem('principalToken') || await AsyncStorage.getItem('token');
             const response = await axios.get(
                 `${API_ENDPOINTS.PRINCIPAL}/teacher/list`,
                 { headers: { Authorization: `Bearer ${token}` } }
@@ -325,7 +325,7 @@ export default function TeacherList() {
 
                             <Text style={styles.filterLabel}>By Gender:</Text>
                             <View style={{ flexDirection: 'row', gap: 10, marginBottom: 20 }}>
-                                {['Male', 'Female'].map(g => (
+                                {['Male', 'Female', 'Other'].map(g => (
                                     <TouchableOpacity
                                         key={g}
                                         style={[styles.filterChip, { flex: 1, marginRight: 0 }, filterGender.toLowerCase() === g.toLowerCase() && styles.filterChipActive]}

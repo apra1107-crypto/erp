@@ -1,52 +1,117 @@
 import { Stack, usePathname, useRouter } from 'expo-router';
-import { ThemeProvider } from '../context/ThemeContext';
+import { ThemeProvider, useTheme } from '../context/ThemeContext';
 import { SocketProvider } from '../context/SocketContext';
-import { useEffect } from 'react';
+import { useEffect, useRef } from 'react';
 import { usePushNotifications } from '../hooks/usePushNotifications';
-import AsyncStorage from '@react-native-async-storage/async-storage';
+import Toast from 'react-native-toast-message';
+import { View, Text, Platform, Alert } from 'react-native';
 import axios from 'axios';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import { API_ENDPOINTS } from '../constants/Config';
-import Toast, { BaseToast, ErrorToast } from 'react-native-toast-message';
-import { View, Text, TouchableOpacity } from 'react-native';
-import { Ionicons } from '@expo/vector-icons';
-import { SafeAreaProvider } from 'react-native-safe-area-context';
+import { SafeAreaProvider, useSafeAreaInsets } from 'react-native-safe-area-context';
 import UpdateModal from '../components/UpdateModal';
+import * as NavigationBar from 'expo-navigation-bar';
+import {
+  PaperProvider,
+  MD3LightTheme as DefaultTheme,
+  MD3DarkTheme as DarkTheme,
+} from 'react-native-paper';
+import { GestureHandlerRootView } from 'react-native-gesture-handler';
+import { Ionicons } from '@expo/vector-icons';
 
-export const toastConfig = {
-  success: (props: any) => (
-    <View style={{
-      width: '90%',
-      backgroundColor: '#fff',
-      borderRadius: 16,
-      padding: 16,
-      flexDirection: 'row',
-      alignItems: 'center',
-      shadowColor: '#000',
-      shadowOffset: { width: 0, height: 4 },
-      shadowOpacity: 0.1,
-      shadowRadius: 10,
-      elevation: 6,
-      borderLeftWidth: 6,
-      borderLeftColor: '#00C853',
-      marginTop: 20
-    }}>
-      <View style={{
-        width: 40,
-        height: 40,
-        borderRadius: 20,
-        backgroundColor: '#E8F5E9',
-        justifyContent: 'center',
-        alignItems: 'center',
-        marginRight: 12
-      }}>
-        <Ionicons name="checkmark" size={24} color="#00C853" />
+import { LinearGradient } from 'expo-linear-gradient';
+
+const toastConfig = {
+  subscription: ({ props }: any) => {
+    // Define stunning gradient backgrounds and text colors based on status
+    const themes: {
+      [key: string]: {
+        gradient: readonly [string, string, ...string[]];
+        text: string;
+        subText: string;
+        dialText: string;
+        dialSubText: string;
+        borderColor: string;
+      };
+    } = {
+      default: { gradient: ['#475569', '#1e293b'], text: '#FFFFFF', subText: '#cbd5e1', dialText: '#FFFFFF', dialSubText: '#94a3b8', borderColor: '#475569' },
+      active: { gradient: ['#0d9488', '#0f766e'], text: '#FFFFFF', subText: '#99f6e4', dialText: '#FFFFFF', dialSubText: '#5eead4', borderColor: '#0d9488' },
+      warning: { gradient: ['#f59e0b', '#d97706'], text: '#FFFFFF', subText: '#fef3c7', dialText: '#FFFFFF', dialSubText: '#fde68a', borderColor: '#f59e0b' },
+      critical: { gradient: ['#e11d48', '#be123c'], text: '#FFFFFF', subText: '#fda4af', dialText: '#FFFFFF', dialSubText: '#fda4af', borderColor: '#e11d48' },
+      special: { gradient: ['#6d28d9', '#5b21b6'], text: '#FFFFFF', subText: '#ddd6fe', dialText: '#FFFFFF', dialSubText: '#c4b5fd', borderColor: '#6d28d9' },
+    };
+
+    let currentTheme;
+    if (props.label === 'Premium Active') {
+        if (props.color === '#22d3ee' || props.color === '#34d399') currentTheme = themes.active;
+        else if (props.color === '#fcd34d') currentTheme = themes.warning;
+        else currentTheme = themes.critical;
+    } else if (props.label === 'Special Access') {
+        currentTheme = themes.special;
+    } else {
+        currentTheme = themes.default; // Expired
+    }
+    
+    return (
+      <View style={{ width: '95%', borderRadius: 28, overflow: 'hidden' }}>
+        <LinearGradient
+          colors={currentTheme.gradient}
+          style={{
+            paddingVertical: 22,
+            paddingHorizontal: 18,
+            flexDirection: 'row',
+            alignItems: 'center',
+            borderWidth: 2,
+            borderColor: currentTheme.borderColor,
+            shadowColor: '#000',
+            shadowOffset: { width: 0, height: 4 },
+            shadowOpacity: 0.2,
+            shadowRadius: 15,
+            elevation: 12,
+          }}
+        >
+          {/* Status Icon */}
+          <View style={{
+            width: 55, height: 55, borderRadius: 20,
+            backgroundColor: 'rgba(255, 255, 255, 0.15)',
+            justifyContent: 'center', alignItems: 'center', marginRight: 15,
+          }}>
+            <Ionicons 
+              name={props.label === 'Expired' ? 'lock-closed' : (props.label === 'Special Access' ? 'shield-checkmark' : 'checkmark-done')} 
+              size={28} color={currentTheme.text} 
+            />
+          </View>
+
+          {/* Main Content */}
+          <View style={{ flex: 1 }}>
+            <Text style={{ color: currentTheme.text, fontWeight: '900', fontSize: 17, textTransform: 'uppercase' }}>
+              {props.label}
+            </Text>
+            <Text style={{ color: currentTheme.subText, fontSize: 13, marginTop: 5, fontWeight: '500' }}>
+              Plan: ₹{props.monthlyPrice?.toLocaleString()}/mo • Since: {new Date(props.startDate).toLocaleDateString('en-IN', { day: '2-digit', month: 'short' })}
+            </Text>
+            <Text style={{ color: currentTheme.subText, fontSize: 13, marginTop: 2, fontWeight: '500' }}>
+              Valid Till: {props.expiryDate}
+            </Text>
+          </View>
+
+          {/* Days Left Dial */}
+          <View style={{
+            width: 75, height: 75, borderRadius: 40,
+            backgroundColor: 'rgba(0, 0, 0, 0.15)',
+            alignItems: 'center', justifyContent: 'center', marginLeft: 10,
+          }}>
+            <Text style={{ color: currentTheme.dialText, fontSize: 28, fontWeight: '900' }}>
+              {props.label === 'Expired' ? '0' : props.timeLeft.split('d')[0]}
+            </Text>
+            <Text style={{ color: currentTheme.dialSubText, fontSize: 10, fontWeight: '700', textTransform: 'uppercase', marginTop: -2 }}>
+              Days Left
+            </Text>
+          </View>
+        </LinearGradient>
       </View>
-      <View style={{ flex: 1 }}>
-        <Text style={{ fontSize: 16, fontWeight: '800', color: '#2E3A59' }}>{props.text1}</Text>
-        <Text style={{ fontSize: 13, color: '#8F9BB3', marginTop: 2, fontWeight: '600' }}>{props.text2}</Text>
-      </View>
-    </View>
-  ),
+    );
+  },
   attendance: (props: any) => {
     const { status, teacher_name, date, student_name } = props.props;
     const isPresent = status === 'present';
@@ -106,158 +171,21 @@ export const toastConfig = {
       </View>
     );
   },
-  subscription: (props: any) => {
-    const { timeLeft, expiryDate, color, label } = props.props;
-    return (
-      <View style={{
-        width: '95%',
-        backgroundColor: '#fff',
-        borderRadius: 24,
-        padding: 20,
-        shadowColor: '#000',
-        shadowOffset: { width: 0, height: -4 },
-        shadowOpacity: 0.15,
-        shadowRadius: 15,
-        elevation: 10,
-        borderTopWidth: 6,
-        borderTopColor: color,
-      }}>
-        <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
-          <View style={{ backgroundColor: color + '15', paddingHorizontal: 12, paddingVertical: 6, borderRadius: 12 }}>
-            <Text style={{ color: color, fontWeight: '900', fontSize: 12, textTransform: 'uppercase' }}>{label}</Text>
-          </View>
-          <View style={{ flexDirection: 'row', alignItems: 'center' }}>
-            <Ionicons name="time-outline" size={16} color="#8F9BB3" style={{ marginRight: 4 }} />
-            <Text style={{ color: '#8F9BB3', fontWeight: '700', fontSize: 13 }}>{timeLeft}</Text>
-          </View>
-        </View>
-
-        <Text style={{ fontSize: 18, fontWeight: '800', color: '#2E3A59', marginBottom: 4 }}>Subscription Details</Text>
-        <Text style={{ fontSize: 14, color: '#8F9BB3', fontWeight: '600' }}>
-          Expires on: <Text style={{ color: '#2E3A59', fontWeight: '800' }}>{expiryDate}</Text>
-        </Text>
-
-        <View style={{ marginTop: 15, paddingTop: 12, borderTopWidth: 1, borderTopColor: '#f0f0f0' }}>
-          <Text style={{ fontSize: 12, color: '#8F9BB3', fontWeight: '600', fontStyle: 'italic', lineHeight: 18 }}>
-            Renew your subscription from the web dashboard to avoid service interruption.
-          </Text>
-        </View>
-      </View>
-    );
-  },
-  error: (props: any) => (
-    <ErrorToast
-      {...props}
-      style={{ borderLeftColor: '#FF3D00', borderRadius: 12, width: '90%', height: 70 }}
-      contentContainerStyle={{ paddingHorizontal: 15 }}
-      text1Style={{ fontSize: 16, fontWeight: 'bold', color: '#000' }}
-      text2Style={{ fontSize: 13, color: '#666' }}
-    />
-  )
 };
 
-// ... imports
-
-// Safely access properties to prevent crashes if modules are missing during dev
-// const useSafePushNotifications = () => {
-//   try {
-//     return usePushNotifications();
-//   } catch (e) {
-//     console.warn("Push notifications module missing:", e);
-//     return { expoPushToken: undefined, notification: undefined };
-//   }
-// }
-
-export default function RootLayout() {
+function RootLayoutContent() {
+  const { isDark } = useTheme();
   const pathname = usePathname();
   const router = useRouter();
   const { expoPushToken, notification, lastResponse } = usePushNotifications();
+  const insets = useSafeAreaInsets();
 
   useEffect(() => {
-    const syncPushToken = async () => {
-      if (expoPushToken) {
-        try {
-          // Identify active role based on path
-          const isStudentPath = pathname.includes('(student)');
-          const isTeacherPath = pathname.includes('(teacher)');
-          const isPrincipalPath = pathname.includes('(principal)');
-
-          if (isStudentPath) {
-            const studentToken = await AsyncStorage.getItem('studentToken');
-            if (studentToken) {
-              const url = `${API_ENDPOINTS.AUTH.STUDENT}/update-token`;
-              console.log(`[PushSync] Attempting student sync: ${url}`);
-              await axios.put(url, {
-                push_token: expoPushToken
-              }, {
-                headers: { Authorization: `Bearer ${studentToken}` }
-              });
-              console.log('Active Student push token synced');
-              return;
-            }
-          }
-
-          if (isTeacherPath) {
-            const teacherToken = await AsyncStorage.getItem('teacherToken');
-            if (teacherToken) {
-              const url = `${API_ENDPOINTS.AUTH.TEACHER}/update-token`;
-              console.log(`[PushSync] Attempting teacher sync: ${url}`);
-              await axios.put(url, {
-                push_token: expoPushToken
-              }, {
-                headers: { Authorization: `Bearer ${teacherToken}` }
-              });
-              console.log('Active Teacher push token synced');
-              return;
-            }
-          }
-
-          if (isPrincipalPath) {
-            const principalToken = await AsyncStorage.getItem('principalToken') || await AsyncStorage.getItem('token');
-            if (principalToken) {
-              const url = `${API_ENDPOINTS.AUTH.INSTITUTE}/update-token`;
-              console.log(`[PushSync] Attempting principal sync: ${url}`);
-              await axios.put(url, {
-                push_token: expoPushToken
-              }, {
-                headers: { Authorization: `Bearer ${principalToken}` }
-              });
-              console.log('Active Principal push token synced');
-              return;
-            }
-          }
-
-          // Fallback logic if not on a specific path but tokens exist (e.g. initial load)
-          if (!isStudentPath && !isTeacherPath && !isPrincipalPath) {
-            // Priority: Student > Teacher > Principal
-            const sToken = await AsyncStorage.getItem('studentToken');
-            if (sToken) {
-              await axios.put(`${API_ENDPOINTS.AUTH.STUDENT}/update-token`, { push_token: expoPushToken }, { headers: { Authorization: `Bearer ${sToken}` } });
-              return;
-            }
-            const tToken = await AsyncStorage.getItem('teacherToken');
-            if (tToken) {
-              await axios.put(`${API_ENDPOINTS.AUTH.TEACHER}/update-token`, { push_token: expoPushToken }, { headers: { Authorization: `Bearer ${tToken}` } });
-              return;
-            }
-            const pToken = await AsyncStorage.getItem('principalToken') || await AsyncStorage.getItem('token');
-            if (pToken) {
-              await axios.put(`${API_ENDPOINTS.AUTH.INSTITUTE}/update-token`, { push_token: expoPushToken }, { headers: { Authorization: `Bearer ${pToken}` } });
-              return;
-            }
-          }
-        } catch (error: any) {
-          console.error('Error syncing push token:', error);
-          if (error.response?.status === 401) {
-            console.log('Push sync 401: Unauthorized - possible expired token');
-          }
-        }
-      }
-    };
-
-    syncPushToken();
-  }, [expoPushToken, pathname]);
-
+    if (Platform.OS === 'android') {
+      NavigationBar.setBackgroundColorAsync(isDark ? '#000' : '#fff');
+      NavigationBar.setButtonStyleAsync(isDark ? 'light' : 'dark');
+    }
+  }, [isDark]);
 
   useEffect(() => {
     if (notification) {
@@ -310,33 +238,144 @@ export default function RootLayout() {
     }
   }, [lastResponse]);
 
+  useEffect(() => {
+    const syncPushToken = async () => {
+      if (!expoPushToken) return;
+
+      try {
+        const studentToken = await AsyncStorage.getItem('studentToken');
+        const teacherToken = await AsyncStorage.getItem('teacherToken');
+        const principalToken = await AsyncStorage.getItem('principalToken') || await AsyncStorage.getItem('token');
+
+        // Student Sync
+        if (studentToken) {
+          await axios.put(`${API_ENDPOINTS.AUTH.STUDENT}/update-token`, 
+            { push_token: expoPushToken },
+            { headers: { Authorization: `Bearer ${studentToken}` } }
+          );
+        }
+
+        // Teacher Sync
+        if (teacherToken) {
+          await axios.put(`${API_ENDPOINTS.AUTH.TEACHER}/update-token`, 
+            { push_token: expoPushToken },
+            { headers: { Authorization: `Bearer ${teacherToken}` } }
+          );
+        }
+
+        // Principal Sync
+        if (principalToken) {
+          await axios.put(`${API_ENDPOINTS.AUTH.INSTITUTE}/update-token`, 
+            { push_token: expoPushToken },
+            { headers: { Authorization: `Bearer ${principalToken}` } }
+          );
+        }
+      } catch (error: any) {
+        // Silently fail in production
+      }
+    };
+
+    syncPushToken();
+  }, [expoPushToken, pathname]);
+
+    return (
+
+            <PaperProvider theme={isDark ? DarkTheme : DefaultTheme}>
+
+      
+
+              <GestureHandlerRootView style={{ flex: 1, backgroundColor: isDark ? '#000' : '#fff' }}>
+
+                  <View style={{ flex: 1, paddingBottom: insets.bottom }}>
+
+                      <Stack
+
+      
+
+                        screenOptions={{
+
+      
+
+                          headerShown: false,
+
+      
+
+                          statusBarStyle: isDark ? 'light' : 'dark',
+
+      
+
+                          animation: 'slide_from_right',
+
+      
+
+                        }}
+
+      
+
+                      >
+
+      
+
+                        <Stack.Screen name="index" />
+
+      
+
+                        <Stack.Screen name="(auth)/role-selection" />
+
+      
+
+                        <Stack.Screen name="(auth)/student-login" />
+
+      
+
+                        <Stack.Screen name="(auth)/institute-login" />
+
+      
+
+                        <Stack.Screen name="(auth)/institute-register" />
+
+      
+
+                        <Stack.Screen name="(auth)/teacher-login" />
+
+      
+
+                        <Stack.Screen name="(principal)/dashboard" />
+
+      
+
+                      </Stack>
+
+                  </View>
+
+      
+
+                  <Toast
+                    config={toastConfig}
+                    position="bottom"
+                    bottomOffset={100 + insets.bottom}
+                  />
+      
+
+                  <UpdateModal />
+
+      
+
+              </GestureHandlerRootView>
+
+      
+
+            </PaperProvider>
+
+    );
+}
+
+export default function RootLayout() {
   return (
     <SafeAreaProvider>
       <ThemeProvider>
         <SocketProvider>
-          <Stack screenOptions={{
-            headerShown: false,
-            animation: 'slide_from_right',
-            presentation: 'card',
-            gestureEnabled: true,
-            gestureDirection: 'horizontal',
-            animationDuration: 250,
-          }}>
-            <Stack.Screen name="index" />
-            <Stack.Screen name="(auth)/role-selection" />
-            <Stack.Screen name="(auth)/student-login" />
-            <Stack.Screen name="(auth)/institute-login" />
-            <Stack.Screen name="(auth)/institute-register" />
-            <Stack.Screen name="(auth)/teacher-login" />
-            <Stack.Screen name="(principal)/dashboard" />
-          </Stack>
-          <Toast 
-            config={toastConfig} 
-            position="top"
-            topOffset={80}
-            visibilityTime={5000}
-          />
-          <UpdateModal />
+          <RootLayoutContent />
         </SocketProvider>
       </ThemeProvider>
     </SafeAreaProvider>

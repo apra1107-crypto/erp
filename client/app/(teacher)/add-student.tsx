@@ -456,7 +456,7 @@ export default function AddStudent() {
                   </TouchableOpacity>
                 </View>
 
-                <View style={[styles.inputGroup, { flex: 0.48 }]}>
+                <View style={[styles.inputGroup, { flex: 1 }]}>
                   <Text style={styles.label}>Gender *</Text>
                   <View style={styles.genderContainer}>
                     <TouchableOpacity
@@ -470,6 +470,12 @@ export default function AddStudent() {
                       onPress={() => setFormData({ ...formData, gender: 'Female' })}
                     >
                       <Text style={[styles.genderText, formData.gender === 'Female' && styles.genderTextActive]}>Female</Text>
+                    </TouchableOpacity>
+                    <TouchableOpacity
+                      style={[styles.genderButton, formData.gender === 'Other' && styles.genderButtonActive]}
+                      onPress={() => setFormData({ ...formData, gender: 'Other' })}
+                    >
+                      <Text style={[styles.genderText, formData.gender === 'Other' && styles.genderTextActive]}>Other</Text>
                     </TouchableOpacity>
                   </View>
                 </View>
@@ -625,7 +631,7 @@ export default function AddStudent() {
               <View style={styles.inputGroup}>
                 <Text style={styles.label}>Monthly Tuition Fees *</Text>
                 <View style={styles.inputWrapper}>
-                  <Ionicons name="cash-outline" size={20} color={theme.primary} style={styles.inputIcon} />
+                  <Text style={{ fontSize: 18, fontWeight: '700', color: theme.primary, marginRight: 5 }}>₹</Text>
                   <TextInput
                     style={styles.input}
                     placeholder="e.g. 1500"
@@ -641,7 +647,7 @@ export default function AddStudent() {
                 <View style={styles.inputGroup}>
                   <Text style={styles.label}>Monthly Transport Fees *</Text>
                   <View style={styles.inputWrapper}>
-                    <Ionicons name="bus-outline" size={20} color={theme.primary} style={styles.inputIcon} />
+                    <Text style={{ fontSize: 18, fontWeight: '700', color: theme.primary, marginRight: 5 }}>₹</Text>
                     <TextInput
                       style={styles.input}
                       placeholder="e.g. 500"

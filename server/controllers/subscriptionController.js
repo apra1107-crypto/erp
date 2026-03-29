@@ -200,7 +200,7 @@ export const processPayment = async (req, res) => {
             ]).catch(err => console.error('Failed to send WhatsApp payment confirmation:', err));
 
             // Send Email
-            sendSubscriptionSuccessEmail(email, principal_name, institute_name, {
+            sendSubscriptionSuccessEmail(email, principal_name, instituteId, {
                 amount: amount,
                 durationDays: daysToAdd,
                 months: months,

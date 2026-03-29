@@ -1,5 +1,5 @@
 import { useState, useEffect, useMemo } from 'react';
-import { View, Text, StyleSheet, ScrollView, TextInput, TouchableOpacity, Image, Switch, ActivityIndicator, Alert, Platform, StatusBar } from 'react-native';
+import { View, Text, StyleSheet, ScrollView, TextInput, TouchableOpacity, Image, Switch, ActivityIndicator, Alert, Platform, StatusBar, KeyboardAvoidingView } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useRouter, useLocalSearchParams } from 'expo-router';
 import * as ImagePicker from 'expo-image-picker';
@@ -74,7 +74,7 @@ export default function StudentDetails() {
 
     const fetchFullFeesData = async () => {
         try {
-            const token = await AsyncStorage.getItem('token');
+            const token = await AsyncStorage.getItem('principalToken') || await AsyncStorage.getItem('token');
             const response = await axios.get(
                 `${API_ENDPOINTS.PRINCIPAL}/student/${id}/fees-full`,
                 { headers: { Authorization: `Bearer ${token}` } }
@@ -106,7 +106,7 @@ export default function StudentDetails() {
 
     const fetchStudentDetails = async () => {
         try {
-            const token = await AsyncStorage.getItem('token');
+            const token = await AsyncStorage.getItem('principalToken') || await AsyncStorage.getItem('token');
             const response = await axios.get(
                 `${API_ENDPOINTS.PRINCIPAL}/student/list`,
                 { headers: { Authorization: `Bearer ${token}` } }
@@ -155,7 +155,7 @@ export default function StudentDetails() {
     const handleUpdate = async () => {
         try {
             setSaving(true);
-            const token = await AsyncStorage.getItem('token');
+            const token = await AsyncStorage.getItem('principalToken') || await AsyncStorage.getItem('token');
             const data = new FormData();
 
             data.append('student_id', id as string);
@@ -219,7 +219,7 @@ export default function StudentDetails() {
                     style: "destructive",
                     onPress: async () => {
                         try {
-                            const token = await AsyncStorage.getItem('token');
+                            const token = await AsyncStorage.getItem('principalToken') || await AsyncStorage.getItem('token');
                             await axios.delete(`${API_ENDPOINTS.PRINCIPAL}/student/delete/${id}`, {
                                 headers: { Authorization: `Bearer ${token}` }
                             });
@@ -308,7 +308,6 @@ export default function StudentDetails() {
             fontWeight: '900',
             color: theme.primary,
             letterSpacing: 4,
-            textTransform: 'uppercase',
             fontFamily: Platform.OS === 'ios' ? 'Verdana' : 'sans-serif-medium'
         },
 
@@ -349,45 +348,6 @@ export default function StudentDetails() {
         loadingContainer: { flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: theme.background }
     }), [theme, isDark]);
 
-    const DetailItem = ({ label, value, icon }: any) => {
-        return (
-            <View style={[styles.detailRow, { borderBottomColor: theme.border }]}>
-                <View style={styles.detailLabelContainer}>
-                    {icon && <Ionicons name={icon} size={18} color={theme.primary} style={{ marginRight: 8 }} />}
-                    <Text style={styles.detailLabel}>{label}</Text>
-                </View>
-                <Text style={styles.detailValue}>{value || '—'}</Text>
-            </View>
-        );
-    };
-
-    const InputItem = ({ label, value, onChange, onTouch, keyboardType, multiline, icon }: any) => {
-        return (
-            <View style={styles.inputGroup}>
-                <Text style={styles.label}>{label}</Text>
-                {onTouch ? (
-                    <TouchableOpacity style={styles.inputWrapper} onPress={onTouch}>
-                        {icon && <Ionicons name={icon} size={20} color={theme.primary} style={{ marginRight: 10 }} />}
-                        <Text style={[styles.input, { lineHeight: 48 }]}>{value}</Text>
-                        <Ionicons name="calendar-outline" size={20} color={theme.primary} />
-                    </TouchableOpacity>
-                ) : (
-                    <View style={styles.inputWrapper}>
-                        {icon && <Ionicons name={icon} size={20} color={theme.primary} style={{ marginRight: 10 }} />}
-                        <TextInput
-                            style={[styles.input, multiline && styles.textArea]}
-                            value={value}
-                            onChangeText={onChange}
-                            keyboardType={keyboardType}
-                            multiline={multiline}
-                            placeholderTextColor={theme.textLight}
-                        />
-                    </View>
-                )}
-            </View>
-        );
-    };
-
     if (loading) return (
         <View style={styles.loadingContainer}>
             <ActivityIndicator size="large" color={theme.primary} />
@@ -414,196 +374,242 @@ export default function StudentDetails() {
                 )}
             </View>
 
-            <ScrollView style={styles.content} showsVerticalScrollIndicator={false} contentContainerStyle={{ paddingBottom: Math.max(40, insets.bottom + 20) }}>
-                <View style={styles.profileCard}>
-                    <TouchableOpacity style={styles.avatarWrapper} onPress={isEditing ? pickImage : undefined} activeOpacity={isEditing ? 0.7 : 1}>
-                        {(photo || originalData?.photo_url) ? (
-                            <Image source={{ uri: photo ? photo.uri : originalData.photo_url }} style={styles.avatarImg} />
-                        ) : (
-                            <Ionicons name="person" size={50} color={theme.border} />
-                        )}
-                        {isEditing && (
-                            <View style={styles.photoOverlay}>
-                                <Ionicons name="camera" size={16} color="#fff" />
-                            </View>
-                        )}
-                    </TouchableOpacity>
-                    <Text style={styles.studentName}>{originalData?.name}</Text>
-                    <Text style={styles.studentClass}>Class {originalData?.class} • Section {originalData?.section} • Roll No: {originalData?.roll_no}</Text>
-                </View>
-
-                {!isEditing && (
-                    <>
-                        <View style={styles.actionButtonsRow}>
-                            <TouchableOpacity 
-                                style={styles.attendanceBtn}
-                                onPress={() => setIsAttendanceVisible(true)}
-                            >
-                                <Ionicons name="calendar" size={18} color={isDark ? '#D1C4E9' : '#9C27B0'} />
-                                <Text style={styles.attendanceBtnText}>ATTENDANCE</Text>
-                            </TouchableOpacity>
-
-                            <TouchableOpacity 
-                                style={[styles.attendanceBtn, { backgroundColor: isDark ? '#1B2C1B' : '#E8F5E9', borderColor: isDark ? '#27AE60' : '#C8E6C9' }]}
-                                onPress={() => setIsFeesHistoryVisible(true)}
-                            >
-                                <Ionicons name="receipt-outline" size={18} color={isDark ? '#81C784' : '#2E7D32'} />
-                                <Text style={[styles.attendanceBtnText, { color: isDark ? '#81C784' : '#2E7D32' }]}>FEES HISTORY</Text>
-                            </TouchableOpacity>
-                        </View>
-
-                        <View style={styles.codeCard}>
-                            <Text style={styles.codeLabel}>ACCESS CODE:</Text>
-                            <Text style={styles.codeValue}>{originalData?.unique_code}</Text>
-                            <TouchableOpacity style={{ marginLeft: 15 }} onPress={() => { }}>
-                                <Ionicons name="copy-outline" size={20} color={theme.primary} />
-                            </TouchableOpacity>
-                        </View>
-                    </>
-                )}
-
-                <View style={styles.section}>
-                    <Text style={styles.sectionTitle}>Personal Information</Text>
-                    <View style={styles.detailsContainer}>
-                        {isEditing ? (
-                            <>
-                                <InputItem icon="person-outline" label="Full Name" value={formData.name} onChange={(t: string) => setFormData({ ...formData, name: t })} />
-                                <InputItem icon="calendar-outline" label="Date of Birth" value={formatDate(formData.dob)} onTouch={() => setShowDatePicker(true)} />
-                                <InputItem icon="male-female-outline" label="Gender" value={formData.gender} onChange={(t: string) => setFormData({ ...formData, gender: t })} />
-                                <InputItem icon="call-outline" label="Mobile" value={formData.mobile} onChange={(t: string) => setFormData({ ...formData, mobile: t })} keyboardType="phone-pad" />
-                                <InputItem icon="mail-outline" label="Email" value={formData.email} onChange={(t: string) => setFormData({ ...formData, email: t })} keyboardType="email-address" />
-                            </>
-                        ) : (
-                            <>
-                                <DetailItem icon="person-outline" label="Full Name" value={originalData?.name} />
-                                <DetailItem icon="calendar-outline" label="Date of Birth" value={formatDate(parseDate(originalData?.dob))} />
-                                <DetailItem icon="male-female-outline" label="Gender" value={originalData?.gender} />
-                                <DetailItem icon="call-outline" label="Mobile" value={originalData?.mobile} />
-                                <DetailItem icon="mail-outline" label="Email" value={originalData?.email || 'N/A'} />
-                            </>
-                        )}
-                    </View>
-                </View>
-
-                <View style={styles.section}>
-                    <Text style={styles.sectionTitle}>Academic & Guardian</Text>
-                    <View style={styles.detailsContainer}>
-                        {isEditing ? (
-                            <>
-                                <InputItem icon="school-outline" label="Class" value={formData.class} onChange={(t: string) => setFormData({ ...formData, class: t })} />
-                                <InputItem icon="grid-outline" label="Section" value={formData.section} onChange={(t: string) => setFormData({ ...formData, section: t })} />
-                                <InputItem icon="list-outline" label="Roll Number" value={formData.roll_no} onChange={(t: string) => setFormData({ ...formData, roll_no: t })} />
-                                <InputItem icon="calendar-outline" label="Admission Date" value={formatDate(formData.admission_date)} onTouch={() => setShowAdmissionDatePicker(true)} />
-                            </>
-                        ) : (
-                            <>
-                                <DetailItem icon="school-outline" label="Class" value={originalData?.class} />
-                                <DetailItem icon="grid-outline" label="Section" value={originalData?.section} />
-                                <DetailItem icon="list-outline" label="Roll Number" value={originalData?.roll_no} />
-                                <DetailItem icon="calendar-outline" label="Admission Date" value={formatDate(parseDate(originalData?.admission_date))} />
-                            </>
-                        )}
-                    </View>
-                </View>
-
-                {showAdmissionDatePicker && (
-                    <DateTimePicker
-                        value={formData.admission_date || new Date()}
-                        mode="date"
-                        display="default"
-                        onChange={(event, date) => {
-                            setShowAdmissionDatePicker(false);
-                            if (date) setFormData({ ...formData, admission_date: date });
-                        }}
-                    />
-                )}
-
-                <View style={styles.section}>
-                    <Text style={styles.sectionTitle}>Parent Information</Text>
-                    <View style={styles.detailsContainer}>
-                        {isEditing ? (
-                            <>
-                                <InputItem icon="person-outline" label="Father's Name" value={formData.father_name} onChange={(t: string) => setFormData({ ...formData, father_name: t })} />
-                                <InputItem icon="person-outline" label="Mother's Name" value={formData.mother_name} onChange={(t: string) => setFormData({ ...formData, mother_name: t })} />
-                            </>
-                        ) : (
-                            <>
-                                <DetailItem icon="person-outline" label="Father's Name" value={originalData?.father_name} />
-                                <DetailItem icon="person-outline" label="Mother's Name" value={originalData?.mother_name} />
-                            </>
-                        )}
-                    </View>
-                </View>
-
-                <View style={styles.section}>
-                    <Text style={styles.sectionTitle}>Financial Information</Text>
-                    <View style={styles.detailsContainer}>
-                        {isEditing ? (
-                            <>
-                                <InputItem icon="cash-outline" label="Monthly Tuition Fee" value={String(formData.monthly_fees || '')} onChange={(t: string) => setFormData({ ...formData, monthly_fees: t })} keyboardType="numeric" />
-                                {formData.transport_facility && (
-                                    <InputItem icon="bus-outline" label="Monthly Transport Fee" value={String(formData.transport_fees || '')} onChange={(t: string) => setFormData({ ...formData, transport_fees: t })} keyboardType="numeric" />
-                                )}
-                            </>
-                        ) : (
-                            <>
-                                <DetailItem icon="cash-outline" label="Monthly Tuition Fee" value={`₹${parseFloat(originalData?.monthly_fees || 0).toLocaleString()}`} />
-                                {originalData?.transport_facility && (
-                                    <DetailItem icon="bus-outline" label="Monthly Transport Fee" value={`₹${parseFloat(originalData?.transport_fees || 0).toLocaleString()}`} />
-                                )}
-                            </>
-                        )}
-                    </View>
-                </View>
-
-                <View style={styles.section}>
-                    <Text style={styles.sectionTitle}>Residence & Facilities</Text>
-                    <View style={styles.detailsContainer}>
-                        {isEditing ? (
-                            <>
-                                <InputItem icon="location-outline" label="Complete Address" value={formData.address} onChange={(t: string) => setFormData({ ...formData, address: t })} multiline />
-                                <View style={{ padding: 15, flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
-                                    <View style={{ flexDirection: 'row', alignItems: 'center' }}>
-                                        <View style={{ width: 32, height: 32, borderRadius: 8, backgroundColor: theme.primary + '10', justifyContent: 'center', alignItems: 'center', marginRight: 10 }}>
-                                            <Ionicons name="bus-outline" size={18} color={theme.primary} />
-                                        </View>
-                                        <Text style={styles.detailLabel}>Transport Facility</Text>
-                                    </View>
-                                    <ModernToggle
-                                        value={formData.transport_facility}
-                                        onValueChange={(v) => setFormData({ ...formData, transport_facility: v })}
-                                        activeColor={theme.primary}
-                                    />
+            <KeyboardAvoidingView 
+                behavior={Platform.OS === 'ios' ? 'padding' : 'height'} 
+                style={{ flex: 1 }}
+                keyboardVerticalOffset={Platform.OS === 'ios' ? 64 : 0}
+            >
+                <ScrollView style={styles.content} showsVerticalScrollIndicator={false} contentContainerStyle={{ paddingBottom: Math.max(40, insets.bottom + 20) }}>
+                    <View style={styles.profileCard}>
+                        <TouchableOpacity style={styles.avatarWrapper} onPress={isEditing ? pickImage : undefined} activeOpacity={isEditing ? 0.7 : 1}>
+                            {(photo || originalData?.photo_url) ? (
+                                <Image source={{ uri: photo ? photo.uri : originalData.photo_url }} style={styles.avatarImg} />
+                            ) : (
+                                <Ionicons name="person" size={50} color={theme.border} />
+                            )}
+                            {isEditing && (
+                                <View style={styles.photoOverlay}>
+                                    <Ionicons name="camera" size={16} color="#fff" />
                                 </View>
-                            </>
-                        ) : (
-                            <>
-                                <DetailItem icon="location-outline" label="Complete Address" value={originalData?.address} />
-                                <DetailItem icon="bus-outline" label="Transport Facility" value={originalData?.transport_facility ? 'Yes' : 'No'} />
-                            </>
-                        )}
+                            )}
+                        </TouchableOpacity>
+                        <Text style={styles.studentName}>{originalData?.name}</Text>
+                        <Text style={styles.studentClass}>Class {originalData?.class} • Section {originalData?.section} • Roll No: {originalData?.roll_no}</Text>
                     </View>
-                </View>
 
-                {isEditing && (
-                    <TouchableOpacity style={styles.deleteBtn} onPress={handleDelete}>
-                        <Ionicons name="trash-outline" size={22} color={theme.danger} />
-                        <Text style={styles.deleteText}>Delete Student Profile</Text>
-                    </TouchableOpacity>
-                )}
+                    {!isEditing && (
+                        <>
+                            <View style={styles.actionButtonsRow}>
+                                <TouchableOpacity 
+                                    style={styles.attendanceBtn}
+                                    onPress={() => setIsAttendanceVisible(true)}
+                                >
+                                    <Ionicons name="calendar" size={18} color={isDark ? '#D1C4E9' : '#9C27B0'} />
+                                    <Text style={styles.attendanceBtnText}>ATTENDANCE</Text>
+                                </TouchableOpacity>
 
-                {showDatePicker && (
-                    <DateTimePicker
-                        value={formData.dob || new Date()}
-                        mode="date"
-                        display="default"
-                        onChange={(event, date) => {
-                            setShowDatePicker(false);
-                            if (date) setFormData({ ...formData, dob: date });
-                        }}
-                    />
-                )}
-            </ScrollView>
+                                <TouchableOpacity 
+                                    style={[styles.attendanceBtn, { backgroundColor: isDark ? '#1B2C1B' : '#E8F5E9', borderColor: isDark ? '#27AE60' : '#C8E6C9' }]}
+                                    onPress={() => setIsFeesHistoryVisible(true)}
+                                >
+                                    <Text style={{ fontSize: 16, fontWeight: '900', color: isDark ? '#81C784' : '#2E7D32' }}>₹</Text>
+                                    <Text style={[styles.attendanceBtnText, { color: isDark ? '#81C784' : '#2E7D32' }]}>FEES HISTORY</Text>
+                                </TouchableOpacity>
+                            </View>
+
+                            <View style={styles.codeCard}>
+                                <Text style={styles.codeLabel}>ACCESS CODE:</Text>
+                                <Text style={styles.codeValue}>{originalData?.unique_code}</Text>
+                                <TouchableOpacity style={{ marginLeft: 15 }} onPress={() => { }}>
+                                    <Ionicons name="copy-outline" size={20} color={theme.primary} />
+                                </TouchableOpacity>
+                            </View>
+                        </>
+                    )}
+
+                    <View style={styles.section}>
+                        <Text style={styles.sectionTitle}>Personal Information</Text>
+                        <View style={styles.detailsContainer}>
+                            {isEditing ? (
+                                <>
+                                    <InputItem theme={theme} styles={styles} icon="person-outline" label="Full Name" value={formData.name} onChange={(t: string) => setFormData({ ...formData, name: t })} />
+                                    <InputItem theme={theme} styles={styles} icon="calendar-outline" label="Date of Birth" value={formatDate(formData.dob)} onTouch={() => setShowDatePicker(true)} />
+                                    
+                                    <View style={styles.inputGroup}>
+                                        <Text style={styles.label}>Gender</Text>
+                                        <View style={{ flexDirection: 'row', backgroundColor: theme.background, borderRadius: 15, padding: 4, borderWidth: 1, borderColor: theme.border }}>
+                                            {['Male', 'Female', 'Other'].map((g) => (
+                                                <TouchableOpacity
+                                                    key={g}
+                                                    style={[{ flex: 1, height: 40, borderRadius: 12, justifyContent: 'center', alignItems: 'center' }, formData.gender === g && { backgroundColor: theme.primary }]}
+                                                    onPress={() => setFormData({ ...formData, gender: g })}
+                                                >
+                                                    <Text style={[{ fontSize: 12, fontWeight: '700', color: theme.textLight }, formData.gender === g && { color: '#fff' }]}>{g}</Text>
+                                                </TouchableOpacity>
+                                            ))}
+                                        </View>
+                                    </View>
+
+                                    <InputItem theme={theme} styles={styles} icon="call-outline" label="Mobile" value={formData.mobile} onChange={(t: string) => setFormData({ ...formData, mobile: t })} keyboardType="phone-pad" />
+                                    <InputItem theme={theme} styles={styles} icon="mail-outline" label="Email" value={formData.email} onChange={(t: string) => setFormData({ ...formData, email: t })} keyboardType="email-address" />
+                                </>
+                            ) : (
+                                <>
+                                    <DetailItem theme={theme} styles={styles} icon="person-outline" label="Full Name" value={originalData?.name} />
+                                    <DetailItem theme={theme} styles={styles} icon="calendar-outline" label="Date of Birth" value={formatDate(parseDate(originalData?.dob))} />
+                                    <DetailItem theme={theme} styles={styles} icon="male-female-outline" label="Gender" value={originalData?.gender} />
+                                    <DetailItem theme={theme} styles={styles} icon="call-outline" label="Mobile" value={originalData?.mobile} />
+                                    <DetailItem theme={theme} styles={styles} icon="mail-outline" label="Email" value={originalData?.email || 'N/A'} />
+                                </>
+                            )}
+                        </View>
+                    </View>
+
+                    <View style={styles.section}>
+                        <Text style={styles.sectionTitle}>Academic & Guardian</Text>
+                        <View style={styles.detailsContainer}>
+                            {isEditing ? (
+                                <>
+                                    <InputItem theme={theme} styles={styles} icon="school-outline" label="Class" value={formData.class} onChange={(t: string) => setFormData({ ...formData, class: t })} />
+                                    <InputItem theme={theme} styles={styles} icon="grid-outline" label="Section" value={formData.section} onChange={(t: string) => setFormData({ ...formData, section: t })} />
+                                    <InputItem theme={theme} styles={styles} icon="list-outline" label="Roll Number" value={formData.roll_no} onChange={(t: string) => setFormData({ ...formData, roll_no: t })} />
+                                    <InputItem theme={theme} styles={styles} icon="calendar-outline" label="Admission Date" value={formatDate(formData.admission_date)} onTouch={() => setShowAdmissionDatePicker(true)} />
+                                </>
+                            ) : (
+                                <>
+                                    <DetailItem theme={theme} styles={styles} icon="school-outline" label="Class" value={originalData?.class} />
+                                    <DetailItem theme={theme} styles={styles} icon="grid-outline" label="Section" value={originalData?.section} />
+                                    <DetailItem theme={theme} styles={styles} icon="list-outline" label="Roll Number" value={originalData?.roll_no} />
+                                    <DetailItem theme={theme} styles={styles} icon="calendar-outline" label="Admission Date" value={formatDate(parseDate(originalData?.admission_date))} />
+                                </>
+                            )}
+                        </View>
+                    </View>
+
+                    {showAdmissionDatePicker && (
+                        <DateTimePicker
+                            value={formData.admission_date || new Date()}
+                            mode="date"
+                            display="default"
+                            onChange={(event, date) => {
+                                setShowAdmissionDatePicker(false);
+                                if (date) setFormData({ ...formData, admission_date: date });
+                            }}
+                        />
+                    )}
+
+                    <View style={styles.section}>
+                        <Text style={styles.sectionTitle}>Parent Information</Text>
+                        <View style={styles.detailsContainer}>
+                            {isEditing ? (
+                                <>
+                                    <InputItem theme={theme} styles={styles} icon="person-outline" label="Father's Name" value={formData.father_name} onChange={(t: string) => setFormData({ ...formData, father_name: t })} />
+                                    <InputItem theme={theme} styles={styles} icon="person-outline" label="Mother's Name" value={formData.mother_name} onChange={(t: string) => setFormData({ ...formData, mother_name: t })} />
+                                </>
+                            ) : (
+                                <>
+                                    <DetailItem theme={theme} styles={styles} icon="person-outline" label="Father's Name" value={originalData?.father_name} />
+                                    <DetailItem theme={theme} styles={styles} icon="person-outline" label="Mother's Name" value={originalData?.mother_name} />
+                                </>
+                            )}
+                        </View>
+                    </View>
+
+                    <View style={styles.section}>
+                        <Text style={styles.sectionTitle}>Financial Information</Text>
+                        <View style={styles.detailsContainer}>
+                            {isEditing ? (
+                                <>
+                                    <View style={styles.inputGroup}>
+                                        <Text style={styles.label}>Monthly Tuition Fee</Text>
+                                        <View style={styles.inputWrapper}>
+                                            <Text style={{ fontSize: 16, color: theme.textLight, marginRight: 8, fontWeight: '700' }}>₹</Text>
+                                            <TextInput
+                                                style={styles.input}
+                                                value={String(formData.monthly_fees || '')}
+                                                onChangeText={(t) => setFormData({ ...formData, monthly_fees: t })}
+                                                keyboardType="numeric"
+                                                placeholderTextColor={theme.textLight}
+                                            />
+                                        </View>
+                                    </View>
+
+                                    {formData.transport_facility && (
+                                        <View style={styles.inputGroup}>
+                                            <Text style={styles.label}>Monthly Transport Fee</Text>
+                                            <View style={styles.inputWrapper}>
+                                                <Text style={{ fontSize: 16, color: theme.textLight, marginRight: 8, fontWeight: '700' }}>₹</Text>
+                                                <TextInput
+                                                    style={styles.input}
+                                                    value={String(formData.transport_fees || '')}
+                                                    onChangeText={(t) => setFormData({ ...formData, transport_fees: t })}
+                                                    keyboardType="numeric"
+                                                    placeholderTextColor={theme.textLight}
+                                                />
+                                            </View>
+                                        </View>
+                                    )}
+                                </>
+                            ) : (
+                                <>
+                                    <DetailItem theme={theme} styles={styles} icon="cash-outline" label="Monthly Tuition Fee" value={`₹${parseFloat(originalData?.monthly_fees || 0).toLocaleString()}`} />
+                                    {originalData?.transport_facility && (
+                                        <DetailItem theme={theme} styles={styles} icon="bus-outline" label="Monthly Transport Fee" value={`₹${parseFloat(originalData?.transport_fees || 0).toLocaleString()}`} />
+                                    )}
+                                </>
+                            )}
+                        </View>
+                    </View>
+
+                    <View style={styles.section}>
+                        <Text style={styles.sectionTitle}>Residence & Facilities</Text>
+                        <View style={styles.detailsContainer}>
+                            {isEditing ? (
+                                <>
+                                    <InputItem theme={theme} styles={styles} icon="location-outline" label="Complete Address" value={formData.address} onChange={(t: string) => setFormData({ ...formData, address: t })} multiline />
+                                    <View style={{ padding: 15, flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
+                                        <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+                                            <View style={{ width: 32, height: 32, borderRadius: 8, backgroundColor: theme.primary + '10', justifyContent: 'center', alignItems: 'center', marginRight: 10 }}>
+                                                <Ionicons name="bus-outline" size={18} color={theme.primary} />
+                                            </View>
+                                            <Text style={styles.detailLabel}>Transport Facility</Text>
+                                        </View>
+                                        <ModernToggle
+                                            value={formData.transport_facility}
+                                            onValueChange={(v) => setFormData({ ...formData, transport_facility: v })}
+                                            activeColor={theme.primary}
+                                        />
+                                    </View>
+                                </>
+                            ) : (
+                                <>
+                                    <DetailItem theme={theme} styles={styles} icon="location-outline" label="Complete Address" value={originalData?.address} />
+                                    <DetailItem theme={theme} styles={styles} icon="bus-outline" label="Transport Facility" value={originalData?.transport_facility ? 'Yes' : 'No'} />
+                                </>
+                            )}
+                        </View>
+                    </View>
+
+                    {isEditing && (
+                        <TouchableOpacity style={styles.deleteBtn} onPress={handleDelete}>
+                            <Ionicons name="trash-outline" size={22} color={theme.danger} />
+                            <Text style={styles.deleteText}>Delete Student Profile</Text>
+                        </TouchableOpacity>
+                    )}
+
+                    {showDatePicker && (
+                        <DateTimePicker
+                            value={formData.dob || new Date()}
+                            mode="date"
+                            display="default"
+                            onChange={(event, date) => {
+                                setShowDatePicker(false);
+                                if (date) setFormData({ ...formData, dob: date });
+                            }}
+                        />
+                    )}
+                </ScrollView>
+            </KeyboardAvoidingView>
 
             {originalData && (
                 <AttendanceHistoryBottomSheet 
@@ -628,3 +634,42 @@ export default function StudentDetails() {
         </View>
     );
 }
+
+const DetailItem = ({ label, value, icon, theme, styles }: any) => {
+    return (
+        <View style={[styles.detailRow, { borderBottomColor: theme.border }]}>
+            <View style={styles.detailLabelContainer}>
+                {icon && <Ionicons name={icon} size={18} color={theme.primary} style={{ marginRight: 8 }} />}
+                <Text style={styles.detailLabel}>{label}</Text>
+            </View>
+            <Text style={styles.detailValue}>{value || '—'}</Text>
+        </View>
+    );
+};
+
+const InputItem = ({ label, value, onChange, onTouch, keyboardType, multiline, icon, theme, styles }: any) => {
+    return (
+        <View style={styles.inputGroup}>
+            <Text style={styles.label}>{label}</Text>
+            {onTouch ? (
+                <TouchableOpacity style={styles.inputWrapper} onPress={onTouch}>
+                    {icon && <Ionicons name={icon} size={20} color={theme.primary} style={{ marginRight: 10 }} />}
+                    <Text style={[styles.input, { lineHeight: 48 }]}>{value}</Text>
+                    <Ionicons name="calendar-outline" size={20} color={theme.primary} />
+                </TouchableOpacity>
+            ) : (
+                <View style={styles.inputWrapper}>
+                    {icon && <Ionicons name={icon} size={20} color={theme.primary} style={{ marginRight: 10 }} />}
+                    <TextInput
+                        style={[styles.input, multiline && styles.textArea]}
+                        value={value}
+                        onChangeText={onChange}
+                        keyboardType={keyboardType}
+                        multiline={multiline}
+                        placeholderTextColor={theme.textLight}
+                    />
+                </View>
+            )}
+        </View>
+    );
+};

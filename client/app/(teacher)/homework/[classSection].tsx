@@ -9,6 +9,7 @@ import { Ionicons } from '@expo/vector-icons';
 import axios from 'axios';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import Toast from 'react-native-toast-message';
+import DateTimePicker from '@react-native-community/datetimepicker';
 import { useTheme } from '../../../context/ThemeContext';
 import { API_ENDPOINTS } from '../../../constants/Config';
 
@@ -24,6 +25,7 @@ export default function ClassHomework() {
     const [refreshing, setRefreshing] = useState(false);
     const [homeworkList, setHomeworkList] = useState<any[]>([]);
     const [selectedDate, setSelectedDate] = useState(new Date());
+    const [showDatePicker, setShowDatePicker] = useState(false);
 
     // Modal State
     const [modalVisible, setModalVisible] = useState(false);
@@ -184,19 +186,22 @@ export default function ClassHomework() {
         },
         headerTitle: { fontSize: 24, fontWeight: '900', color: theme.text, letterSpacing: -0.5 },
         
-        dateSelector: {
-            flexDirection: 'row',
-            justifyContent: 'space-between',
-            alignItems: 'center',
-            padding: 15,
-            backgroundColor: theme.card,
-            margin: 20,
-            borderRadius: 20,
-            borderWidth: 1,
-            borderColor: theme.border,
+        dateSection: {
+            paddingHorizontal: 20,
+            paddingVertical: 10,
         },
-        dateText: { fontSize: 16, fontWeight: '800', color: theme.text },
-        navBtn: { padding: 8, borderRadius: 10, backgroundColor: theme.background, borderWidth: 1, borderColor: theme.border },
+        dateLabel: { fontSize: 12, fontWeight: '800', color: theme.primary, marginBottom: 8, textTransform: 'uppercase', letterSpacing: 1 },
+        dateButton: {
+            flexDirection: 'row',
+            alignItems: 'center',
+            backgroundColor: isDark ? '#333' : '#f4f4f5',
+            paddingVertical: 10,
+            paddingHorizontal: 16,
+            borderRadius: 14,
+            alignSelf: 'flex-start',
+            gap: 10,
+        },
+        dateText: { fontSize: 16, fontWeight: '700', color: theme.text },
 
         content: { flex: 1, paddingHorizontal: 20 },
         homeworkCard: {
@@ -247,7 +252,7 @@ export default function ClassHomework() {
 
         fab: {
             position: 'absolute', 
-            bottom: Math.max(30, insets.bottom + 15), 
+            bottom: 20, 
             right: 20, 
             width: 65, 
             height: 65, 
@@ -357,10 +362,13 @@ export default function ClassHomework() {
                 <Text style={styles.headerTitle}>Class {className}-{section} HW</Text>
             </View>
 
-            <View style={styles.dateSelector}>
-                <TouchableOpacity style={styles.navBtn} onPress={() => changeDate(-1)}><Ionicons name="chevron-back" size={20} color={theme.text} /></TouchableOpacity>
-                <Text style={styles.dateText}>{selectedDate.toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' })}</Text>
-                <TouchableOpacity style={styles.navBtn} onPress={() => changeDate(1)}><Ionicons name="chevron-forward" size={20} color={theme.text} /></TouchableOpacity>
+            <View style={styles.dateSection}>
+                <Text style={styles.dateLabel}>SELECT DATE</Text>
+                <TouchableOpacity style={styles.dateButton} onPress={() => setShowDatePicker(true)}>
+                    <Ionicons name="calendar" size={18} color={theme.primary} />
+                    <Text style={styles.dateText}>{selectedDate.toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' })}</Text>
+                    <Ionicons name="chevron-down" size={16} color={theme.textLight} />
+                </TouchableOpacity>
             </View>
 
             <ScrollView 
@@ -442,6 +450,18 @@ export default function ClassHomework() {
                     </View>
                 </KeyboardAvoidingView>
             </Modal>
+
+            {showDatePicker && (
+                <DateTimePicker
+                    value={selectedDate}
+                    mode="date"
+                    display="default"
+                    onChange={(event, date) => {
+                        setShowDatePicker(false);
+                        if (date) setSelectedDate(date);
+                    }}
+                />
+            )}
         </View>
     );
 }

@@ -40,8 +40,10 @@ export default function PrincipalStats() {
     const [isTeacherExpanded, setIsTeacherExpanded] = useState(false);
     const [detailModalVisible, setDetailModalVisible] = useState(false);
     const [revenueModalVisible, setRevenueModalVisible] = useState(false);
+    const [showRevenueDatePicker, setShowRevenueDatePicker] = useState(false);
     const [revenueSelectedDate, setRevenueSelectedDate] = useState(new Date());
     const [revenueStudents, setRevenueStudents] = useState<any[]>([]);
+    const [revenueSummary, setRevenueSummary] = useState({ monthlyTotal: 0, monthName: '' });
     const [loadingRevenueStudents, setLoadingRevenueStudents] = useState(false);
     const [revenueType, setRevenueType] = useState<'monthly' | 'onetime'>('monthly');
     const [selectedSection, setSelectedSection] = useState<any>(null);
@@ -52,7 +54,7 @@ export default function PrincipalStats() {
     const fetchStats = useCallback(async () => {
         try {
             setLoading(true);
-            const token = await AsyncStorage.getItem('token');
+            const token = await AsyncStorage.getItem('principalToken') || await AsyncStorage.getItem('token');
             const storedSessionId = await AsyncStorage.getItem('selectedSessionId');
             const userDataStr = await AsyncStorage.getItem('userData');
             const userData = userDataStr ? JSON.parse(userDataStr) : null;
@@ -105,7 +107,7 @@ export default function PrincipalStats() {
     const fetchDailyRevenueStudents = async () => {
         try {
             setLoadingRevenueStudents(true);
-            const token = await AsyncStorage.getItem('token');
+            const token = await AsyncStorage.getItem('principalToken') || await AsyncStorage.getItem('token');
             const storedSessionId = await AsyncStorage.getItem('selectedSessionId');
             const userDataStr = await AsyncStorage.getItem('userData');
             const userData = userDataStr ? JSON.parse(userDataStr) : null;
@@ -121,7 +123,16 @@ export default function PrincipalStats() {
                     } 
                 }
             );
-            setRevenueStudents(response.data);
+            
+            if (response.data.payments) {
+                setRevenueStudents(response.data.payments);
+                setRevenueSummary({
+                    monthlyTotal: response.data.monthlyTotal,
+                    monthName: response.data.monthName
+                });
+            } else {
+                setRevenueStudents(response.data);
+            }
         } catch (error) {
             console.error('Error fetching daily revenue:', error);
         } finally {
@@ -140,7 +151,7 @@ export default function PrincipalStats() {
             setLoadingDetails(true);
             setSelectedSection({ className, section });
             setDetailModalVisible(true);
-            const token = await AsyncStorage.getItem('token');
+            const token = await AsyncStorage.getItem('principalToken') || await AsyncStorage.getItem('token');
             const userDataStr = await AsyncStorage.getItem('userData');
             const userData = userDataStr ? JSON.parse(userDataStr) : null;
             const activeSessionId = userData?.current_session_id;
@@ -587,25 +598,6 @@ export default function PrincipalStats() {
                     <Text style={{ fontSize: 24, fontWeight: '900', color: theme.text }}>Financial Insights</Text>
                 </View>
 
-                {/* Period Selector */}
-                <View style={styles.monthSelector}>
-                    <TouchableOpacity style={styles.navBtn} onPress={() => {
-                        const d = new Date(selectedDate);
-                        d.setMonth(d.getMonth() - 1);
-                        setSelectedDate(d);
-                    }}>
-                        <Ionicons name="chevron-back" size={20} color={theme.text} />
-                    </TouchableOpacity>
-                    <Text style={styles.monthText}>{months[selectedDate.getMonth()]} {selectedDate.getFullYear()}</Text>
-                    <TouchableOpacity style={styles.navBtn} onPress={() => {
-                        const d = new Date(selectedDate);
-                        d.setMonth(d.getMonth() + 1);
-                        setSelectedDate(d);
-                    }}>
-                        <Ionicons name="chevron-forward" size={20} color={theme.text} />
-                    </TouchableOpacity>
-                </View>
-
                 {/* Monthly Collection Card */}
                 <TouchableOpacity 
                     activeOpacity={0.9} 
@@ -621,7 +613,37 @@ export default function PrincipalStats() {
                     >
                         <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
                             <Text style={{ color: 'rgba(255,255,255,0.7)', fontSize: 11, fontWeight: '800', letterSpacing: 1 }}>MONTHLY FEES COLLECTION</Text>
-                            <Ionicons name="calendar" size={16} color="rgba(255,255,255,0.5)" />
+                            
+                            {/* Integrated Month/Year Selector */}
+                            <View style={{ flexDirection: 'row', alignItems: 'center', backgroundColor: 'rgba(255,255,255,0.1)', borderRadius: 12, padding: 4 }}>
+                                <TouchableOpacity 
+                                    onPress={(e) => {
+                                        e.stopPropagation();
+                                        const d = new Date(selectedDate);
+                                        d.setMonth(d.getMonth() - 1);
+                                        setSelectedDate(d);
+                                    }}
+                                    style={{ padding: 4 }}
+                                >
+                                    <Ionicons name="chevron-back" size={18} color="#fff" />
+                                </TouchableOpacity>
+                                
+                                <Text style={{ color: '#fff', fontSize: 12, fontWeight: '800', marginHorizontal: 8 }}>
+                                    {months[selectedDate.getMonth()]} {selectedDate.getFullYear().toString().slice(-2)}
+                                </Text>
+
+                                <TouchableOpacity 
+                                    onPress={(e) => {
+                                        e.stopPropagation();
+                                        const d = new Date(selectedDate);
+                                        d.setMonth(d.getMonth() + 1);
+                                        setSelectedDate(d);
+                                    }}
+                                    style={{ padding: 4 }}
+                                >
+                                    <Ionicons name="chevron-forward" size={18} color="#fff" />
+                                </TouchableOpacity>
+                            </View>
                         </View>
                         <Text style={{ color: '#fff', fontSize: 28, fontWeight: '900', marginTop: 8 }}>₹{rev.monthly.collected.toLocaleString()}</Text>
                         
@@ -973,32 +995,49 @@ export default function PrincipalStats() {
                             </TouchableOpacity>
                         </View>
 
-                        {/* Date Switcher */}
-                        <View style={[styles.monthSelector, { marginVertical: 10 }]}>
-                            <TouchableOpacity style={styles.navBtn} onPress={() => {
-                                const d = new Date(revenueSelectedDate);
-                                d.setDate(d.getDate() - 1);
-                                setRevenueSelectedDate(d);
-                            }}>
-                                <Ionicons name="chevron-back" size={20} color={theme.text} />
-                            </TouchableOpacity>
-                            <Text style={styles.monthText}>
+                        {/* Date Switcher Replacement: Single Clickable Calendar Picker */}
+                        <TouchableOpacity 
+                            style={[styles.monthSelector, { marginVertical: 10, justifyContent: 'center' }]}
+                            onPress={() => setShowRevenueDatePicker(true)}
+                        >
+                            <Ionicons name="calendar-outline" size={20} color={theme.primary} />
+                            <Text style={[styles.monthText, { marginHorizontal: 12 }]}>
                                 {revenueSelectedDate.toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' })}
                             </Text>
-                            <TouchableOpacity style={styles.navBtn} onPress={() => {
-                                const d = new Date(revenueSelectedDate);
-                                d.setDate(d.getDate() + 1);
-                                if (d <= new Date()) setRevenueSelectedDate(d);
-                            }}>
-                                <Ionicons name="chevron-forward" size={20} color={theme.text} />
-                            </TouchableOpacity>
-                        </View>
+                            <Ionicons name="chevron-down" size={16} color={theme.textLight} />
+                        </TouchableOpacity>
 
-                        <View style={{ paddingHorizontal: 20, marginBottom: 10 }}>
-                            <Text style={{ fontSize: 14, fontWeight: '800', color: theme.primary }}>
-                                Total Collected: ₹{revenueStudents.reduce((sum, s) => sum + parseFloat(s.amount || 0), 0).toLocaleString()}
-                            </Text>
-                        </View>
+                        {/* COLLECTION SUMMARY: Daily vs Monthly */}
+                        {!loadingRevenueStudents && (
+                            <View style={{ paddingHorizontal: 20, marginBottom: 20, gap: 10 }}>
+                                <View style={{ 
+                                    backgroundColor: theme.primary + '10', 
+                                    padding: 15, 
+                                    borderRadius: 18, 
+                                    flexDirection: 'row', 
+                                    justifyContent: 'space-between',
+                                    alignItems: 'center',
+                                    borderWidth: 1,
+                                    borderColor: theme.primary + '30'
+                                }}>
+                                    <View>
+                                        <Text style={{ fontSize: 10, fontWeight: '900', color: theme.primary, textTransform: 'uppercase', letterSpacing: 0.5 }}>Daily Collection</Text>
+                                        <Text style={{ fontSize: 18, fontWeight: '900', color: theme.text, marginTop: 2 }}>
+                                            ₹{revenueStudents.reduce((sum, s) => sum + parseFloat(s.amount || 0), 0).toLocaleString()}
+                                        </Text>
+                                    </View>
+                                    <View style={{ height: 30, width: 1, backgroundColor: theme.primary + '20' }} />
+                                    <View style={{ alignItems: 'flex-end' }}>
+                                        <Text style={{ fontSize: 10, fontWeight: '900', color: theme.primary, textTransform: 'uppercase', letterSpacing: 0.5 }}>
+                                            Total for {revenueSummary.monthName || 'Month'}
+                                        </Text>
+                                        <Text style={{ fontSize: 18, fontWeight: '900', color: theme.text, marginTop: 2 }}>
+                                            ₹{(revenueSummary.monthlyTotal || 0).toLocaleString()}
+                                        </Text>
+                                    </View>
+                                </View>
+                            </View>
+                        )}
 
                         {loadingRevenueStudents ? (
                             <ActivityIndicator size="large" color={theme.primary} style={{ marginTop: 50 }} />
@@ -1012,6 +1051,13 @@ export default function PrincipalStats() {
                                         <View style={styles.rollBadge}>
                                             <Text style={styles.rollText}>{item.roll_no}</Text>
                                         </View>
+                                        {item.photo_url ? (
+                                            <Image source={{ uri: item.photo_url }} style={{ width: 40, height: 40, borderRadius: 20, marginRight: 12 }} />
+                                        ) : (
+                                            <View style={{ width: 40, height: 40, borderRadius: 20, backgroundColor: theme.background, justifyContent: 'center', alignItems: 'center', marginRight: 12, borderWidth: 1, borderColor: theme.border }}>
+                                                <Ionicons name="person" size={20} color={theme.textLight} />
+                                            </View>
+                                        )}
                                         <View style={{ flex: 1 }}>
                                             <Text style={styles.studentName}>{item.name}</Text>
                                             <Text style={{ fontSize: 12, color: theme.textLight }}>
@@ -1034,6 +1080,21 @@ export default function PrincipalStats() {
                                         <Text style={{ color: theme.textLight, marginTop: 15, fontSize: 16 }}>No collections on this date</Text>
                                     </View>
                                 )}
+                            />
+                        )}
+
+                        {showRevenueDatePicker && (
+                            <DateTimePicker
+                                value={revenueSelectedDate}
+                                mode="date"
+                                display="default"
+                                maximumDate={new Date()}
+                                onChange={(event, date) => {
+                                    setShowRevenueDatePicker(false);
+                                    if (date) {
+                                        setRevenueSelectedDate(date);
+                                    }
+                                }}
                             />
                         )}
                     </View>

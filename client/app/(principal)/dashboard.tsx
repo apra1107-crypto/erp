@@ -80,6 +80,22 @@ export default function PrincipalDashboard() {
   const { socket } = useSocket();
   const { isDark, theme, toggleTheme } = useTheme();
 
+  useEffect(() => {
+    const loadInitialData = async () => {
+        try {
+            const storedData = await AsyncStorage.getItem('principalData');
+            if (storedData) {
+                const parsed = JSON.parse(storedData);
+                setUserData(parsed);
+                setProfileData(parsed);
+            }
+        } catch (e) {
+            console.error('Error loading initial data:', e);
+        }
+    };
+    loadInitialData();
+  }, []);
+
   // Carousel Animation
   const scrollX = useSharedValue(0);
   const scrollHandler = useAnimatedScrollHandler({
@@ -487,15 +503,6 @@ export default function PrincipalDashboard() {
 
   const onMomentumScrollEnd = (event: any) => { setActiveSlide(Math.round(event.nativeEvent.contentOffset.x / SCREEN_WIDTH)); isInteracting.current = false; startTimer(); };
 
-  const fetchProfileImages = async (forcedToken?: string) => {
-    try {
-      const token = forcedToken || await AsyncStorage.getItem('principalToken') || await AsyncStorage.getItem('token');
-      const res = await axios.get(`${API_ENDPOINTS.PRINCIPAL}/profile`, { headers: { Authorization: `Bearer ${token}` } });
-      setProfileData(res.data.profile);
-      setUserData((prev: any) => ({ ...prev, ...res.data.profile }));
-    } catch (e) {}
-  };
-
   const checkSubscription = async (id: any) => {
     try {
       const token = await AsyncStorage.getItem('principalToken') || await AsyncStorage.getItem('token');
@@ -512,6 +519,10 @@ export default function PrincipalDashboard() {
       if (!sId) return;
       const res = await axios.get(`${API_ENDPOINTS.PRINCIPAL}/dashboard`, { headers: { Authorization: `Bearer ${token}`, 'x-academic-session-id': sId.toString() } });
       if (res.data.flashcards) setFlashcards(res.data.flashcards);
+      if (res.data.institute) {
+          setProfileData(res.data.institute);
+          setUserData((prev: any) => ({ ...prev, ...res.data.institute }));
+      }
     } catch (e) {}
   };
 
@@ -571,11 +582,15 @@ export default function PrincipalDashboard() {
             return;
         }
 
-        const profileRes = await axios.get(`${API_ENDPOINTS.PRINCIPAL}/profile`, { headers: { Authorization: `Bearer ${token}` } });
+        const profileUrl = `${API_ENDPOINTS.PRINCIPAL}/profile`;
+        console.log(`[DashboardRefresh] Attempting profile fetch: ${profileUrl}`);
+        const profileRes = await axios.get(profileUrl, { headers: { Authorization: `Bearer ${token}` } });
         const profile = profileRes.data.profile;
-        
+        console.log('[DashboardRefresh] Profile fetched successfully');
+
+        // Update local states
         setProfileData(profile);
-        setUserData(profile);
+        setUserData((prev: any) => ({ ...prev, ...profile }));
 
         // Update principal data in storage to keep it fresh
         await AsyncStorage.setItem('principalData', JSON.stringify(profile));
@@ -617,6 +632,15 @@ export default function PrincipalDashboard() {
       const res = await axios.get(`${API_ENDPOINTS.PRINCIPAL}/search?query=${t}`, { headers: { Authorization: `Bearer ${token}` } });
       setSearchResults(res.data.results);
     } catch (e) {} finally { setIsSearching(false); }
+  };
+
+  const handleCreateResult = (item: any) => {
+    dismissSearch();
+    if (item.type === 'student') {
+        router.push({ pathname: '/(principal)/students', params: { searchId: item.id } });
+    } else if (item.type === 'teacher') {
+        router.push({ pathname: '/(principal)/teachers', params: { searchId: item.id } });
+    }
   };
 
   const handleAddNewAccount = async () => {
@@ -692,7 +716,7 @@ export default function PrincipalDashboard() {
 
   const styles = useMemo(() => StyleSheet.create({
     container: { flex: 1, backgroundColor: theme.background },
-    header: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingRight: 20, paddingTop: insets.top + 10, paddingBottom: 10, zIndex: 10 },
+    header: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingRight: 20, paddingTop: insets.top, paddingBottom: 10, zIndex: 10 },
     headerTouchArea: { marginLeft: 5 },
     headerLogo: { width: 100, height: 45 },
     headerRight: { flexDirection: 'row', alignItems: 'center', gap: 10 },
@@ -787,12 +811,14 @@ export default function PrincipalDashboard() {
                     Toast.show({ 
                         type: 'subscription', 
                         position: 'bottom',
-                        bottomOffset: 40,
+                        bottomOffset: 65,
                         props: { 
                             label: visuals.label, 
                             timeLeft: visuals.timeLeft,
                             expiryDate: expiryDate,
-                            color: visuals.color
+                            color: visuals.color,
+                            monthlyPrice: subData?.monthly_price,
+                            startDate: subData?.subscription_start_date || subData?.created_at,
                         } 
                     });
                 }} 

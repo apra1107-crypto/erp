@@ -80,7 +80,7 @@ export default function PromotionScreen() {
 
     const fetchSessions = async () => {
         try {
-            const token = await AsyncStorage.getItem('token');
+            const token = await AsyncStorage.getItem('principalToken') || await AsyncStorage.getItem('token');
             const storedSessionId = await AsyncStorage.getItem('selectedSessionId');
             const response = await axios.get(API_ENDPOINTS.ACADEMIC_SESSIONS, {
                 headers: { Authorization: `Bearer ${token}` }
@@ -104,7 +104,7 @@ export default function PromotionScreen() {
     const fetchPromotedTracking = async (sessionId: any) => {
         if (!sessionId) return;
         try {
-            const token = await AsyncStorage.getItem('token');
+            const token = await AsyncStorage.getItem('principalToken') || await AsyncStorage.getItem('token');
             const response = await axios.get(
                 `${API_ENDPOINTS.PRINCIPAL}/students-by-session/${sessionId}`,
                 { headers: { Authorization: `Bearer ${token}` } }
@@ -118,7 +118,7 @@ export default function PromotionScreen() {
     const fetchClasses = async () => {
         try {
             setLoading(true);
-            const token = await AsyncStorage.getItem('token');
+            const token = await AsyncStorage.getItem('principalToken') || await AsyncStorage.getItem('token');
             const storedSessionId = await AsyncStorage.getItem('selectedSessionId');
             const userData = await AsyncStorage.getItem('userData');
             const sessionId = storedSessionId || (userData ? JSON.parse(userData).current_session_id : null);
@@ -192,7 +192,7 @@ export default function PromotionScreen() {
 
         try {
             setPromoting(true);
-            const token = await AsyncStorage.getItem('token');
+            const token = await AsyncStorage.getItem('principalToken') || await AsyncStorage.getItem('token');
             await axios.post(API_ENDPOINTS.PROMOTION + '/student', {
                 studentId: selectedStudent.id,
                 ...promotionData

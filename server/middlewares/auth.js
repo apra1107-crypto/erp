@@ -108,7 +108,6 @@ const studentOnly = (req, res, next) => {
 };
 
 const staffOnly = (req, res, next) => {
-  console.log('DEBUG: staffOnly check for user:', req.user);
   if (req.user && (
     req.user.type === 'teacher' ||
     req.user.role === 'principal' ||
@@ -117,7 +116,6 @@ const staffOnly = (req, res, next) => {
   )) {
     next();
   } else {
-    console.log('DEBUG: staffOnly access denied for user:', req.user);
     res.status(403).json({ message: 'Access denied. Staff only.' });
   }
 };

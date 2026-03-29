@@ -50,7 +50,7 @@ export const sendTestNotification = async (req, res) => {
 export const updatePushToken = async (req, res) => {
     try {
         const { push_token } = req.body;
-        const unique_code = req.user.unique_code; // Use unique_code from JWT
+        const unique_code = req.user.unique_code;
 
         if (!unique_code) {
             // Fallback to id if unique_code is missing for some reason
@@ -579,7 +579,7 @@ export const getStudentFeesData = async (req, res) => {
 
         // 1. Get student fee structure
         const studentRes = await pool.query(
-            'SELECT monthly_fees, transport_fees, transport_facility FROM students WHERE id = $1',
+            'SELECT monthly_fees, transport_fees, transport_facility, admission_date FROM students WHERE id = $1',
             [studentId]
         );
         const student = studentRes.rows[0];
@@ -591,6 +591,17 @@ export const getStudentFeesData = async (req, res) => {
              ORDER BY year DESC, month DESC`,
             [instituteId, sessionId]
         );
+
+        // Filter activated months based on admission date
+        const admissionDate = new Date(student.admission_date);
+        const admissionMonth = admissionDate.getMonth() + 1; // getMonth() is 0-indexed
+        const admissionYear = admissionDate.getFullYear();
+
+        const filteredActivatedMonths = activatedMonthsRes.rows.filter(m => {
+            if (m.year > admissionYear) return true;
+            if (m.year === admissionYear && m.month >= admissionMonth) return true;
+            return false;
+        });
 
         // 3. Get all published one-time fees for this student (Refined)
         const oneTimeFeesRes = await pool.query(
@@ -634,7 +645,7 @@ export const getStudentFeesData = async (req, res) => {
                 transport_fees: parseFloat(student.transport_fees || 0),
                 transport_facility: student.transport_facility
             },
-            activated_months: activatedMonthsRes.rows,
+            activated_months: filteredActivatedMonths,
             one_time_fees: oneTimeFeesRes.rows,
             payments: paymentsRes.rows,
             extra_charges: extraChargesRes.rows,

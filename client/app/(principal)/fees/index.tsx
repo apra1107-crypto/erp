@@ -15,6 +15,7 @@ import AddExtraChargeModal from '../../../components/AddExtraChargeModal';
 import OneTimeFeesTab from '../../../components/OneTimeFeesTab';
 import { generateReceiptPDF } from '../../../utils/receiptGenerator';
 import MonthlyTransactionBottomSheet from '../../../components/MonthlyTransactionBottomSheet';
+import FeeReceiptPreview from '../../../components/FeeReceiptPreview';
 
 if (Platform.OS === 'android' && UIManager.setLayoutAnimationEnabledExperimental) {
   UIManager.setLayoutAnimationEnabledExperimental(true);
@@ -49,6 +50,8 @@ export default function Fees() {
     const [instituteData, setInstituteData] = useState<any>(null);
     const [showTransactionDetails, setShowTransactionDetails] = useState(false);
     const [selectedTransactionData, setSelectedTransactionData] = useState<any>(null);
+    const [showPreview, setShowPreview] = useState(false);
+    const [previewData, setPreviewData] = useState<any>(null);
 
     // Summary Stats
     const stats = useMemo(() => {
@@ -81,7 +84,7 @@ export default function Fees() {
     const fetchData = async () => {
         setLoading(true);
         try {
-            const token = await AsyncStorage.getItem('token');
+            const token = await AsyncStorage.getItem('principalToken') || await AsyncStorage.getItem('token');
             const [statusRes, activationRes, profileRes] = await Promise.all([
                 axios.get(`${API_ENDPOINTS.PRINCIPAL}/student/fees-status`, {
                     params: { month: selectedMonth, year: selectedYear },
@@ -129,7 +132,7 @@ export default function Fees() {
     const toggleActivation = async () => {
         setProcessing(true);
         try {
-            const token = await AsyncStorage.getItem('token');
+            const token = await AsyncStorage.getItem('principalToken') || await AsyncStorage.getItem('token');
             await axios.post(`${API_ENDPOINTS.PRINCIPAL}/student/toggle-monthly-fees`, {
                 month: selectedMonth,
                 year: selectedYear,
@@ -169,7 +172,7 @@ export default function Fees() {
                     onPress: async () => {
                         setProcessingId(student.id);
                         try {
-                            const token = await AsyncStorage.getItem('token');
+                            const token = await AsyncStorage.getItem('principalToken') || await AsyncStorage.getItem('token');
                             await axios.post(`${API_ENDPOINTS.PRINCIPAL}/student/collect-fee/${student.id}`, {
                                 month: selectedMonth,
                                 year: selectedYear
@@ -198,12 +201,10 @@ export default function Fees() {
             ];
 
             await generateReceiptPDF({
-                institute: instituteData,
                 student,
                 payment: { ...student, month: selectedMonth, year: selectedYear },
                 breakage,
-                type: 'MONTHLY',
-                months
+                type: 'MONTHLY'
             });
         } catch (error) {
             console.error('Download Error:', error);
@@ -211,6 +212,24 @@ export default function Fees() {
         } finally {
             setProcessingId(null);
         }
+    };
+
+    const handlePreviewMonthly = (student: any) => {
+        if (!instituteData) return;
+        const breakage = [
+            { label: 'Monthly Tuition Fee', amount: parseFloat(student.monthly_fees || 0) },
+            ...(student.transport_facility ? [{ label: 'Transport Fee', amount: parseFloat(student.transport_fees || 0) }] : []),
+            ...(student.extra_charges || []).map((ec: any) => ({ label: ec.reason, amount: parseFloat(ec.amount) }))
+        ];
+
+        setPreviewData({
+            institute: instituteData,
+            student,
+            payment: { ...student, month: selectedMonth, year: selectedYear },
+            breakage,
+            type: 'MONTHLY'
+        });
+        setShowPreview(true);
     };
 
     const renderStudentCard = ({ item }: { item: any }) => {
@@ -307,6 +326,12 @@ export default function Fees() {
                             </TouchableOpacity>
                             <TouchableOpacity 
                                 style={styles.iconBtn}
+                                onPress={() => handlePreviewMonthly(item)}
+                            >
+                                <Ionicons name="eye-outline" size={20} color={theme.primary} />
+                            </TouchableOpacity>
+                            <TouchableOpacity 
+                                style={styles.iconBtn}
                                 onPress={() => handleDownloadMonthly(item)}
                                 disabled={isProcessing}
                             >
@@ -325,7 +350,7 @@ export default function Fees() {
 
     const handleExtraCharge = async (charges: any[], studentIds: number[]) => {
         try {
-            const token = await AsyncStorage.getItem('token');
+            const token = await AsyncStorage.getItem('principalToken') || await AsyncStorage.getItem('token');
             await axios.post(`${API_ENDPOINTS.PRINCIPAL}/student/add-extra-charge`, {
                 charges,
                 month: selectedMonth,
@@ -603,6 +628,12 @@ export default function Fees() {
                 isOpen={showTransactionDetails}
                 onClose={() => setShowTransactionDetails(false)}
                 data={selectedTransactionData}
+            />
+
+            <FeeReceiptPreview 
+                isOpen={showPreview}
+                onClose={() => setShowPreview(false)}
+                data={previewData}
             />
         </View>
     );

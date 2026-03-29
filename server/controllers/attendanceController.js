@@ -3,8 +3,9 @@ import { sendPushNotification, sendMulticastPushNotification } from '../utils/pu
 import { Expo } from 'expo-server-sdk';
 import { emitToStudent, emitToTeacher } from '../utils/socket.js';
 
-// Take Attendance (Initial save for a date)
+// Take Attendance (Initial save or update for a date)
 const takeAttendance = async (req, res) => {
+    const client = await pool.connect();
     try {
         const teacherId = req.user.id;
         const instituteId = req.user.institute_id || req.user.id;
@@ -16,7 +17,7 @@ const takeAttendance = async (req, res) => {
             sessionId = sessionResult.rows[0]?.current_session_id;
         }
 
-        if (!className || !section || !date || !attendance || !Array.isArray(attendance)) {
+        if (!className || !section || !date || !attendance || !Array.isArray(attendance) || attendance.length === 0) {
             return res.status(400).json({ message: 'Invalid request data' });
         }
 
@@ -33,26 +34,25 @@ const takeAttendance = async (req, res) => {
             actualTeacherId = teacherId; 
         }
 
-        // Check if attendance already exists
-        const existingCheck = await pool.query(
-            'SELECT COUNT(*) FROM attendance WHERE date = $1 AND class = $2 AND section = $3 AND institute_id = $4 AND session_id = $5',
-            [date, className, section, instituteId, sessionId]
-        );
-
-        const isUpdate = parseInt(existingCheck.rows[0].count) > 0;
         const totalStudents = attendance.length;
         const presentCount = attendance.filter(a => a.status === 'present').length;
         const absentCount = totalStudents - presentCount;
 
+        // Start Transaction
+        await client.query('BEGIN');
+
+        // 1. Get existing attendance in one go to calculate changes
+        const existingRes = await client.query(
+            'SELECT a.student_id, a.status, s.roll_no FROM attendance a JOIN students s ON a.student_id = s.id WHERE a.date = $1 AND a.class = $2 AND a.section = $3 AND a.institute_id = $4 AND a.session_id = $5',
+            [date, className, section, instituteId, sessionId]
+        );
+
+        const prevMap = {};
+        existingRes.rows.forEach(row => { prevMap[row.student_id] = { status: row.status, roll_no: row.roll_no }; });
+        const isUpdate = existingRes.rows.length > 0;
+
+        let changesSummary = null;
         if (isUpdate) {
-            const prevAttendance = await pool.query(
-                'SELECT a.student_id, a.status, s.roll_no FROM attendance a JOIN students s ON a.student_id = s.id WHERE a.date = $1 AND a.class = $2 AND a.section = $3 AND a.institute_id = $4 AND a.session_id = $5',
-                [date, className, section, instituteId, sessionId]
-            );
-
-            const prevMap = {};
-            prevAttendance.rows.forEach(row => { prevMap[row.student_id] = { status: row.status, roll_no: row.roll_no }; });
-
             let changesCount = 0;
             let presentToAbsent = [];
             let absentToPresent = [];
@@ -65,90 +65,66 @@ const takeAttendance = async (req, res) => {
                     if (prevData.status === 'absent' && status === 'present') absentToPresent.push(prevData.roll_no);
                 }
             });
-
-            const changesSummary = JSON.stringify({ total: changesCount, presentToAbsent, absentToPresent });
-
-            for (const { student_id, status } of attendance) {
-                await pool.query(
-                    `INSERT INTO attendance (institute_id, teacher_id, student_id, class, section, date, status, updated_at, session_id)
-           VALUES ($1, $2, $3, $4, $5, $6, $7, NOW(), $8)
-           ON CONFLICT (student_id, date, session_id) 
-           DO UPDATE SET status = $7, teacher_id = $2, updated_at = NOW()`,
-                    [instituteId, actualTeacherId, student_id, className, section, date, status, sessionId]
-                );
-                
-                // Emit socket event to each student
-                emitToStudent(student_id, 'attendance_marked', { 
-                    status, 
-                    date, 
-                    teacher_name: teacherName 
-                });
-            }
-
-            await pool.query(
-                `INSERT INTO attendance_logs 
-         (institute_id, teacher_id, teacher_name, class, section, date, action_type, total_students, present_count, absent_count, changes_made, session_id)
-         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)`,
-                [instituteId, actualTeacherId, teacherName, className, section, date, 'modified', totalStudents, presentCount, absentCount, changesSummary, sessionId]
-            );
-
-            // Send notifications for modified records
-            await sendAttendanceNotifications(attendance, date, teacherName);
-
-            // Fetch updated institute stats and emit to teachers
-            const statsRes = await pool.query(
-                `SELECT COUNT(*) FROM attendance WHERE institute_id = $1 AND session_id = $2 AND date = $3 AND status = 'present'`,
-                [instituteId, sessionId, date]
-            );
-            const totalInstitutePresent = parseInt(statsRes.rows[0].count);
-            emitToTeacher(instituteId, 'attendance_stats_update', {
-                date,
-                total_present: totalInstitutePresent
-            });
-
-            return res.status(200).json({ message: 'Attendance updated successfully', stats: { total: totalStudents, present: presentCount, absent: absentCount } });
-        } else {
-            for (const { student_id, status } of attendance) {
-                await pool.query(
-                    `INSERT INTO attendance (institute_id, teacher_id, student_id, class, section, date, status, session_id)
-           VALUES ($1, $2, $3, $4, $5, $6, $7, $8)`,
-                    [instituteId, actualTeacherId, student_id, className, section, date, status, sessionId]
-                );
-
-                // Emit socket event to each student
-                emitToStudent(student_id, 'attendance_marked', { 
-                    status, 
-                    date, 
-                    teacher_name: teacherName 
-                });
-            }
-
-            await pool.query(
-                `INSERT INTO attendance_logs 
-         (institute_id, teacher_id, teacher_name, class, section, date, action_type, total_students, present_count, absent_count, changes_made, session_id)
-         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)`,
-                [instituteId, actualTeacherId, teacherName, className, section, date, 'initial', totalStudents, presentCount, absentCount, null, sessionId]
-            );
-
-            // Send notifications for initial records
-            await sendAttendanceNotifications(attendance, date, teacherName);
-
-            // Fetch updated institute stats and emit to teachers
-            const statsRes = await pool.query(
-                `SELECT COUNT(*) FROM attendance WHERE institute_id = $1 AND session_id = $2 AND date = $3 AND status = 'present'`,
-                [instituteId, sessionId, date]
-            );
-            const totalInstitutePresent = parseInt(statsRes.rows[0].count);
-            emitToTeacher(instituteId, 'attendance_stats_update', {
-                date,
-                total_present: totalInstitutePresent
-            });
-
-            return res.status(201).json({ message: 'Attendance saved successfully', stats: { total: totalStudents, present: presentCount, absent: absentCount } });
+            changesSummary = JSON.stringify({ total: changesCount, presentToAbsent, absentToPresent });
         }
+
+        // 2. Perform Bulk Upsert using unnest for maximum performance
+        const studentIds = attendance.map(a => a.student_id);
+        const statuses = attendance.map(a => a.status);
+
+        await client.query(`
+            INSERT INTO attendance (institute_id, teacher_id, student_id, class, section, date, status, updated_at, session_id)
+            SELECT $1, $2, unnest($3::int[]), $4, $5, $6, unnest($7::text[]), NOW(), $8
+            ON CONFLICT (student_id, date, session_id) 
+            DO UPDATE SET status = EXCLUDED.status, teacher_id = EXCLUDED.teacher_id, updated_at = NOW()
+        `, [instituteId, actualTeacherId, studentIds, className, section, date, statuses, sessionId]);
+
+        // 3. Insert single audit log
+        const logResult = await client.query(
+            `INSERT INTO attendance_logs 
+            (institute_id, teacher_id, teacher_name, class, section, date, action_type, total_students, present_count, absent_count, changes_made, session_id)
+            VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12) RETURNING id`,
+            [instituteId, actualTeacherId, teacherName, className, section, date, isUpdate ? 'modified' : 'initial', totalStudents, presentCount, absentCount, changesSummary, sessionId]
+        );
+        const logId = logResult.rows[0].id;
+
+        await client.query('COMMIT');
+
+        // Respond to the client immediately
+        res.status(isUpdate ? 200 : 201).json({ 
+            message: isUpdate ? 'Attendance updated successfully' : 'Attendance saved successfully', 
+            stats: { total: totalStudents, present: presentCount, absent: absentCount } 
+        });
+
+        // --- Post-response Background Tasks (Push, Socket and Stats) ---
+        (async () => {
+            try {
+                // 1. Instant Push Notifications (Background dispatch)
+                sendAttendanceNotifications(attendance, date, teacherName);
+                pool.query('UPDATE attendance_logs SET push_sent_at = NOW() WHERE id = $1', [logId]);
+
+                // 2. Socket.io updates
+                attendance.forEach(({ student_id, status }) => {
+                    emitToStudent(student_id, 'attendance_marked', { status, date, teacher_name: teacherName });
+                });
+
+                // 3. Update institute-wide stats
+                const statsRes = await pool.query(
+                    `SELECT COUNT(*) FROM attendance WHERE institute_id = $1 AND session_id = $2 AND date = $3 AND status = 'present'`,
+                    [instituteId, sessionId, date]
+                );
+                emitToTeacher(instituteId, 'attendance_stats_update', { date, total_present: parseInt(statsRes.rows[0].count) });
+            } catch (bgError) {
+                console.error('[Background Task Error]:', bgError);
+            }
+        })();
+
     } catch (error) {
+        await client.query('ROLLBACK');
         console.error('Take attendance error:', error);
         res.status(500).json({ message: 'Server error while saving attendance' });
+    } finally {
+        client.release();
     }
 };
 
@@ -156,36 +132,26 @@ const takeAttendance = async (req, res) => {
 async function sendAttendanceNotifications(attendance, date, teacherName) {
     try {
         const studentIds = attendance.map(a => parseInt(a.student_id));
-        console.log(`[Notification] Preparing attendance notifications for ${studentIds.length} students on ${date}`);
         
-        // Fetch student details including photo_url
+        // Fetch student details
         const tokensRes = await pool.query(
-            "SELECT id, name, push_token, photo_url FROM students WHERE id = ANY($1) AND push_token IS NOT NULL AND push_token != ''",
+            "SELECT id, name, push_token FROM students WHERE id = ANY($1) AND push_token IS NOT NULL AND push_token != ''",
             [studentIds]
         );
 
-        console.log(`[Notification] Found ${tokensRes.rows.length} students with active push tokens`);
+        if (tokensRes.rows.length === 0) return;
 
-        // Use string keys for the map
         const studentMap = {};
         tokensRes.rows.forEach(r => { 
             studentMap[r.id.toString()] = {
                 token: r.push_token,
-                name: r.name,
-                photo: r.photo_url
+                name: r.name
             }; 
         });
 
-        // Format Date: "12th Feb 2026"
         const dateObj = new Date(date);
-        const day = dateObj.getDate();
-        const month = dateObj.toLocaleString('en-IN', { month: 'short' });
-        const year = dateObj.getFullYear();
-        const formattedDate = `${day} ${month} ${year}`;
-        
-        // Get Time: "10:30 AM"
-        const now = new Date();
-        const timeStr = now.toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit', hour12: true });
+        const formattedDate = `${dateObj.getDate()} ${dateObj.toLocaleString('en-IN', { month: 'short' })} ${dateObj.getFullYear()}`;
+        const timeStr = new Date().toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit', hour12: true });
 
         let messages = [];
 
@@ -195,40 +161,21 @@ async function sendAttendanceNotifications(attendance, date, teacherName) {
 
             if (studentData && studentData.token && Expo.isExpoPushToken(studentData.token)) {
                 const isPresent = record.status === 'present';
-                
-                // Customize UI based on status
-                const statusColor = isPresent ? '#2ecc71' : '#e74c3c'; // Green or Red
                 const statusIcon = isPresent ? '✅' : '❌';
                 const statusText = isPresent ? 'PRESENT' : 'ABSENT';
-
-                // Professional Message Format
-                const title = `${statusIcon} Attendance: ${statusText}`;
-                const body = `Dear ${studentData.name}, you have been marked ${statusText} today (${formattedDate}).\n📅 ${formattedDate}  ⏰ ${timeStr}`;
 
                 messages.push({
                     to: studentData.token,
                     sound: 'default',
-                    title: title,
-                    body: body,
+                    title: `${statusIcon} Attendance: ${statusText}`,
+                    body: `Dear ${studentData.name}, you have been marked ${statusText} today (${formattedDate}).\n📅 ${formattedDate}  ⏰ ${timeStr}`,
+                    priority: 'high',
+                    channelId: 'klassin-alerts-v3',
                     data: { 
                         type: 'attendance', 
                         date,
-                        student_id: sid,
                         status: record.status,
-                        photo_url: studentData.photo,
-                        teacher_name: teacherName, // Added teacher name here
-                        student_name: studentData.name // Added student name for robust UI handling
-                    },
-                    // Android Specific UI Enhancements
-                    android: {
-                        color: statusColor, // Icon/Accent Color
-                        largeIcon: studentData.photo || undefined, // Student Face on the right
-                        channelId: 'klassin-alerts-v2', // High Priority Channel
-                    },
-                    // iOS Specific
-                    ios: {
-                        sound: 'default',
-                        _displayInForeground: true
+                        teacher_name: teacherName 
                     }
                 });
             }
@@ -236,12 +183,9 @@ async function sendAttendanceNotifications(attendance, date, teacherName) {
 
         if (messages.length > 0) {
             await sendMulticastPushNotification(messages);
-        } else {
-            console.log('[Notification] No valid tokens to send to.');
         }
-
     } catch (error) {
-        console.error('[Notification] Error in sendAttendanceNotifications:', error);
+        console.error('[Push Error] Attendance:', error);
     }
 }
 
@@ -409,4 +353,63 @@ const getAttendanceStatusBySection = async (req, res) => {
     }
 };
 
-export { takeAttendance, getAttendance, getAttendanceLogs, getMyAttendance, getStudentAttendance, getAttendanceStatusBySection };
+// Get Attendance Dashboard (Sync all data in one request)
+const getAttendanceDashboard = async (req, res) => {
+    try {
+        const instituteId = req.user.institute_id || req.user.id;
+        const { class: className, section, date } = req.query;
+        let sessionId = req.user.current_session_id;
+
+        if (!sessionId || sessionId === 'undefined') {
+            const sessionResult = await pool.query('SELECT current_session_id FROM institutes WHERE id = $1', [instituteId]);
+            sessionId = sessionResult.rows[0]?.current_session_id;
+        }
+
+        if (!className || !section || !date) {
+            return res.status(400).json({ message: 'Class, section, and date are required' });
+        }
+
+        // Run all queries in parallel on the DB/Server
+        const [studentsRes, attendanceRes, logsRes, requestsRes] = await Promise.all([
+            // 1. Fetch Students
+            pool.query(
+                "SELECT id, name, roll_no, photo_url FROM students WHERE class = $1 AND section = $2 AND institute_id = $3 AND session_id = $4 ORDER BY roll_no::int",
+                [className, section, instituteId, sessionId]
+            ),
+            // 2. Fetch Existing Attendance
+            pool.query(
+                "SELECT student_id, status FROM attendance WHERE date = $1 AND class = $2 AND section = $3 AND institute_id = $4 AND session_id = $5",
+                [date, className, section, instituteId, sessionId]
+            ),
+            // 3. Fetch Logs
+            pool.query(
+                "SELECT * FROM attendance_logs WHERE date = $1 AND class = $2 AND section = $3 AND institute_id = $4 AND session_id = $5 ORDER BY created_at DESC",
+                [date, className, section, instituteId, sessionId]
+            ),
+            // 4. Fetch Absent Requests
+            pool.query(
+                "SELECT r.*, s.name as student_name, s.roll_no, s.photo_url FROM absent_requests r JOIN students s ON r.student_id = s.id WHERE r.date = $1 AND r.class = $2 AND r.section = $3 AND r.institute_id = $4 AND r.session_id = $5",
+                [date, className, section, instituteId, sessionId]
+            )
+        ]);
+
+        // Format attendance into a Map for easy frontend use
+        const attendanceMap = {};
+        attendanceRes.rows.forEach(a => {
+            attendanceMap[a.student_id] = a.status;
+        });
+
+        res.status(200).json({
+            students: studentsRes.rows,
+            attendance: attendanceMap,
+            logs: logsRes.rows,
+            absentRequests: requestsRes.rows
+        });
+
+    } catch (error) {
+        console.error('Sync attendance dashboard error:', error);
+        res.status(500).json({ message: 'Server error while syncing attendance data' });
+    }
+};
+
+export { takeAttendance, getAttendance, getAttendanceLogs, getMyAttendance, getStudentAttendance, getAttendanceStatusBySection, getAttendanceDashboard };

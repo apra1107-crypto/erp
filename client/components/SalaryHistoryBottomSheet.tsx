@@ -33,7 +33,9 @@ const SalaryHistoryBottomSheet = ({ visible, onClose, teacher, role = 'principal
     const fetchHistory = async () => {
         setLoading(true);
         try {
-            const token = await AsyncStorage.getItem(role === 'teacher' ? 'teacherToken' : 'token');
+            const token = role === 'teacher' 
+                ? await AsyncStorage.getItem('teacherToken') 
+                : (await AsyncStorage.getItem('principalToken') || await AsyncStorage.getItem('token'));
             const storedSessionId = await AsyncStorage.getItem('selectedSessionId');
             const url = role === 'teacher' 
                 ? `${API_ENDPOINTS.SALARY}/my-history`

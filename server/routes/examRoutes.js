@@ -11,6 +11,8 @@ import {
     getClassStudents,
     togglePublishExam,
     getPublishedExams,
+    generateBulkPDF,
+    generateStudentPDF,
 } from '../controllers/examController.js';
 import { protect, staffOnly, studentOnly } from '../middlewares/auth.js';
 
@@ -21,6 +23,7 @@ router.use(protect);
 // Student Routes
 router.get('/student/published', studentOnly, getPublishedExams);
 router.get('/:exam_id/marksheet/:student_id', getStudentMarksheet); // Accessible by both staff and student
+router.post('/:id/generate-student-pdf', studentOnly, generateStudentPDF);
 
 // Staff Routes (Principal/Teacher)
 router.get('/students/search-class', staffOnly, getClassStudents);
@@ -32,6 +35,7 @@ router.put('/:id/stats', staffOnly, updateExamStats);
 router.get('/:id/grid', staffOnly, getExamStudents);
 router.post('/:exam_id/student/save', staffOnly, saveStudentMarks);
 router.patch('/:id/toggle-publish', staffOnly, togglePublishExam);
+router.post('/:id/generate-bulk-pdf', staffOnly, generateBulkPDF);
 
 export default router;
 

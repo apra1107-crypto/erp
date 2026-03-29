@@ -35,15 +35,21 @@ export default function TransportDashboard() {
 
     const fetchBuses = async () => {
         try {
-            const token = await AsyncStorage.getItem('token');
+            const token = await AsyncStorage.getItem('principalToken') || await AsyncStorage.getItem('token');
             const storedSessionId = await AsyncStorage.getItem('selectedSessionId');
-            const userDataStr = await AsyncStorage.getItem('userData');
+            const userDataStr = await AsyncStorage.getItem('principalData') || await AsyncStorage.getItem('userData');
             const sessionId = storedSessionId || (userDataStr ? JSON.parse(userDataStr).current_session_id : null);
+
+            if (!sessionId) {
+                console.error('No session ID found for transport fetch');
+                setLoading(false);
+                return;
+            }
 
             const response = await axios.get(`${API_ENDPOINTS.TRANSPORT}/list`, {
                 headers: { 
                     Authorization: `Bearer ${token}`,
-                    'x-academic-session-id': sessionId?.toString()
+                    'x-academic-session-id': sessionId.toString()
                 }
             });
             setBuses(response.data.buses || []);
@@ -107,9 +113,9 @@ export default function TransportDashboard() {
         }
         
         try {
-            const token = await AsyncStorage.getItem('token');
+            const token = await AsyncStorage.getItem('principalToken') || await AsyncStorage.getItem('token');
             const storedSessionId = await AsyncStorage.getItem('selectedSessionId');
-            const userDataStr = await AsyncStorage.getItem('userData');
+            const userDataStr = await AsyncStorage.getItem('principalData') || await AsyncStorage.getItem('userData');
             const sessionId = storedSessionId || (userDataStr ? JSON.parse(userDataStr).current_session_id : null);
 
             const headers = { 
@@ -143,9 +149,9 @@ export default function TransportDashboard() {
                 style: 'destructive',
                 onPress: async () => {
                     try {
-                        const token = await AsyncStorage.getItem('token');
+                        const token = await AsyncStorage.getItem('principalToken') || await AsyncStorage.getItem('token');
                         const storedSessionId = await AsyncStorage.getItem('selectedSessionId');
-                        const userDataStr = await AsyncStorage.getItem('userData');
+                        const userDataStr = await AsyncStorage.getItem('principalData') || await AsyncStorage.getItem('userData');
                         const sessionId = storedSessionId || (userDataStr ? JSON.parse(userDataStr).current_session_id : null);
 
                         await axios.delete(`${API_ENDPOINTS.TRANSPORT}/delete/${id}`, {
@@ -281,7 +287,7 @@ export default function TransportDashboard() {
 
         // Modal Styles
         modalOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.5)', justifyContent: 'flex-end' },
-        modalContainer: { backgroundColor: theme.card, borderTopLeftRadius: 30, borderTopRightRadius: 30, paddingBottom: 20, height: '85%' },
+        modalContainer: { backgroundColor: theme.card, borderTopLeftRadius: 30, borderTopRightRadius: 30, borderBottomLeftRadius: 30, borderBottomRightRadius: 30, paddingBottom: 20, height: '80%', marginBottom: 30, marginHorizontal: 10 },
         modalHeader: { padding: 20, borderBottomWidth: 1, borderBottomColor: theme.border, flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
         modalTitle: { fontSize: 18, fontWeight: '800', color: theme.text },
         modalBody: { padding: 20 },

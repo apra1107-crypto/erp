@@ -32,14 +32,19 @@ export const usePushNotifications = (): PushNotificationState => {
         if (Notifications) {
             try {
                 Notifications.setNotificationHandler({
-                    handleNotification: async () => ({
-                        shouldShowAlert: true,
-                        shouldPlaySound: true,
-                        shouldSetBadge: true,
-                        shouldShowBanner: true,
-                        shouldShowList: true,
-                        priority: Notifications.AndroidNotificationPriority.MAX,
-                    }),
+                    handleNotification: async (notification: any) => {
+                        // PRODUCTION UX: Only show banners in foreground for HIGH PRIORITY types
+                        const type = notification.request.content.data?.type;
+                        const isHighPriority = ['attendance', 'homework', 'exam', 'notice'].includes(type);
+
+                        return {
+                            shouldShowAlert: isHighPriority,
+                            shouldPlaySound: true,
+                            shouldSetBadge: true,
+                            shouldShowBanner: isHighPriority,
+                            priority: Notifications.AndroidNotificationPriority.MAX,
+                        };
+                    },
                 });
             } catch (e) {
                 console.warn("Failed to set notification handler", e);
@@ -53,7 +58,7 @@ export const usePushNotifications = (): PushNotificationState => {
         let token;
 
         if (Platform.OS === 'android') {
-            await Notifications.setNotificationChannelAsync('klassin-alerts-v2', {
+            await Notifications.setNotificationChannelAsync('klassin-alerts-v3', {
                 name: 'Klassin Alerts',
                 importance: Notifications.AndroidImportance.MAX,
                 vibrationPattern: [0, 250, 250, 250],

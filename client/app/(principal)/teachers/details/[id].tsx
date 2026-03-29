@@ -1,5 +1,5 @@
 import { useState, useEffect, useMemo } from 'react';
-import { View, Text, StyleSheet, ScrollView, TextInput, TouchableOpacity, Image, Switch, ActivityIndicator, Alert, Platform, StatusBar } from 'react-native';
+import { View, Text, StyleSheet, ScrollView, TextInput, TouchableOpacity, Image, Switch, ActivityIndicator, Alert, Platform, StatusBar, KeyboardAvoidingView } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useRouter, useLocalSearchParams } from 'expo-router';
 import * as ImagePicker from 'expo-image-picker';
@@ -12,6 +12,39 @@ import { useTheme } from '../../../../context/ThemeContext';
 import { API_ENDPOINTS } from '../../../../constants/Config';
 import SalaryHistoryBottomSheet from '../../../../components/SalaryHistoryBottomSheet';
 import TeacherAttendanceBottomSheet from '../../../../components/TeacherAttendanceBottomSheet';
+
+const ModernToggle = ({ value, onValueChange, theme, activeColor = '#27AE60' }: { value: boolean; onValueChange: (v: boolean) => void; theme: any; activeColor?: string; }) => {
+    return (
+        <TouchableOpacity 
+            activeOpacity={0.8}
+            onPress={() => onValueChange(!value)}
+            style={{
+                width: 44,
+                height: 24,
+                borderRadius: 12,
+                backgroundColor: value ? activeColor : (theme.isDark ? '#333' : '#E9E9EB'),
+                borderWidth: value ? 0 : 1.5,
+                borderColor: 'transparent',
+                padding: 2,
+                flexDirection: 'row',
+                alignItems: 'center',
+                justifyContent: value ? 'flex-end' : 'flex-start',
+            }}
+        >
+            <View style={{
+                width: 18,
+                height: 18,
+                borderRadius: 9,
+                backgroundColor: '#fff',
+                elevation: 2,
+                shadowColor: '#000',
+                shadowOffset: { width: 0, height: 1 },
+                shadowOpacity: 0.2,
+                shadowRadius: 1.5,
+            }} />
+        </TouchableOpacity>
+    );
+};
 
 export default function TeacherDetails() {
     const router = useRouter();
@@ -49,7 +82,7 @@ export default function TeacherDetails() {
 
     const fetchTeacherDetails = async () => {
         try {
-            const token = await AsyncStorage.getItem('token');
+            const token = await AsyncStorage.getItem('principalToken') || await AsyncStorage.getItem('token');
             const response = await axios.get(
                 `${API_ENDPOINTS.PRINCIPAL}/teacher/list`,
                 { headers: { Authorization: `Bearer ${token}` } }
@@ -96,7 +129,7 @@ export default function TeacherDetails() {
     const handleUpdate = async () => {
         try {
             setSaving(true);
-            const token = await AsyncStorage.getItem('token');
+            const token = await AsyncStorage.getItem('principalToken') || await AsyncStorage.getItem('token');
             const data = new FormData();
 
             data.append('teacher_id', id as string);
@@ -154,7 +187,7 @@ export default function TeacherDetails() {
                     style: "destructive",
                     onPress: async () => {
                         try {
-                            const token = await AsyncStorage.getItem('token');
+                            const token = await AsyncStorage.getItem('principalToken') || await AsyncStorage.getItem('token');
                             await axios.delete(`${API_ENDPOINTS.PRINCIPAL}/teacher/delete/${id}`, {
                                 headers: { Authorization: `Bearer ${token}` }
                             });
@@ -294,134 +327,159 @@ export default function TeacherDetails() {
                 )}
             </View>
 
-            <ScrollView style={styles.content} showsVerticalScrollIndicator={false} contentContainerStyle={{ paddingBottom: insets.bottom + 60 }}>
-                <View style={styles.profileCard}>
-                    <TouchableOpacity style={styles.avatarWrapper} onPress={isEditing ? pickImage : undefined} activeOpacity={isEditing ? 0.7 : 1}>
-                        {(photo || originalData?.photo_url) ? (
-                            <Image source={{ uri: photo ? photo.uri : originalData.photo_url }} style={styles.avatarImg} />
-                        ) : (
-                            <Ionicons name="person" size={50} color={theme.border} />
-                        )}
-                        {isEditing && (
-                            <View style={styles.photoOverlay}>
-                                <Ionicons name="camera" size={16} color="#fff" />
-                            </View>
-                        )}
-                    </TouchableOpacity>
-                    <Text style={styles.teacherName}>{originalData?.name}</Text>
-                    <Text style={styles.teacherSubject}>{originalData?.subject} • {originalData?.qualification}</Text>
-                </View>
-
-                {!isEditing && (
-                    <View style={styles.actionButtonsRow}>
-                        <TouchableOpacity 
-                            style={[styles.actionButton, { backgroundColor: '#E8F5E9' }]} 
-                            onPress={() => setShowSalarySheet(true)}
-                        >
-                            <Ionicons name="wallet-outline" size={20} color="#2E7D32" />
-                            <Text style={[styles.actionButtonText, { color: '#2E7D32' }]}>Salary</Text>
+            <KeyboardAvoidingView 
+                behavior={Platform.OS === 'ios' ? 'padding' : 'height'} 
+                style={{ flex: 1 }}
+                keyboardVerticalOffset={Platform.OS === 'ios' ? 64 : 0}
+            >
+                <ScrollView style={styles.content} showsVerticalScrollIndicator={false} contentContainerStyle={{ paddingBottom: insets.bottom + 60 }}>
+                    <View style={styles.profileCard}>
+                        <TouchableOpacity style={styles.avatarWrapper} onPress={isEditing ? pickImage : undefined} activeOpacity={isEditing ? 0.7 : 1}>
+                            {(photo || originalData?.photo_url) ? (
+                                <Image source={{ uri: photo ? photo.uri : originalData.photo_url }} style={styles.avatarImg} />
+                            ) : (
+                                <Ionicons name="person" size={50} color={theme.border} />
+                            )}
+                            {isEditing && (
+                                <View style={styles.photoOverlay}>
+                                    <Ionicons name="camera" size={16} color="#fff" />
+                                </View>
+                            )}
                         </TouchableOpacity>
-                        <TouchableOpacity 
-                            style={[styles.actionButton, { backgroundColor: '#E3F2FD' }]} 
-                            onPress={() => setShowAttendanceSheet(true)}
-                        >
-                            <Ionicons name="calendar-outline" size={20} color="#1565C0" />
-                            <Text style={[styles.actionButtonText, { color: '#1565C0' }]}>Attendance</Text>
+                        <Text style={styles.teacherName}>{originalData?.name}</Text>
+                        <Text style={styles.teacherSubject}>{originalData?.subject} • {originalData?.qualification}</Text>
+                    </View>
+
+                    {!isEditing && (
+                        <View style={styles.actionButtonsRow}>
+                            <TouchableOpacity 
+                                style={[styles.actionButton, { backgroundColor: '#E8F5E9' }]} 
+                                onPress={() => setShowSalarySheet(true)}
+                            >
+                                <Ionicons name="wallet-outline" size={20} color="#2E7D32" />
+                                <Text style={[styles.actionButtonText, { color: '#2E7D32' }]}>Salary</Text>
+                            </TouchableOpacity>
+                            <TouchableOpacity 
+                                style={[styles.actionButton, { backgroundColor: '#E3F2FD' }]} 
+                                onPress={() => setShowAttendanceSheet(true)}
+                            >
+                                <Ionicons name="calendar-outline" size={20} color="#1565C0" />
+                                <Text style={[styles.actionButtonText, { color: '#1565C0' }]}>Attendance</Text>
+                            </TouchableOpacity>
+                        </View>
+                    )}
+
+                    {!isEditing && (
+                        <View style={styles.codeCard}>
+                            <Text style={styles.codeLabel}>ACCESS CODE:</Text>
+                            <Text style={styles.codeValue}>{originalData?.unique_code}</Text>
+                            <TouchableOpacity style={{ marginLeft: 15 }}>
+                                <Ionicons name="copy-outline" size={20} color={theme.primary} />
+                            </TouchableOpacity>
+                        </View>
+                    )}
+
+                    <View style={styles.section}>
+                        <Text style={styles.sectionTitle}>Personal Information</Text>
+                        <View style={styles.detailsContainer}>
+                            {isEditing ? (
+                                <>
+                                    <InputItem icon="person-outline" label="Full Name" value={formData.name} onChange={t => setFormData({ ...formData, name: t })} />
+                                    <InputItem icon="calendar-outline" label="Date of Birth" value={formatDate(formData.dob)} onTouch={() => setShowDatePicker(true)} />
+                                    
+                                    <View style={{ paddingHorizontal: 20, paddingVertical: 10 }}>
+                                        <Text style={{ fontSize: 13, fontWeight: '700', color: theme.textLight, marginBottom: 8, marginLeft: 5 }}>Gender</Text>
+                                        <View style={{ flexDirection: 'row', backgroundColor: theme.card, borderRadius: 15, padding: 4, borderWidth: 1, borderColor: theme.border }}>
+                                            {['Male', 'Female', 'Other'].map((g) => (
+                                                <TouchableOpacity
+                                                    key={g}
+                                                    style={[{ flex: 1, height: 40, borderRadius: 12, justifyContent: 'center', alignItems: 'center' }, formData.gender === g && { backgroundColor: theme.primary }]}
+                                                    onPress={() => setFormData({ ...formData, gender: g })}
+                                                >
+                                                    <Text style={[{ fontSize: 12, fontWeight: '700', color: theme.textLight }, formData.gender === g && { color: '#fff' }]}>{g}</Text>
+                                                </TouchableOpacity>
+                                            ))}
+                                        </View>
+                                    </View>
+
+                                    <InputItem icon="school-outline" label="Qualification" value={formData.qualification} onChange={t => setFormData({ ...formData, qualification: t })} />
+                                </>
+                            ) : (
+                                <>
+                                    <DetailItem icon="person-outline" label="Full Name" value={originalData?.name} />
+                                    <DetailItem icon="calendar-outline" label="Date of Birth" value={originalData?.dob ? formatDate(parseDate(originalData.dob)) : '—'} />
+                                    <DetailItem icon="transgender-outline" label="Gender" value={originalData?.gender} />
+                                    <DetailItem icon="school-outline" label="Qualification" value={originalData?.qualification} />
+                                </>
+                            )}
+                        </View>
+                    </View>
+
+                    <View style={styles.section}>
+                        <Text style={styles.sectionTitle}>Professional & Contact</Text>
+                        <View style={styles.detailsContainer}>
+                            {isEditing ? (
+                                <>
+                                    <InputItem icon="book-outline" label="Main Subject" value={formData.subject} onChange={t => setFormData({ ...formData, subject: t })} />
+                                    <InputItem icon="call-outline" label="Mobile Number" value={formData.mobile} onChange={t => setFormData({ ...formData, mobile: t })} keyboardType="phone-pad" />
+                                    <InputItem icon="mail-outline" label="Email Address" value={formData.email} onChange={t => setFormData({ ...formData, email: t })} keyboardType="email-address" />
+                                </>
+                            ) : (
+                                <>
+                                    <DetailItem icon="book-outline" label="Main Subject" value={originalData?.subject} />
+                                    <DetailItem icon="call-outline" label="Mobile Number" value={originalData?.mobile} />
+                                    <DetailItem icon="mail-outline" label="Email Address" value={originalData?.email} />
+                                    <DetailItem icon="checkmark-circle-outline" label="Special Permission" value={originalData?.special_permission ? 'Enabled' : 'Disabled'} />
+                                </>
+                            )}
+                        </View>
+                    </View>
+
+                    <View style={styles.section}>
+                        <Text style={styles.sectionTitle}>Residence</Text>
+                        <View style={styles.detailsContainer}>
+                            {isEditing ? (
+                                <InputItem icon="location-outline" label="Complete Address" value={formData.address} onChange={t => setFormData({ ...formData, address: t })} multiline />
+                            ) : (
+                                <DetailItem icon="location-outline" label="Complete Address" value={originalData?.address} />
+                            )}
+                        </View>
+                    </View>
+
+                    <View style={[styles.switchContainer, { opacity: isEditing ? 1 : 0.7 }]}>
+                        <View>
+                            <Text style={styles.switchLabel}>Grant Special Edit Permission</Text>
+                            <Text style={{ fontSize: 10, fontWeight: '800', color: formData.special_permission ? '#27AE60' : theme.textLight, marginTop: 4 }}>
+                                {formData.special_permission ? 'YES, ENABLED' : 'NO, DISABLED'}
+                            </Text>
+                        </View>
+                        <ModernToggle
+                            value={formData.special_permission}
+                            onValueChange={isEditing ? (value) => setFormData({ ...formData, special_permission: value }) : () => {}}
+                            theme={{ isDark }}
+                        />
+                    </View>
+
+                    {isEditing && (
+                        <TouchableOpacity style={styles.deleteBtn} onPress={handleDelete}>
+                            <Ionicons name="trash-outline" size={22} color={theme.danger} />
+                            <Text style={styles.deleteText}>Delete Teacher Profile</Text>
                         </TouchableOpacity>
-                    </View>
-                )}
+                    )}
 
-                {!isEditing && (
-                    <View style={styles.codeCard}>
-                        <Text style={styles.codeLabel}>ACCESS CODE:</Text>
-                        <Text style={styles.codeValue}>{originalData?.unique_code}</Text>
-                        <TouchableOpacity style={{ marginLeft: 15 }}>
-                            <Ionicons name="copy-outline" size={20} color={theme.primary} />
-                        </TouchableOpacity>
-                    </View>
-                )}
-
-                <View style={styles.section}>
-                    <Text style={styles.sectionTitle}>Personal Information</Text>
-                    <View style={styles.detailsContainer}>
-                        {isEditing ? (
-                            <>
-                                <InputItem icon="person-outline" label="Full Name" value={formData.name} onChange={t => setFormData({ ...formData, name: t })} />
-                                <InputItem icon="calendar-outline" label="Date of Birth" value={formatDate(formData.dob)} onTouch={() => setShowDatePicker(true)} />
-                                <InputItem icon="transgender-outline" label="Gender" value={formData.gender} onChange={t => setFormData({ ...formData, gender: t })} />
-                                <InputItem icon="school-outline" label="Qualification" value={formData.qualification} onChange={t => setFormData({ ...formData, qualification: t })} />
-                            </>
-                        ) : (
-                            <>
-                                <DetailItem icon="person-outline" label="Full Name" value={originalData?.name} />
-                                <DetailItem icon="calendar-outline" label="Date of Birth" value={originalData?.dob ? formatDate(parseDate(originalData.dob)) : '—'} />
-                                <DetailItem icon="transgender-outline" label="Gender" value={originalData?.gender} />
-                                <DetailItem icon="school-outline" label="Qualification" value={originalData?.qualification} />
-                            </>
-                        )}
-                    </View>
-                </View>
-
-                <View style={styles.section}>
-                    <Text style={styles.sectionTitle}>Professional & Contact</Text>
-                    <View style={styles.detailsContainer}>
-                        {isEditing ? (
-                            <>
-                                <InputItem icon="book-outline" label="Main Subject" value={formData.subject} onChange={t => setFormData({ ...formData, subject: t })} />
-                                <InputItem icon="call-outline" label="Mobile Number" value={formData.mobile} onChange={t => setFormData({ ...formData, mobile: t })} keyboardType="phone-pad" />
-                                <InputItem icon="mail-outline" label="Email Address" value={formData.email} onChange={t => setFormData({ ...formData, email: t })} keyboardType="email-address" />
-                            </>
-                        ) : (
-                            <>
-                                <DetailItem icon="book-outline" label="Main Subject" value={originalData?.subject} />
-                                <DetailItem icon="call-outline" label="Mobile Number" value={originalData?.mobile} />
-                                <DetailItem icon="mail-outline" label="Email Address" value={originalData?.email} />
-                                <DetailItem icon="checkmark-circle-outline" label="Special Permission" value={originalData?.special_permission ? 'Enabled' : 'Disabled'} />
-                            </>
-                        )}
-                    </View>
-                </View>
-
-                <View style={styles.section}>
-                    <Text style={styles.sectionTitle}>Residence</Text>
-                    <View style={styles.detailsContainer}>
-                        {isEditing ? (
-                            <InputItem icon="location-outline" label="Complete Address" value={formData.address} onChange={t => setFormData({ ...formData, address: t })} multiline />
-                        ) : (
-                            <DetailItem icon="location-outline" label="Complete Address" value={originalData?.address} />
-                        )}
-                    </View>
-                </View>
-
-                <View style={[styles.switchContainer, { opacity: isEditing ? 1 : 0.7 }]}>
-                    <Text style={styles.switchLabel}>Grant Special Edit Permission</Text>
-                    <Switch
-                        value={formData.special_permission}
-                        onValueChange={isEditing ? (value) => setFormData({ ...formData, special_permission: value }) : undefined}
-                        trackColor={{ false: '#ddd', true: theme.primary }}
-                        disabled={!isEditing}
-                    />
-                </View>
-
-                {isEditing && (
-                    <TouchableOpacity style={styles.deleteBtn} onPress={handleDelete}>
-                        <Ionicons name="trash-outline" size={22} color={theme.danger} />
-                        <Text style={styles.deleteText}>Delete Teacher Profile</Text>
-                    </TouchableOpacity>
-                )}
-
-                {showDatePicker && (
-                    <DateTimePicker
-                        value={formData.dob || new Date()}
-                        mode="date"
-                        display="default"
-                        onChange={(event, date) => {
-                            setShowDatePicker(false);
-                            if (date) setFormData({ ...formData, dob: date });
-                        }}
-                    />
-                )}
-            </ScrollView>
+                    {showDatePicker && (
+                        <DateTimePicker
+                            value={formData.dob || new Date()}
+                            mode="date"
+                            display="default"
+                            onChange={(event, date) => {
+                                setShowDatePicker(false);
+                                if (date) setFormData({ ...formData, dob: date });
+                            }}
+                        />
+                    )}
+                </ScrollView>
+            </KeyboardAvoidingView>
 
             <SalaryHistoryBottomSheet 
                 visible={showSalarySheet} 

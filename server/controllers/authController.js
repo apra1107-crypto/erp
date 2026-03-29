@@ -112,6 +112,9 @@ const loginInstitute = async (req, res) => {
     }
 
     const institute = result.rows[0];
+    if (!institute) {
+        return res.status(401).json({ message: 'Invalid credentials' });
+    }
 
     // Check password
     const isPasswordValid = await bcrypt.compare(trimmedPassword, institute.password);
@@ -124,6 +127,13 @@ const loginInstitute = async (req, res) => {
     }
 
     fs.appendFileSync(logPath, `[${timestamp}] Success: Logged in as "${normalizedEmail}"\n`);
+
+    // Ensure image URLs are absolute
+    const absoluteInstitute = {
+        ...institute,
+        logo_url: institute.logo_url?.startsWith('http') ? institute.logo_url : (institute.logo_url ? `${process.env.S3_BUCKET_URL}/${institute.logo_url}` : null),
+        principal_photo_url: institute.principal_photo_url?.startsWith('http') ? institute.principal_photo_url : (institute.principal_photo_url ? `${process.env.S3_BUCKET_URL}/${institute.principal_photo_url}` : null),
+    };
 
     // Generate JWT token
     const token = jwt.sign(
@@ -139,12 +149,12 @@ const loginInstitute = async (req, res) => {
     );
 
     // Remove password from response
-    delete institute.password;
+    delete absoluteInstitute.password;
 
     res.status(200).json({
       message: 'Login successful',
       token,
-      institute,
+      institute: absoluteInstitute,
     });
   } catch (error) {
     console.error('Login error:', error);

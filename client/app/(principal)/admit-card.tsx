@@ -22,6 +22,7 @@ import axios from 'axios';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as Print from 'expo-print';
 import * as Sharing from 'expo-sharing';
+import * as FileSystem from 'expo-file-system/legacy';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { API_ENDPOINTS, BASE_URL } from '../../constants/Config';
 import { useNavigation } from 'expo-router';
@@ -139,6 +140,8 @@ const AdmitCardScreen = () => {
     const [isSelectionMode, setIsSelectionMode] = useState(false);
     const [selectedStudent, setSelectedStudent] = useState<Student | null>(null);
     const [filterTitle, setFilterTitle] = useState('All');
+    const [filterClass, setFilterClass] = useState('All');
+    const [isFilterModalVisible, setIsFilterModalVisible] = useState(false);
     
     // Schedule Date Picker States
     const [showScheduleDatePicker, setShowScheduleDatePicker] = useState(false);
@@ -155,9 +158,12 @@ const AdmitCardScreen = () => {
     }, [admitCardEvents]);
 
     const filteredEvents = useMemo(() => {
-        if (filterTitle === 'All') return admitCardEvents;
-        return admitCardEvents.filter(event => event.exam_name === filterTitle);
-    }, [admitCardEvents, filterTitle]);
+        return admitCardEvents.filter(event => {
+            const matchesTitle = filterTitle === 'All' || event.exam_name === filterTitle;
+            const matchesClass = filterClass === 'All' || (event.classes && event.classes.some(c => `${c.class}-${c.section}` === filterClass));
+            return matchesTitle && matchesClass;
+        });
+    }, [admitCardEvents, filterTitle, filterClass]);
 
     const styles = useMemo(() => StyleSheet.create({
         container: { flex: 1, backgroundColor: theme.background },
@@ -166,7 +172,7 @@ const AdmitCardScreen = () => {
         subtitle: { fontSize: 14, color: theme.textLight },
         floatingAddBtn: {
             position: 'absolute',
-            bottom: Math.max(30, insets.bottom + 10),
+            bottom: 25,
             right: 25,
             width: 65,
             height: 65,
@@ -195,7 +201,7 @@ const AdmitCardScreen = () => {
         classChipsRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 6 },
         miniClassChip: { fontSize: 10, fontWeight: '700', color: theme.textLight, backgroundColor: isDark ? '#333' : '#f1f5f9', paddingHorizontal: 6, paddingVertical: 3, borderRadius: 4, borderWidth: 1, borderColor: theme.border },
         deleteIcon: { padding: 8, position: 'absolute', bottom: 12, right: 12 },
-        modalHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', padding: 20, paddingTop: 60, backgroundColor: theme.card, borderBottomWidth: 1, borderBottomColor: theme.border },
+        modalHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', padding: 20, paddingTop: 60, backgroundColor: 'transparent', borderBottomWidth: 0 },
         modalTitle: { fontSize: 18, fontWeight: 'bold', color: theme.text },
         createContent: { padding: 20 },
         inputGroup: { marginBottom: 20 },
@@ -208,10 +214,9 @@ const AdmitCardScreen = () => {
         chipTextSelected: { color: '#fff' },
         footer: { 
             padding: 20, 
-            paddingBottom: Math.max(20, insets.bottom + 10),
-            backgroundColor: theme.card, 
-            borderTopWidth: 1, 
-            borderTopColor: theme.border 
+            paddingBottom: 25,
+            backgroundColor: 'transparent', 
+            borderTopWidth: 0, 
         },
         footerRow: { flexDirection: 'row' },
         primaryBtn: { backgroundColor: theme.primary, padding: 16, borderRadius: 12, alignItems: 'center' },
@@ -247,7 +252,7 @@ const AdmitCardScreen = () => {
         checkboxSelected: { backgroundColor: theme.primary },
         selectionHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingHorizontal: 20, paddingVertical: 12, backgroundColor: isDark ? '#1a1a1a' : '#f8fafc', borderBottomWidth: 1, borderBottomColor: theme.border },
         selectionHeaderText: { fontSize: 14, fontWeight: '700', color: theme.textLight },
-        bulkFooter: { position: 'absolute', bottom: Math.max(30, insets.bottom + 10), left: 20, right: 20, zIndex: 1000 },
+        bulkFooter: { position: 'absolute', bottom: 25, left: 20, right: 20, zIndex: 1000 },
         downloadBtn: { backgroundColor: theme.success, padding: 18, borderRadius: 20, flexDirection: 'row', justifyContent: 'center', alignItems: 'center', elevation: 10, shadowColor: theme.success, shadowOffset: { width: 0, height: 6 }, shadowOpacity: 0.4, shadowRadius: 10 },
         downloadBtnText: { color: '#fff', fontSize: 17, fontWeight: '800' },
 
@@ -290,6 +295,20 @@ const AdmitCardScreen = () => {
         paperSigLine: { borderTopWidth: 1, borderTopColor: '#000', width: 120, alignItems: 'center', paddingTop: 5 },
         paperSigText: { fontSize: 9, fontWeight: '900' },
         modalOverlay: { position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, backgroundColor: 'rgba(0,0,0,0.7)', justifyContent: 'center', alignItems: 'center', zIndex: 9999 },
+        
+        // Filter Modal Styles
+        filterModalContainer: { flex: 1, backgroundColor: 'rgba(0,0,0,0.5)', justifyContent: 'center', padding: 20 },
+        filterModalContent: { backgroundColor: theme.background, borderRadius: 24, padding: 25, maxHeight: '80%', elevation: 10, shadowColor: '#000', shadowOffset: { width: 0, height: 5 }, shadowOpacity: 0.3, shadowRadius: 10 },
+        filterSection: { marginBottom: 25 },
+        filterLabel: { fontSize: 16, fontWeight: 'bold', color: theme.text, marginBottom: 15 },
+        filterScroll: { maxHeight: 200 },
+        filterChip: { paddingHorizontal: 16, paddingVertical: 10, borderRadius: 12, borderWidth: 1, borderColor: theme.border, marginRight: 10, marginBottom: 10 },
+        filterChipSelected: { backgroundColor: theme.primary, borderColor: theme.primary },
+        filterChipText: { fontSize: 14, fontWeight: '600', color: theme.textLight },
+        filterChipTextSelected: { color: '#fff' },
+        filterFooter: { flexDirection: 'row', gap: 15, marginTop: 10, paddingBottom: 20 },
+        resetBtn: { flex: 1, padding: 16, borderRadius: 12, borderWidth: 1, borderColor: theme.border, alignItems: 'center' },
+        applyBtn: { flex: 1, padding: 16, borderRadius: 12, backgroundColor: theme.primary, alignItems: 'center' },
     }), [theme, isDark, insets]);
 
     useEffect(() => {
@@ -322,7 +341,7 @@ const AdmitCardScreen = () => {
 
     const fetchInstituteProfile = async () => {
         try {
-            const token = await AsyncStorage.getItem('token');
+            const token = await AsyncStorage.getItem('principalToken') || await AsyncStorage.getItem('token');
             const response = await axios.get(`${API_ENDPOINTS.PRINCIPAL}/profile`, {
                 headers: { Authorization: `Bearer ${token}` }
             });
@@ -335,7 +354,7 @@ const AdmitCardScreen = () => {
     const fetchAdmitCardEvents = async () => {
         try {
             setLoading(true);
-            const token = await AsyncStorage.getItem('token');
+            const token = await AsyncStorage.getItem('principalToken') || await AsyncStorage.getItem('token');
             const response = await axios.get(`${API_ENDPOINTS.ADMIT_CARD}/list`, {
                 headers: { Authorization: `Bearer ${token}` }
             });
@@ -350,7 +369,7 @@ const AdmitCardScreen = () => {
 
     const toggleVisibility = async (event: AdmitCardEvent) => {
         try {
-            const token = await AsyncStorage.getItem('token');
+            const token = await AsyncStorage.getItem('principalToken') || await AsyncStorage.getItem('token');
             const newStatus = !event.is_published;
             
             console.log(`[AdmitCard] Toggling visibility for ${event.id} to ${newStatus}`);
@@ -382,7 +401,7 @@ const AdmitCardScreen = () => {
 
     const fetchClassSections = async () => {
         try {
-            const token = await AsyncStorage.getItem('token');
+            const token = await AsyncStorage.getItem('principalToken') || await AsyncStorage.getItem('token');
             const response = await axios.get(`${API_ENDPOINTS.PRINCIPAL}/student/list`, {
                 headers: { Authorization: `Bearer ${token}` }
             });
@@ -458,7 +477,7 @@ const AdmitCardScreen = () => {
 
         try {
             setLoading(true);
-            const token = await AsyncStorage.getItem('token');
+            const token = await AsyncStorage.getItem('principalToken') || await AsyncStorage.getItem('token');
             await axios.post(`${API_ENDPOINTS.ADMIT_CARD}/create`, {
                 exam_name: examName,
                 classes: selectedClasses,
@@ -489,7 +508,7 @@ const AdmitCardScreen = () => {
         setViewMode('event-details');
         try {
             setLoading(true);
-            const token = await AsyncStorage.getItem('token');
+            const token = await AsyncStorage.getItem('principalToken') || await AsyncStorage.getItem('token');
             const response = await axios.post(`${API_ENDPOINTS.ADMIT_CARD}/students`, {
                 classes: event.classes
             }, {
@@ -563,16 +582,69 @@ const AdmitCardScreen = () => {
     const generatePDF = async () => {
         if (!currentEvent) return Alert.alert('Error', 'No exam event selected');
         
-        const selectedData = filteredStudents.filter(s => selectionMap[s.id]);
-        if (selectedData.length === 0 && !selectedStudent) {
+        const selectedIds = Object.keys(selectionMap).filter(id => selectionMap[id]);
+        if (selectedIds.length === 0 && !selectedStudent) {
             return Alert.alert('Warning', 'Select students first');
         }
 
-        const dataToPrint = selectedStudent && viewMode === 'individual-preview' ? [selectedStudent] : selectedData;
+        // If it's a bulk operation (Selection Mode)
+        if (isSelectionMode && selectedIds.length > 0) {
+            try {
+                setIsGeneratingPDF(true);
+                const token = await AsyncStorage.getItem('principalToken') || await AsyncStorage.getItem('token');
+                
+                const response = await axios.post(
+                    `${API_ENDPOINTS.ADMIT_CARD}/generate-bulk-pdf/${currentEvent.id}`,
+                    { studentIds: selectedIds },
+                    {
+                        headers: { Authorization: `Bearer ${token}` },
+                        responseType: 'arraybuffer',
+                        timeout: 300000 // 5 minutes for heavy PDF generation
+                    }
+                );
 
+                // Efficient ArrayBuffer to Base64 conversion using chunking for large files
+                const arrayBuffer = response.data; // This is the ArrayBuffer
+                const chunkSize = 16 * 1024; // Process in 16KB chunks (adjust as needed)
+                let base64 = '';
+                const bytes = new Uint8Array(arrayBuffer);
+                const len = bytes.byteLength;
+
+                for (let i = 0; i < len; i += chunkSize) {
+                    const chunk = bytes.subarray(i, Math.min(i + chunkSize, len));
+                    base64 += String.fromCharCode.apply(null, Array.from(chunk));
+                }
+                // Ensure btoa is available, fallback if not (Expo usually polyfills it)
+                const base64data = btoa(base64);
+                
+                const fileName = `admit_cards_${currentEvent.id}_${Date.now()}.pdf`;
+                const fileUri = `${FileSystem.cacheDirectory}${fileName}`;
+
+                await FileSystem.writeAsStringAsync(fileUri, base64data, {
+                    encoding: 'base64',
+                });
+
+                await Sharing.shareAsync(fileUri, {
+                    UTI: '.pdf',
+                    mimeType: 'application/pdf',
+                    dialogTitle: 'Admit Cards'
+                });
+
+                setIsSelectionMode(false);
+                setSelectionMap({});
+            } catch (error: any) {
+                console.error('Bulk Admit Card Error:', error.message);
+                Alert.alert('Error', 'Failed to generate bundle. Please try again.');
+            } finally {
+                setIsGeneratingPDF(false);
+            }
+            return;
+        }
+
+        // Individual Preview Print (Original logic for single card)
         try {
             setIsGeneratingPDF(true);
-            
+            const dataToPrint = [selectedStudent as Student];
             const instLogoB64 = await toBase64(instProfile?.logo_url || instProfile?.institute_logo);
             const studentsWithPhotos = await Promise.all(dataToPrint.map(async (s) => ({
                 ...s,
@@ -595,56 +667,235 @@ const AdmitCardScreen = () => {
                     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
                     <style>
                         @page { size: A4; margin: 0; }
-                        body { font-family: 'Helvetica Neue', Helvetica, Arial, sans-serif; padding: 0; margin: 0; color: #333; background: #fff; }
+                        * { box-sizing: border-box; -webkit-print-color-adjust: exact; }
+                        body { 
+                            font-family: 'Helvetica Neue', Helvetica, Arial, sans-serif; 
+                            padding: 0; 
+                            margin: 0; 
+                            color: #333; 
+                            background: #fff; 
+                        }
                         
                         .page-container {
                             width: 210mm;
                             height: 297mm;
-                            padding: 25px 35px;
+                            padding: 15mm;
                             box-sizing: border-box;
                             page-break-after: always;
                             display: flex;
                             flex-direction: column;
                             background: #fff;
+                            position: relative;
+                        }
+
+                        /* A4 Page Border */
+                        .page-border {
+                            position: absolute;
+                            top: 10mm;
+                            left: 10mm;
+                            right: 10mm;
+                            bottom: 10mm;
+                            border: 2px solid #000;
+                            pointer-events: none;
+                            z-index: 10;
+                        }
+
+                        .content-wrapper {
+                            position: relative;
+                            z-index: 5;
+                            height: 100%;
+                            display: flex;
+                            flex-direction: column;
+                            padding: 5mm;
                         }
                         
-                        .header-container { display: flex; flex-direction: row; align-items: center; justify-content: center; margin-bottom: 5px; }
-                        .logo { width: 65px; height: 65px; margin-right: 15px; border-radius: 8px; }
-                        .institute-info { text-align: center; }
+                        .header-container { 
+                            display: flex; 
+                            flex-direction: row; 
+                            align-items: center; 
+                            justify-content: center; 
+                            margin-bottom: 5px; 
+                            gap: 20px;
+                        }
                         
-                        .institute-name { font-size: 28px; font-weight: 900; color: #1A237E; margin: 0; text-transform: uppercase; letter-spacing: 1px; }
-                        .affiliation-text { font-size: 13px; color: #444; margin: 0; margin-top: 4px; margin-left: 20px; font-weight: 700; }
-                        .address-text { font-size: 12px; color: #666; margin-top: 4px; font-weight: 600; text-align: center; }
+                        .logo { 
+                            width: 80px; 
+                            height: 80px; 
+                            object-fit: contain;
+                        }
                         
-                        .divider { height: 2px; background-color: #000; margin: 12px 0; }
+                        .institute-info { 
+                            text-align: center; 
+                        }
+                        
+                        .institute-name { 
+                            font-size: 28px; 
+                            font-weight: 900; 
+                            color: #1A237E; 
+                            margin: 0; 
+                            text-transform: uppercase; 
+                            letter-spacing: 1px; 
+                        }
+                        
+                        .affiliation-text { 
+                            font-size: 14px; 
+                            color: #444; 
+                            margin: 4px 0 0 0; 
+                            font-weight: 700; 
+                        }
+                        
+                        .address-text { 
+                            font-size: 12px; 
+                            color: #666; 
+                            margin-top: 4px; 
+                            font-weight: 600; 
+                            text-align: center; 
+                        }
+                        
+                        .divider { 
+                            height: 2px; 
+                            background-color: #000; 
+                            margin: 15px 0; 
+                        }
                         
                         .exam-box { 
-                            font-size: 22px; font-weight: 900; text-align: center; margin: 10px auto; 
-                            text-transform: uppercase; padding: 8px 45px; border: 2.5px solid #000; display: table; 
+                            font-size: 22px; 
+                            font-weight: 900; 
+                            text-align: center; 
+                            margin: 0px auto 10px auto; /* Moved up further */
+                            text-transform: uppercase; 
+                            padding: 8px 45px; 
+                            border: 2.5px solid #000; 
+                            display: table; 
                         }
                         
-                        .details-section { display: flex; flex-direction: row; justify-content: space-between; margin: 20px 0; }
-                        .info-table { width: 72%; border-collapse: collapse; }
-                        .info-table td { padding: 8px 0; font-size: 15px; border-bottom: 1px solid #f0f0f0; }
-                        .label { font-weight: bold; width: 170px; color: #555; font-size: 12px; text-transform: uppercase; }
-                        .value { font-weight: 900; color: #000; font-size: 17px; }
+                        .details-section { 
+                            display: flex; 
+                            flex-direction: row; 
+                            justify-content: space-between; 
+                            margin: 20px 0; /* Reduced margin */
+                            align-items: flex-start;
+                        }
                         
-                        .photo-box { width: 130px; height: 160px; border: 2.5px solid #000; display: flex; align-items: center; justify-content: center; background: #fff; overflow: hidden; }
-                        .photo-box img { width: 100%; height: 100%; object-fit: cover; }
+                        .info-table { 
+                            width: 70%; 
+                            border-collapse: collapse; 
+                        }
                         
-                        .timetable-section { width: 100%; margin-top: 10px; }
-                        .section-title { font-weight: 900; text-decoration: underline; font-size: 14px; margin-bottom: 10px; }
+                        .info-table td { 
+                            padding: 10px 0; 
+                            font-size: 15px; 
+                            border-bottom: 1px solid #eee; 
+                        }
                         
-                        table.schedule { width: 100%; border-collapse: collapse; border: 2px solid #000; }
-                        .schedule th { background-color: #f8f9fa; border: 1.5px solid #000; padding: 10px; text-align: left; font-size: 13px; font-weight: 900; }
-                        .schedule td { border: 1.5px solid #000; padding: 10px; font-size: 13px; font-weight: bold; }
+                        .label { 
+                            font-weight: bold; 
+                            width: 150px; 
+                            color: #555; 
+                            font-size: 12px; 
+                            text-transform: uppercase; 
+                        }
                         
-                        .instructions { border: 2px solid #000; padding: 15px; border-radius: 8px; margin-top: 20px; background: #fafafa; }
-                        .inst-title { font-weight: 900; font-size: 13px; text-decoration: underline; margin-bottom: 8px; }
-                        .inst-list { font-size: 12px; font-weight: bold; margin: 0; padding-left: 20px; line-height: 1.4; }
+                        .value { 
+                            font-weight: 900; 
+                            color: #000; 
+                            font-size: 16px; 
+                        }
                         
-                        .signature-section { margin-top: auto; padding-top: 40px; display: flex; justify-content: space-between; padding-bottom: 20px; }
-                        .sig-line { border-top: 2px solid #000; width: 200px; text-align: center; font-size: 12px; font-weight: 900; padding-top: 8px; text-transform: uppercase; }
+                        .photo-box { 
+                            width: 130px; 
+                            height: 160px; 
+                            border: 2.5px solid #000; 
+                            display: flex; 
+                            align-items: center; 
+                            justify-content: center; 
+                            background: #fff; 
+                            overflow: hidden; 
+                        }
+                        
+                        .photo-box img { 
+                            width: 100%; 
+                            height: 100%; 
+                            object-fit: cover; 
+                        }
+                        
+                        .timetable-section { 
+                            width: 100%; 
+                            margin-top: 10px; 
+                        }
+                        
+                        .section-title { 
+                            font-weight: 900; 
+                            text-decoration: underline; 
+                            font-size: 14px; 
+                            margin-bottom: 12px; 
+                            color: #000;
+                        }
+                        
+                        table.schedule { 
+                            width: 100%; 
+                            border-collapse: collapse; 
+                            border: 2px solid #000; 
+                        }
+                        
+                        .schedule th { 
+                            background-color: #f8f9fa; 
+                            border: 1.5px solid #000; 
+                            padding: 12px; 
+                            text-align: left; 
+                            font-size: 13px; 
+                            font-weight: 900; 
+                            text-transform: uppercase;
+                        }
+                        
+                        .schedule td { 
+                            border: 1.5px solid #000; 
+                            padding: 10px; 
+                            font-size: 13px; 
+                            font-weight: bold; 
+                            color: #000;
+                        }
+                        
+                        .instructions { 
+                            border: 2px solid #000; 
+                            padding: 15px; 
+                            border-radius: 4px; 
+                            margin-top: 20px; /* Reduced margin */
+                            background: #fafafa; 
+                        }
+                        
+                        .inst-title { 
+                            font-weight: 900; 
+                            font-size: 13px; 
+                            text-decoration: underline; 
+                            margin-bottom: 8px; 
+                        }
+                        
+                        .inst-list { 
+                            font-size: 12px; 
+                            font-weight: bold; 
+                            margin: 0; 
+                            padding-left: 20px; 
+                            line-height: 1.5; 
+                        }
+                        
+                        .signature-section { 
+                            margin-top: auto; 
+                            padding-top: 30px; /* Reduced padding */
+                            display: flex; 
+                            justify-content: space-between; 
+                            padding-bottom: 20px; 
+                        }
+                        
+                        .sig-line { 
+                            border-top: 2px solid #000; 
+                            width: 200px; 
+                            text-align: center; 
+                            font-size: 12px; 
+                            font-weight: 900; 
+                            padding-top: 8px; 
+                            text-transform: uppercase; 
+                        }
                     </style>
                 </head>
                 <body>
@@ -658,65 +909,69 @@ const AdmitCardScreen = () => {
 
                 htmlContent += `
                     <div class="page-container">
-                        <div class="header-container">
-                            ${logoHtml}
-                            <div class="institute-info">
-                                <h1 class="institute-name">${(instProfile?.institute_name || 'INSTITUTE').toUpperCase()}</h1>
-                                ${instProfile?.affiliation ? `<p class="affiliation-text">${instProfile.affiliation}</p>` : ''}
-                                <p class="address-text">${fullAddress}</p>
+                        <div class="page-border"></div>
+                        <div class="content-wrapper">
+                            <div class="header-container">
+                                ${logoHtml}
+                                <div class="institute-info">
+                                    <h1 class="institute-name">${(instProfile?.institute_name || 'INSTITUTE').toUpperCase()}</h1>
+                                    ${instProfile?.affiliation ? `<p class="affiliation-text">${instProfile.affiliation}</p>` : ''}
+                                    <p class="address-text">${fullAddress}</p>
+                                </div>
                             </div>
-                        </div>
 
-                        <div class="divider"></div>
-                        
-                        <div class="exam-box">${eventName}</div>
+                            <div class="divider"></div>
+                            
+                            <div class="exam-box">${eventName}</div>
 
-                        <div class="details-section">
-                            <table class="info-table">
-                                <tr><td class="label">Student Name</td><td class="value">${student.name}</td></tr>
-                                <tr><td class="label">Class & Section</td><td class="value">${student.class} - ${student.section}</td></tr>
-                                <tr><td class="label">Roll Number</td><td class="value">${student.roll_no || 'TBD'}</td></tr>
-                                <tr><td class="label">Father's Name</td><td class="value">${student.father_name}</td></tr>
-                                <tr><td class="label">Contact Number</td><td class="value">${student.mobile}</td></tr>
-                            </table>
-                            <div class="photo-box">${photoHtml}</div>
-                        </div>
+                            <div class="details-section">
+                                <table class="info-table">
+                                    <tr><td class="label">Student Name</td><td class="value">${student.name}</td></tr>
+                                    <tr><td class="label">Class & Section</td><td class="value">${student.class} - ${student.section}</td></tr>
+                                    <tr><td class="label">Roll Number</td><td class="value">${student.roll_no || 'TBD'}</td></tr>
+                                    <tr><td class="label">Date of Birth</td><td class="value">${student.dob ? formatDate(student.dob) : 'N/A'}</td></tr>
+                                    <tr><td class="label">Father's Name</td><td class="value">${student.father_name}</td></tr>
+                                    <tr><td class="label">Contact Number</td><td class="value">${student.mobile}</td></tr>
+                                </table>
+                                <div class="photo-box">${photoHtml}</div>
+                            </div>
 
-                        <div class="timetable-section">
-                            <div class="section-title">EXAMINATION TIMETABLE</div>
-                            <table class="schedule">
-                                <thead>
-                                    <tr>
-                                        <th>Date & Day</th>
-                                        <th>Subject Name</th>
-                                        <th>Time / Shift</th>
-                                    </tr>
-                                </thead>
-                                <tbody>
-                                    ${eventSchedule.map(row => `
+                            <div class="timetable-section">
+                                <div class="section-title">EXAMINATION TIMETABLE</div>
+                                <table class="schedule">
+                                    <thead>
                                         <tr>
-                                            <td>${formatDate(row.date)} (${row.day})</td>
-                                            <td>${row.subject}</td>
-                                            <td>${row.time}</td>
+                                            <th>Date & Day</th>
+                                            <th>Subject Name</th>
+                                            <th>Time / Shift</th>
                                         </tr>
-                                    `).join('')}
-                                </tbody>
-                            </table>
-                        </div>
+                                    </thead>
+                                    <tbody>
+                                        ${eventSchedule.map(row => `
+                                            <tr>
+                                                <td>${formatDate(row.date)} (${row.day})</td>
+                                                <td>${row.subject}</td>
+                                                <td>${row.time}</td>
+                                            </tr>
+                                        `).join('')}
+                                    </tbody>
+                                </table>
+                            </div>
 
-                        <div class="instructions">
-                            <div class="inst-title">IMPORTANT INSTRUCTIONS:</div>
-                            <ol class="inst-list">
-                                <li>Candidate must carry this Admit Card to the examination hall for all sessions.</li>
-                                <li>Possession of mobile phones, electronic gadgets, or calculators is strictly prohibited.</li>
-                                <li>Candidates must report at the examination center at least 20 minutes before time.</li>
-                                <li>The card must be signed by the invigilator during every examination session.</li>
-                            </ol>
-                        </div>
+                            <div class="instructions">
+                                <div class="inst-title">IMPORTANT INSTRUCTIONS:</div>
+                                <ol class="inst-list">
+                                    <li>Candidate must carry this Admit Card to the examination hall for all sessions.</li>
+                                    <li>Possession of mobile phones, electronic gadgets, or calculators is strictly prohibited.</li>
+                                    <li>Candidates must report at the examination center at least 20 minutes before time.</li>
+                                    <li>The card must be signed by the invigilator during every examination session.</li>
+                                </ol>
+                            </div>
 
-                        <div class="signature-section">
-                            <div class="sig-line">TEACHER'S SIGNATURE</div>
-                            <div class="sig-line">PRINCIPAL'S SIGNATURE</div>
+                            <div class="signature-section">
+                                <div class="sig-line">TEACHER'S SIGNATURE</div>
+                                <div class="sig-line">PRINCIPAL'S SIGNATURE</div>
+                            </div>
                         </div>
                     </div>
                 `;
@@ -756,7 +1011,7 @@ const AdmitCardScreen = () => {
                     style: 'destructive',
                     onPress: async () => {
                         try {
-                            const token = await AsyncStorage.getItem('token');
+                            const token = await AsyncStorage.getItem('principalToken') || await AsyncStorage.getItem('token');
                             await axios.delete(`${API_ENDPOINTS.ADMIT_CARD}/${id}`, {
                                 headers: { Authorization: `Bearer ${token}` }
                             });
@@ -774,44 +1029,15 @@ const AdmitCardScreen = () => {
     const renderList = () => (
         <View style={{ flex: 1 }}>
             <ScrollView style={styles.container} showsVerticalScrollIndicator={false}>
-                <View style={[styles.headerRow, { backgroundColor: 'transparent', paddingTop: 50 }]}>
-                    <TouchableOpacity onPress={() => navigation.goBack()} style={{ marginRight: 15, padding: 5 }}>
+                <View style={[styles.headerRow, { backgroundColor: 'transparent', paddingTop: 50, alignItems: 'center' }]}>
+                    <TouchableOpacity onPress={() => navigation.goBack()} style={{ padding: 5 }}>
                         <Ionicons name="arrow-back" size={28} color={theme.text} />
                     </TouchableOpacity>
-                    <View style={{ flex: 1 }}>
-                        <Text style={styles.title}>Admit Card Registry</Text>
-                        <Text style={styles.subtitle}>Manage examination identification</Text>
-                    </View>
+                    <Text style={[styles.title, { flex: 1, textAlign: 'center' }]}>Admit Card</Text>
+                    <TouchableOpacity onPress={() => setIsFilterModalVisible(true)} style={{ padding: 5 }}>
+                        <Ionicons name="options-outline" size={26} color={theme.text} />
+                    </TouchableOpacity>
                 </View>
-
-                {/* Title Picker Filter */}
-                {!loading && admitCardEvents.length > 0 && (
-                    <View style={{ marginBottom: 15 }}>
-                        <ScrollView 
-                            horizontal 
-                            showsHorizontalScrollIndicator={false} 
-                            contentContainerStyle={{ paddingHorizontal: 20, gap: 10 }}
-                        >
-                            {uniqueTitles.map((title) => (
-                                <TouchableOpacity 
-                                    key={title} 
-                                    onPress={() => setFilterTitle(title)}
-                                    style={[
-                                        { paddingHorizontal: 16, paddingVertical: 8, borderRadius: 12, borderWidth: 1, borderColor: theme.border },
-                                        filterTitle === title ? { backgroundColor: theme.primary, borderColor: theme.primary } : { backgroundColor: theme.card }
-                                    ]}
-                                >
-                                    <Text style={[
-                                        { fontSize: 13, fontWeight: '700' },
-                                        filterTitle === title ? { color: '#fff' } : { color: theme.textLight }
-                                    ]}>
-                                        {title}
-                                    </Text>
-                                </TouchableOpacity>
-                            ))}
-                        </ScrollView>
-                    </View>
-                )}
 
                 {loading ? (
                     <ActivityIndicator size="large" color={theme.primary} style={{ marginTop: 50 }} />
@@ -819,9 +1045,9 @@ const AdmitCardScreen = () => {
                     <View style={styles.emptyState}>
                         <Ionicons name="document-text-outline" size={80} color={theme.border} />
                         <Text style={styles.emptyText}>
-                            {filterTitle === 'All' ? 'No exam events found' : `No events found for ${filterTitle}`}
+                            {filterTitle === 'All' && filterClass === 'All' ? 'No exam events found' : 'No events match your filters'}
                         </Text>
-                        {filterTitle === 'All' && (
+                        {filterTitle === 'All' && filterClass === 'All' && (
                             <TouchableOpacity style={styles.createBtn} onPress={() => setViewMode('create')}>
                                 <Text style={styles.createBtnText}>Create Your First Event</Text>
                             </TouchableOpacity>
@@ -888,6 +1114,89 @@ const AdmitCardScreen = () => {
             >
                 <Ionicons name="add" size={32} color="#fff" />
             </TouchableOpacity>
+
+            {/* Filter Modal */}
+            <Modal
+                visible={isFilterModalVisible}
+                transparent
+                animationType="slide"
+                onRequestClose={() => setIsFilterModalVisible(false)}
+            >
+                <View style={styles.filterModalContainer}>
+                    <TouchableOpacity 
+                        style={{ flex: 1 }} 
+                        onPress={() => setIsFilterModalVisible(false)} 
+                    />
+                    <View style={styles.filterModalContent}>
+                        <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20 }}>
+                            <Text style={{ fontSize: 20, fontWeight: 'bold', color: theme.text }}>Filter Registry</Text>
+                            <TouchableOpacity onPress={() => setIsFilterModalVisible(false)}>
+                                <Ionicons name="close" size={24} color={theme.text} />
+                            </TouchableOpacity>
+                        </View>
+
+                        <View style={styles.filterSection}>
+                            <Text style={styles.filterLabel}>Exam Title</Text>
+                            <ScrollView horizontal showsHorizontalScrollIndicator={false}>
+                                {uniqueTitles.map((title) => (
+                                    <TouchableOpacity 
+                                        key={title} 
+                                        onPress={() => setFilterTitle(title)}
+                                        style={[styles.filterChip, filterTitle === title && styles.filterChipSelected]}
+                                    >
+                                        <Text style={[styles.filterChipText, filterTitle === title && styles.filterChipTextSelected]}>
+                                            {title}
+                                        </Text>
+                                    </TouchableOpacity>
+                                ))}
+                            </ScrollView>
+                        </View>
+
+                        <View style={styles.filterSection}>
+                            <Text style={styles.filterLabel}>Class & Section</Text>
+                            <ScrollView contentContainerStyle={{ flexDirection: 'row', flexWrap: 'wrap' }} style={styles.filterScroll}>
+                                <TouchableOpacity 
+                                    onPress={() => setFilterClass('All')}
+                                    style={[styles.filterChip, filterClass === 'All' && styles.filterChipSelected]}
+                                >
+                                    <Text style={[styles.filterChipText, filterClass === 'All' && styles.filterChipTextSelected]}>
+                                        All Classes
+                                    </Text>
+                                </TouchableOpacity>
+                                {availableClassSections.map((cs, i) => {
+                                    const key = `${cs.class}-${cs.section}`;
+                                    return (
+                                        <TouchableOpacity 
+                                            key={i} 
+                                            onPress={() => setFilterClass(key)}
+                                            style={[styles.filterChip, filterClass === key && styles.filterChipSelected]}
+                                        >
+                                            <Text style={[styles.filterChipText, filterClass === key && styles.filterChipTextSelected]}>
+                                                {cs.class}-{cs.section}
+                                            </Text>
+                                        </TouchableOpacity>
+                                    );
+                                })}
+                            </ScrollView>
+                        </View>
+
+                        <View style={styles.filterFooter}>
+                            <TouchableOpacity 
+                                style={styles.resetBtn} 
+                                onPress={() => { setFilterTitle('All'); setFilterClass('All'); }}
+                            >
+                                <Text style={[styles.secondaryBtnText, { fontSize: 14 }]}>Reset Filters</Text>
+                            </TouchableOpacity>
+                            <TouchableOpacity 
+                                style={styles.applyBtn} 
+                                onPress={() => setIsFilterModalVisible(false)}
+                            >
+                                <Text style={[styles.primaryBtnText, { fontSize: 14 }]}>Apply Filters</Text>
+                            </TouchableOpacity>
+                        </View>
+                    </View>
+                </View>
+            </Modal>
         </View>
     );
 
@@ -1223,7 +1532,7 @@ const AdmitCardScreen = () => {
                         ) : (
                             <>
                                 <Ionicons name="cloud-download-outline" size={24} color="#fff" style={{ marginRight: 10 }} />
-                                <Text style={styles.downloadBtnText}>Bundle {getSelectedCount()} Identities</Text>
+                                <Text style={styles.downloadBtnText}>Download {getSelectedCount()} Admit Cards</Text>
                             </>
                         )}
                     </TouchableOpacity>

@@ -1,19 +1,18 @@
-import { SESClient, SendEmailCommand, SendRawEmailCommand } from '@aws-sdk/client-ses';
 import { S3Client, PutObjectCommand, DeleteObjectCommand } from '@aws-sdk/client-s3';
+import { SendMailClient } from 'zeptomail';
 import nodemailer from 'nodemailer';
 import React from 'react';
 import { Document, Page, Text, View, StyleSheet, Image, renderToBuffer, Font } from '@react-pdf/renderer';
 import dotenv from 'dotenv';
 import crypto from 'crypto';
+import { getBrowser } from './puppeteerManager.js';
+import { getBase64Image } from './imageUtils.js';
 
 dotenv.config();
 
-const sesClient = new SESClient({
-  region: process.env.AWS_REGION,
-  credentials: {
-    accessKeyId: process.env.AWS_ACCESS_KEY_ID,
-    secretAccessKey: process.env.AWS_SECRET_ACCESS_KEY,
-  },
+const zeptoClient = new SendMailClient({
+  url: process.env.ZEPTOMAIL_API_URL,
+  token: process.env.ZEPTOMAIL_API_TOKEN,
 });
 
 const s3Client = new S3Client({
@@ -86,19 +85,22 @@ const deleteFromS3 = async (fileUrl) => {
 };
 
 const sendWelcomeEmail = async (email, instituteName, principalName) => {
-  const params = {
-    Source: process.env.SES_FROM_EMAIL,
-    Destination: {
-      ToAddresses: [email],
-    },
-    Message: {
-      Subject: {
-        Data: `Welcome to School ERP - ${instituteName}`,
-        Charset: 'UTF-8',
+  try {
+    const response = await zeptoClient.sendMail({
+      from: {
+        address: process.env.ZEPTOMAIL_FROM_EMAIL,
+        name: instituteName,
       },
-      Body: {
-        Html: {
-          Data: `
+      to: [
+        {
+          email_address: {
+            address: email,
+            name: principalName,
+          },
+        },
+      ],
+      subject: `Welcome to School ERP - ${instituteName}`,
+      htmlbody: `
             <!DOCTYPE html>
             <html>
             <head>
@@ -141,17 +143,9 @@ const sendWelcomeEmail = async (email, instituteName, principalName) => {
             </body>
             </html>
           `,
-          Charset: 'UTF-8',
-        },
-      },
-    },
-  };
-
-  try {
-    const command = new SendEmailCommand(params);
-    const response = await sesClient.send(command);
-    console.log('✅ Welcome email sent successfully:', response.MessageId);
-    return { success: true, messageId: response.MessageId };
+    });
+    console.log('✅ Welcome email sent successfully:', response.data?.[0]?.message_id);
+    return { success: true, messageId: response.data?.[0]?.message_id };
   } catch (error) {
     console.error('❌ Error sending welcome email:', error);
     return { success: false, error: error.message };
@@ -160,19 +154,22 @@ const sendWelcomeEmail = async (email, instituteName, principalName) => {
 
 // Send student credentials email
 const sendStudentCredentials = async (email, studentName, uniqueCode, instituteName, studentDetails) => {
-  const params = {
-    Source: process.env.SES_FROM_EMAIL,
-    Destination: {
-      ToAddresses: [email],
-    },
-    Message: {
-      Subject: {
-        Data: `Student Registration Successful - ${instituteName}`,
-        Charset: 'UTF-8',
+  try {
+    const response = await zeptoClient.sendMail({
+      from: {
+        address: process.env.ZEPTOMAIL_FROM_EMAIL,
+        name: instituteName,
       },
-      Body: {
-        Html: {
-          Data: `
+      to: [
+        {
+          email_address: {
+            address: email,
+            name: studentName,
+          },
+        },
+      ],
+      subject: `Student Registration Successful - ${instituteName}`,
+      htmlbody: `
             <!DOCTYPE html>
             <html>
             <head>
@@ -225,17 +222,9 @@ const sendStudentCredentials = async (email, studentName, uniqueCode, instituteN
             </body>
             </html>
           `,
-          Charset: 'UTF-8',
-        },
-      },
-    },
-  };
-
-  try {
-    const command = new SendEmailCommand(params);
-    const response = await sesClient.send(command);
-    console.log('✅ Student credentials email sent:', response.MessageId);
-    return { success: true, messageId: response.MessageId };
+    });
+    console.log('✅ Student credentials email sent:', response.data?.[0]?.message_id);
+    return { success: true, messageId: response.data?.[0]?.message_id };
   } catch (error) {
     console.error('❌ Error sending student email:', error);
     return { success: false, error: error.message };
@@ -244,19 +233,22 @@ const sendStudentCredentials = async (email, studentName, uniqueCode, instituteN
 
 // Send teacher credentials email
 const sendTeacherCredentials = async (email, teacherName, uniqueCode, instituteName, teacherDetails) => {
-  const params = {
-    Source: process.env.SES_FROM_EMAIL,
-    Destination: {
-      ToAddresses: [email],
-    },
-    Message: {
-      Subject: {
-        Data: `Teacher Registration Successful - ${instituteName}`,
-        Charset: 'UTF-8',
+  try {
+    const response = await zeptoClient.sendMail({
+      from: {
+        address: process.env.ZEPTOMAIL_FROM_EMAIL,
+        name: instituteName,
       },
-      Body: {
-        Html: {
-          Data: `
+      to: [
+        {
+          email_address: {
+            address: email,
+            name: teacherName,
+          },
+        },
+      ],
+      subject: `Teacher Registration Successful - ${instituteName}`,
+      htmlbody: `
             <!DOCTYPE html>
             <html>
             <head>
@@ -308,17 +300,9 @@ const sendTeacherCredentials = async (email, teacherName, uniqueCode, instituteN
             </body>
             </html>
           `,
-          Charset: 'UTF-8',
-        },
-      },
-    },
-  };
-
-  try {
-    const command = new SendEmailCommand(params);
-    const response = await sesClient.send(command);
-    console.log('✅ Teacher credentials email sent:', response.MessageId);
-    return { success: true, messageId: response.MessageId };
+    });
+    console.log('✅ Teacher credentials email sent:', response.data?.[0]?.message_id);
+    return { success: true, messageId: response.data?.[0]?.message_id };
   } catch (error) {
     console.error('❌ Error sending teacher email:', error);
     return { success: false, error: error.message };
@@ -332,19 +316,21 @@ const generateOTP = () => {
 
 // Send OTP for password reset
 const sendPasswordResetOTP = async (email, otp) => {
-  const params = {
-    Source: process.env.SES_FROM_EMAIL,
-    Destination: {
-      ToAddresses: [email],
-    },
-    Message: {
-      Subject: {
-        Data: 'Password Reset OTP - School ERP',
-        Charset: 'UTF-8',
+  try {
+    const response = await zeptoClient.sendMail({
+      from: {
+        address: process.env.ZEPTOMAIL_FROM_EMAIL,
+        name: 'School ERP Support',
       },
-      Body: {
-        Html: {
-          Data: `
+      to: [
+        {
+          email_address: {
+            address: email,
+          },
+        },
+      ],
+      subject: 'Password Reset OTP - School ERP',
+      htmlbody: `
             <!DOCTYPE html>
             <html>
             <head>
@@ -388,17 +374,9 @@ const sendPasswordResetOTP = async (email, otp) => {
             </body>
             </html>
           `,
-          Charset: 'UTF-8',
-        },
-      },
-    },
-  };
-
-  try {
-    const command = new SendEmailCommand(params);
-    const response = await sesClient.send(command);
-    console.log('✅ Password reset OTP sent successfully:', response.MessageId);
-    return { success: true, messageId: response.MessageId };
+    });
+    console.log('✅ Password reset OTP sent successfully:', response.data?.[0]?.message_id);
+    return { success: true, messageId: response.data?.[0]?.message_id };
   } catch (error) {
     console.error('❌ Error sending password reset OTP:', error);
     return { success: false, error: error.message };
@@ -529,10 +507,6 @@ const ReceiptPDF = ({ feeRecord, instName, instLogo, instAff, fullAddress, stNam
   )
 };
 
-const transporter = nodemailer.createTransport({
-  SES: { ses: sesClient, aws: { SendRawEmailCommand, SESClient } },
-});
-
 const sendFeeReceiptEmail = async (studentEmail, studentName, amount, feeRecord, instituteDetails) => {
   try {
     const { institute_name, logo_url, address, state, district, pincode, affiliation } = instituteDetails;
@@ -557,11 +531,21 @@ const sendFeeReceiptEmail = async (studentEmail, studentName, amount, feeRecord,
       })
     );
 
-    const mailOptions = {
-      from: process.env.SES_FROM_EMAIL,
-      to: studentEmail,
+    const response = await zeptoClient.sendMail({
+      from: {
+        address: process.env.ZEPTOMAIL_FROM_EMAIL,
+        name: institute_name,
+      },
+      to: [
+        {
+          email_address: {
+            address: studentEmail,
+            name: studentName,
+          },
+        },
+      ],
       subject: `Fee Payment Successful - ${institute_name}`,
-      html: `
+      htmlbody: `
         <div style="font-family: Arial, sans-serif; color: #333; line-height: 1.6; max-width: 600px; margin: 0 auto; border: 1px solid #eee; border-radius: 10px; overflow: hidden;">
           <div style="background: #10b981; color: white; padding: 20px; text-align: center;">
             <h1 style="margin: 0;">Payment Successful!</h1>
@@ -588,38 +572,39 @@ const sendFeeReceiptEmail = async (studentEmail, studentName, amount, feeRecord,
       `,
       attachments: [
         {
-          filename: `Fee_Receipt_${feeRecord.payment_id}.pdf`,
-          content: pdfBuffer,
-          contentType: 'application/pdf'
-        }
-      ]
-    };
+          content: pdfBuffer.toString('base64'),
+          mime_type: 'application/pdf',
+          name: `Fee_Receipt_${feeRecord.payment_id}.pdf`,
+        },
+      ],
+    });
 
-    const info = await transporter.sendMail(mailOptions);
-    console.log(`✨ SUCCESS: Fee receipt email sent to ${studentEmail}. ID: ${info.messageId}`);
-    return { success: true, messageId: info.messageId };
+    console.log(`✨ SUCCESS: Fee receipt email sent to ${studentEmail}. ID: ${response.data?.[0]?.message_id}`);
+    return { success: true, messageId: response.data?.[0]?.message_id };
   } catch (error) {
     console.error('🛑 ERROR in sendFeeReceiptEmail:', error);
-    if (error.message && error.message.includes('address is not verified')) {
-      console.warn('💡 HINT: Your AWS SES is in SANDBOX mode. You can ONLY send to verified email addresses. Go to AWS Console > SES > Identities to verify the student email or request production access.');
-    }
     return { success: false, error: error.message };
   }
 };
 
 // Send promotion success email
 const sendPromotionEmail = async (email, studentName, instituteName, details, promotedBy) => {
-  const params = {
-    Source: process.env.SES_FROM_EMAIL,
-    Destination: { ToAddresses: [email] },
-    Message: {
-      Subject: {
-        Data: `Promotion Successful! - ${instituteName}`,
-        Charset: 'UTF-8',
+  try {
+    const response = await zeptoClient.sendMail({
+      from: {
+        address: process.env.ZEPTOMAIL_FROM_EMAIL,
+        name: instituteName,
       },
-      Body: {
-        Html: {
-          Data: `
+      to: [
+        {
+          email_address: {
+            address: email,
+            name: studentName,
+          },
+        },
+      ],
+      subject: `Promotion Successful! - ${instituteName}`,
+      htmlbody: `
             <div style="font-family: Arial, sans-serif; color: #333; line-height: 1.6; max-width: 600px; margin: 0 auto; border: 1px solid #eee; border-radius: 10px; overflow: hidden;">
               <div style="background: #27AE60; color: white; padding: 20px; text-align: center;">
                 <h1 style="margin: 0;">Congratulations!</h1>
@@ -645,15 +630,7 @@ const sendPromotionEmail = async (email, studentName, instituteName, details, pr
               </div>
             </div>
           `,
-          Charset: 'UTF-8',
-        },
-      },
-    },
-  };
-
-  try {
-    const command = new SendEmailCommand(params);
-    await sesClient.send(command);
+    });
     console.log('✅ Promotion email sent to:', email);
     return { success: true };
   } catch (error) {
@@ -663,59 +640,195 @@ const sendPromotionEmail = async (email, studentName, instituteName, details, pr
 };
 
 // Send subscription payment success email
-const sendSubscriptionSuccessEmail = async (email, principalName, instituteName, details) => {
+const sendSubscriptionSuccessEmail = async (email, principalName, instituteId, details) => {
   const { amount, durationDays, expiryDate, transactionId, months } = details;
-  
-  const params = {
-    Source: process.env.SES_FROM_EMAIL,
-    Destination: {
-      ToAddresses: [email],
-    },
-    Message: {
-      Subject: {
-        Data: `Subscription Renewed Successfully - ${instituteName}`,
-        Charset: 'UTF-8',
+  console.log(`📩 Preparing subscription email for ${email} (Inst: ${instituteId})`);
+
+  const formattedExpiry = new Date(expiryDate).toLocaleString('en-IN', {
+    day: '2-digit',
+    month: 'long',
+    year: 'numeric',
+    hour: '2-digit',
+    minute: '2-digit'
+  });
+
+  const formattedAmount = parseFloat(amount).toLocaleString('en-IN', {
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2
+  });
+
+  try {
+    // 1. Fetch Institute Details
+    const instRes = await (await import('../config/db.js')).default.query(
+      'SELECT institute_name, logo_url, address, district, state, pincode FROM institutes WHERE id = $1',
+      [instituteId]
+    );
+
+    let logoBase64 = null;
+    let fullAddress = 'N/A';
+    let instituteName = 'Our Institute';
+
+    if (instRes.rows.length > 0) {
+      const inst = instRes.rows[0];
+      instituteName = inst.institute_name;
+      const logoUrl = inst.logo_url?.startsWith('http') ? inst.logo_url : (inst.logo_url ? `${process.env.S3_BUCKET_URL}/${inst.logo_url}` : null);
+      if (logoUrl) {
+        try {
+          logoBase64 = await getBase64Image(logoUrl);
+        } catch (e) {
+          console.error('⚠️ Could not load logo for receipt:', e.message);
+        }
+      }
+      fullAddress = [inst.address, inst.district, inst.state, inst.pincode].filter(Boolean).join(', ');
+    } else {
+      console.warn(`⚠️ No institute found for ID ${instituteId} while generating receipt.`);
+    }
+
+    // 2. Generate PDF Receipt using Puppeteer
+    console.log('📄 Generating PDF Receipt with Puppeteer...');
+    const browser = await getBrowser();
+    const page = await browser.newPage();
+
+    const receiptHtml = `
+      <html>
+        <head>
+          <style>
+            body { font-family: 'Helvetica', sans-serif; margin: 0; padding: 40px; color: #333; }
+            .receipt-container { border: 1px solid #eee; padding: 40px; border-radius: 10px; }
+            .header { display: flex; justify-content: space-between; align-items: center; border-bottom: 2px solid #f4f4f4; padding-bottom: 20px; }
+            .logo { height: 60px; }
+            .title { font-size: 24px; font-weight: bold; color: #1e1b4b; }
+            .success-msg { color: #059669; font-weight: bold; margin: 20px 0; font-size: 18px; }
+            .details-table { width: 100%; border-collapse: collapse; margin-top: 30px; }
+            .details-table th { text-align: left; padding: 12px; border-bottom: 1px solid #eee; color: #64748b; font-size: 12px; text-transform: uppercase; }
+            .details-table td { padding: 15px 12px; border-bottom: 1px solid #f8fafc; font-size: 14px; }
+            .total-row { background: #f8fafc; font-weight: bold; }
+            .footer { margin-top: 50px; text-align: center; color: #94a3b8; font-size: 12px; }
+            .brand { color: #1e1b4b; font-weight: bold; font-size: 20px; margin-bottom: 10px; }
+          </style>
+        </head>
+        <body>
+          <div class="receipt-container">
+            <div class="header">
+              <div>
+                <div class="brand">KLASSIN ERP</div>
+                <div style="font-size: 12px; color: #64748b;">School Management System</div>
+              </div>
+              <div class="title">PAYMENT RECEIPT</div>
+            </div>
+
+            <div class="success-msg">Congratulations! Your Payment was Successful</div>
+
+            <p>Dear ${principalName},</p>
+            <p>This is a formal receipt for your subscription payment for <strong>${instituteName}</strong>.</p>
+
+            <table class="details-table">
+              <thead>
+                <tr>
+                  <th>Description</th>
+                  <th>Quantity</th>
+                  <th>Amount</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td>ERP Subscription Renewal (${months} Month/s)</td>
+                  <td>${durationDays} Days</td>
+                  <td>₹${formattedAmount}</td>
+                </tr>
+                <tr class="total-row">
+                  <td colspan="2" style="text-align: right;">Grand Total</td>
+                  <td>₹${formattedAmount}</td>
+                </tr>
+              </tbody>
+            </table>
+
+            <div style="margin-top: 30px; background: #ecfeff; padding: 20px; border-radius: 8px;">
+              <div style="font-size: 12px; color: #164e63; font-weight: bold; text-transform: uppercase;">Subscription Details</div>
+              <div style="display: flex; gap: 40px; margin-top: 10px;">
+                <div>
+                  <div style="font-size: 11px; color: #64748b;">TRANSACTION ID</div>
+                  <div style="font-size: 13px; font-weight: bold;">${transactionId}</div>
+                </div>
+                <div>
+                  <div style="font-size: 11px; color: #64748b;">EXPIRY DATE</div>
+                  <div style="font-size: 13px; font-weight: bold;">${formattedExpiry}</div>
+                </div>
+              </div>
+            </div>
+
+            <div class="footer">
+              <p>Thank you for choosing Klassin. This is a computer-generated document.</p>
+              <p>&copy; 2026 Klassin ERP. All rights reserved.</p>
+            </div>
+          </div>
+        </body>
+      </html>
+    `;
+
+    await page.setContent(receiptHtml);
+    const pdfBuffer = await page.pdf({ format: 'A4', printBackground: true });
+    await page.close();
+    console.log('✅ PDF Buffer generated successfully.');
+
+    // 3. Send the Email
+    console.log('📧 Sending email via ZeptoMail...');
+    const response = await zeptoClient.sendMail({
+      from: {
+        address: process.env.ZEPTOMAIL_FROM_EMAIL,
+        name: 'KLASSIN ERP Support',
       },
-      Body: {
-        Html: {
-          Data: `
+      to: [
+        {
+          email_address: {
+            address: email,
+            name: principalName,
+          },
+        },
+      ],
+      subject: `Congratulations! Payment Successful - ${instituteName}`,
+      htmlbody: `
             <!DOCTYPE html>
             <html>
             <head>
               <style>
                 body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; line-height: 1.6; color: #1e293b; margin: 0; padding: 0; }
                 .container { max-width: 600px; margin: 20px auto; border: 1px solid #e2e8f0; border-radius: 12px; overflow: hidden; box-shadow: 0 4px 6px -1px rgb(0 0 0 / 0.1); }
-                .header { background: linear-gradient(135deg, #111827 0%, #1e1b4b 100%); color: white; padding: 40px 20px; text-align: center; }
-                .status-badge { display: inline-block; background: rgba(34, 211, 238, 0.2); color: #22d3ee; padding: 6px 16px; border-radius: 20px; font-size: 12px; font-weight: bold; text-transform: uppercase; margin-bottom: 15px; border: 1px solid rgba(34, 211, 238, 0.3); }
+                .header { background: linear-gradient(135deg, #1e1b4b 0%, #312e81 100%); color: white; padding: 40px 20px; text-align: center; }
                 .content { background-color: #ffffff; padding: 35px; }
                 .details-grid { background-color: #f8fafc; border-radius: 10px; padding: 20px; margin: 25px 0; border: 1px solid #f1f5f9; }
                 .detail-row { display: flex; justify-content: space-between; margin-bottom: 12px; border-bottom: 1px solid #edf2f7; padding-bottom: 8px; }
                 .detail-row:last-child { border-bottom: none; }
                 .label { color: #64748b; font-size: 13px; font-weight: 600; text-transform: uppercase; }
                 .value { color: #0f172a; font-size: 14px; font-weight: 700; }
-                .expiry-box { background: #ecfeff; border-left: 4px solid #06b6d4; padding: 15px; margin-top: 20px; color: #164e63; }
+                .expiry-box { background: #f0fdf4; border-left: 4px solid #22c55e; padding: 15px; margin-top: 20px; color: #166534; }
                 .footer { text-align: center; padding: 20px; color: #94a3b8; font-size: 12px; background: #f8fafc; }
-                .button { background-color: #22d3ee; color: #083344; padding: 12px 25px; text-decoration: none; border-radius: 6px; font-weight: bold; display: inline-block; margin-top: 20px; }
+                .button { background-color: #4f46e5; color: white; padding: 12px 25px; text-decoration: none; border-radius: 6px; font-weight: bold; display: inline-block; margin-top: 20px; }
               </style>
             </head>
             <body>
               <div class="container">
                 <div class="header">
-                  <div class="status-badge">Payment Successful</div>
-                  <h1 style="margin: 0; font-size: 24px;">Subscription Renewed!</h1>
+                  <h1 style="margin: 0; font-size: 28px;">Congratulations!</h1>
+                  <p style="margin: 10px 0 0; opacity: 0.9;">Your payment of ₹${formattedAmount} was successful</p>
                 </div>
                 <div class="content">
                   <h2 style="margin-top: 0; color: #0f172a;">Hello ${principalName},</h2>
-                  <p>Great news! Your payment has been successfully processed, and your access to <strong>${instituteName}</strong> ERP has been extended.</p>
+                  <p>We are delighted to confirm that your subscription for <strong>${instituteName}</strong> has been successfully renewed.</p>
                   
+                  <div class="expiry-box">
+                    <strong style="font-size: 12px; text-transform: uppercase; display: block; margin-bottom: 4px;">Subscription Valid Until</strong>
+                    <span style="font-size: 18px; font-weight: 800;">${formattedExpiry}</span>
+                  </div>
+
                   <div class="details-grid">
                     <div class="detail-row">
                       <span class="label">Amount Paid</span>
-                      <span class="value">₹${parseFloat(amount).toLocaleString('en-IN')}</span>
+                      <span class="value">₹${formattedAmount}</span>
                     </div>
                     <div class="detail-row">
-                      <span class="label">Duration</span>
-                      <span class="value">${durationDays} Days (${months} Month/s)</span>
+                      <span class="label">Plan Duration</span>
+                      <span class="value">${months} Month/s (${durationDays} Days)</span>
                     </div>
                     <div class="detail-row">
                       <span class="label">Transaction ID</span>
@@ -723,40 +836,34 @@ const sendSubscriptionSuccessEmail = async (email, principalName, instituteName,
                     </div>
                     <div class="detail-row">
                       <span class="label">Payment Status</span>
-                      <span class="value" style="color: #059669;">Completed</span>
+                      <span class="value" style="color: #059669;">Success</span>
                     </div>
                   </div>
                   
-                  <div class="expiry-box">
-                    <strong style="font-size: 12px; text-transform: uppercase; display: block; margin-bottom: 4px;">New Expiry Date</strong>
-                    <span style="font-size: 18px; font-weight: 800;">${new Date(expiryDate).toLocaleString('en-IN', { day: '2-digit', month: 'long', year: 'numeric', hour: '2-digit', minute: '2-digit' })}</span>
-                  </div>
-                  
-                  <p style="margin-top: 25px;">You can now continue managing your institute without any interruptions. Your dashboard visuals and progress bars have been updated.</p>
+                  <p>Your official payment receipt is attached to this email. You can also view your transaction history in your dashboard.</p>
                   
                   <div style="text-align: center;">
-                    <a href="${process.env.FRONTEND_URL}/login?redirectTo=/dashboard/subscription" class="button">Go to Dashboard</a>
+                    <a href="${process.env.FRONTEND_URL}/login" class="button">Go to Dashboard</a>
                   </div>
                 </div>
                 <div class="footer">
-                  <p>&copy; 2026 School ERP. All rights reserved.</p>
-                  <p>This is an automated receipt. No signature required.</p>
+                  <p>&copy; 2026 Klassin ERP. All rights reserved.</p>
+                  <p>Thank you for partnering with us to simplify school management.</p>
                 </div>
               </div>
             </body>
             </html>
           `,
-          Charset: 'UTF-8',
+      attachments: [
+        {
+          content: pdfBuffer.toString('base64'),
+          mime_type: 'application/pdf',
+          name: `Klassin_Subscription_Receipt_${transactionId}.pdf`,
         },
-      },
-    },
-  };
-
-  try {
-    const command = new SendEmailCommand(params);
-    const response = await sesClient.send(command);
-    console.log('✅ Subscription success email sent:', response.MessageId);
-    return { success: true, messageId: response.MessageId };
+      ],
+    });
+    console.log('✅ Professional subscription success email sent:', response.data?.[0]?.message_id);
+    return { success: true, messageId: response.data?.[0]?.message_id };
   } catch (error) {
     console.error('❌ Error sending subscription success email:', error);
     return { success: false, error: error.message };
@@ -767,19 +874,22 @@ const sendSubscriptionSuccessEmail = async (email, principalName, instituteName,
 const sendSubscriptionExpiredEmail = async (email, principalName, instituteName, details) => {
   const { expiryDate, monthlyPrice } = details;
   
-  const params = {
-    Source: process.env.SES_FROM_EMAIL,
-    Destination: {
-      ToAddresses: [email],
-    },
-    Message: {
-      Subject: {
-        Data: `URGENT: Subscription Expired - ${instituteName}`,
-        Charset: 'UTF-8',
+  try {
+    const response = await zeptoClient.sendMail({
+      from: {
+        address: process.env.ZEPTOMAIL_FROM_EMAIL,
+        name: instituteName,
       },
-      Body: {
-        Html: {
-          Data: `
+      to: [
+        {
+          email_address: {
+            address: email,
+            name: principalName,
+          },
+        },
+      ],
+      subject: `URGENT: Subscription Expired - ${instituteName}`,
+      htmlbody: `
             <!DOCTYPE html>
             <html>
             <head>
@@ -827,17 +937,9 @@ const sendSubscriptionExpiredEmail = async (email, principalName, instituteName,
             </body>
             </html>
           `,
-          Charset: 'UTF-8',
-        },
-      },
-    },
-  };
-
-  try {
-    const command = new SendEmailCommand(params);
-    const response = await sesClient.send(command);
-    console.log('✅ Subscription expired email sent:', response.MessageId);
-    return { success: true, messageId: response.MessageId };
+    });
+    console.log('✅ Subscription expired email sent:', response.data?.[0]?.message_id);
+    return { success: true, messageId: response.data?.[0]?.message_id };
   } catch (error) {
     console.error('❌ Error sending subscription expired email:', error);
     return { success: false, error: error.message };

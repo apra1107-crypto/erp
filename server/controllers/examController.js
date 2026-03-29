@@ -1,5 +1,37 @@
 import pool from '../config/db.js';
 import { sendPushNotification } from '../utils/pushNotification.js';
+import { getBrowser } from '../utils/puppeteerManager.js';
+import { getBase64Image } from '../utils/imageUtils.js';
+
+// --- Global Concurrency Queue Logic ---
+let activeJobs = 0;
+const MAX_CONCURRENT_PDFS = 2; // Best for 4GB RAM
+const queue = [];
+
+const processQueue = async () => {
+    if (activeJobs >= MAX_CONCURRENT_PDFS || queue.length === 0) return;
+
+    activeJobs++;
+    const { job, resolve, reject } = queue.shift();
+
+    try {
+        const result = await job();
+        resolve(result);
+    } catch (error) {
+        reject(error);
+    } finally {
+        activeJobs--;
+        processQueue(); // Run next job in line
+    }
+};
+
+const addToQueue = (job) => {
+    return new Promise((resolve, reject) => {
+        queue.push({ job, resolve, reject });
+        processQueue();
+    });
+};
+// ----------------------------------------
 
 export const togglePublishExam = async (req, res) => {
     try {
@@ -84,7 +116,8 @@ export const createExam = async (req, res) => {
             show_highest_marks,
             include_percentage,
             include_grade,
-            manual_stats
+            manual_stats,
+            evaluation_mode
         } = req.body;
 
         // Basic validation
@@ -99,14 +132,16 @@ export const createExam = async (req, res) => {
             `INSERT INTO exams (
                 institute_id, name, session, class_name, section, 
                 show_highest_marks, include_percentage, include_grade,
-                grading_rules, subjects_blueprint, manual_stats, session_id
-            ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12) RETURNING *`,
+                grading_rules, subjects_blueprint, manual_stats, session_id,
+                evaluation_mode
+            ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13) RETURNING *`,
             [
                 institute_id, name, session, class_name, section,
                 show_highest_marks, include_percentage, include_grade,
                 JSON.stringify(grading_rules),
                 JSON.stringify(subjects_blueprint), JSON.stringify(manual_stats || {}),
-                sessionId
+                sessionId,
+                evaluation_mode || 'senior'
             ]
         );
 
@@ -292,10 +327,7 @@ export const getStudentMarksheet = async (req, res) => {
         if (examRes.rows.length === 0) return res.status(404).json({ message: 'Exam not found' });
 
         // 2. Student Data (Detailed)
-        // We need institute details too? Usually stored in institute table or user session.
-        // Let's fetch institute details for the Header
         const instituteRes = await pool.query(`SELECT * FROM institutes WHERE id = $1`, [institute_id]);
-
         const studentRes = await pool.query(`SELECT * FROM students WHERE id = $1`, [student_id]);
 
         // 3. Result Data
@@ -304,11 +336,25 @@ export const getStudentMarksheet = async (req, res) => {
             [exam_id, student_id]
         );
 
+        // 4. Attendance Data (for current session)
+        const attendanceRes = await pool.query(
+            `SELECT 
+                COUNT(*) as total_days,
+                COUNT(*) FILTER (WHERE status = 'present') as present_days
+             FROM attendance 
+             WHERE student_id = $1 AND institute_id = $2`,
+            [student_id, institute_id]
+        );
+
+        const attendance = attendanceRes.rows[0];
+        attendance.percentage = attendance.total_days > 0 ? ((attendance.present_days / attendance.total_days) * 100).toFixed(2) : 0;
+
         res.json({
             exam: examRes.rows[0],
             student: studentRes.rows[0],
             institute: instituteRes.rows[0],
-            result: resultRes.rows[0] || {} // Empty object if no result yet
+            result: resultRes.rows[0] || {},
+            attendance
         });
 
     } catch (err) {
@@ -317,7 +363,265 @@ export const getStudentMarksheet = async (req, res) => {
     }
 };
 
-// Helper for autocomplete in stats modal
+// Shared Helper for PDF Generation Logic (OPTIMIZED)
+const generatePDFLogic = async (examId, studentIds, instituteId, res) => {
+    let page = null;
+    try {
+        // --- QUEUE WRAPPER ---
+        const result = await addToQueue(async () => {
+            // 1. Get Exam & Institute Details
+            const examResult = await pool.query(
+                `SELECT e.*, i.institute_name, i.address, i.district, i.state, i.pincode, i.logo_url, i.affiliation, i.landmark 
+                 FROM exams e
+                 JOIN institutes i ON e.institute_id = i.id
+                 WHERE e.id = $1 AND e.institute_id = $2`,
+                [examId, instituteId]
+            );
+            if (examResult.rows.length === 0) throw new Error('Exam not found');
+            const exam = examResult.rows[0];
+            const isJunior = exam.evaluation_mode === 'junior';
+            const subjects_blueprint = Array.isArray(exam.subjects_blueprint) ? exam.subjects_blueprint : [];
+            const manual_stats = exam.manual_stats || {};
+
+            // 2. Fetch selected students data
+            const studentsDataRes = await pool.query(
+                `SELECT s.*, r.marks_data, r.calculated_stats, r.overall_remark
+                 FROM students s
+                 LEFT JOIN student_exam_results r ON s.id = r.student_id AND r.exam_id = $1
+                 WHERE s.id = ANY($2) AND s.institute_id = $3
+                 ORDER BY s.roll_no ASC`,
+                [examId, studentIds, instituteId]
+            );
+            const students = studentsDataRes.rows;
+
+            // --- DATA PRE-OPTIMIZATION (BASE64) ---
+            const rawLogo = exam.logo_url;
+            const logoFullUrl = rawLogo?.startsWith('http') ? rawLogo : (rawLogo ? `${process.env.S3_BUCKET_URL}/${rawLogo}` : null);
+            const logoBase64 = await getBase64Image(logoFullUrl);
+
+            // Fetch Student Photos & Attendance in small chunks
+            const optimizedStudents = [];
+            for (const s of students) {
+                const rawPhoto = s.photo_url || s.profile_image;
+                const photoFullUrl = rawPhoto?.startsWith('http') ? rawPhoto : (rawPhoto ? `${process.env.S3_BUCKET_URL}/${rawPhoto}` : null);
+                
+                let photoBase64 = null;
+                if (photoFullUrl) {
+                    photoBase64 = await getBase64Image(photoFullUrl);
+                }
+
+                // Fetch Attendance for each student
+                const attRes = await pool.query(
+                    `SELECT 
+                        COUNT(*) as total_days,
+                        COUNT(*) FILTER (WHERE status = 'present') as present_days
+                     FROM attendance 
+                     WHERE student_id = $1 AND institute_id = $2`,
+                    [s.id, instituteId]
+                );
+                const att = attRes.rows[0] || { total_days: 0, present_days: 0 };
+                const att_percent = att.total_days > 0 ? ((att.present_days / att.total_days) * 100).toFixed(2) : 0;
+
+                optimizedStudents.push({ ...s, photoBase64, attendance: { ...att, percentage: att_percent } });
+            }
+
+            // 3. Generate HTML Content
+            const totalMax = subjects_blueprint.reduce((sum, sub) => sum + (parseFloat(sub.max_theory) || 0) + (parseFloat(sub.max_practical) || 0), 0);
+
+            let htmlContent = `
+                <html>
+                <head>
+                    <style>
+                        @page { size: A4; margin: 0; }
+                        * { box-sizing: border-box; -webkit-print-color-adjust: exact; }
+                        body { margin: 0; padding: 0; background: #fff; font-family: 'Helvetica', Arial, sans-serif; }
+                        .report-card { 
+                            width: 210mm; height: 297mm; padding: 12mm; padding-top: 6mm;
+                            background: #fff; page-break-after: always; display: flex; flex-direction: column;
+                            position: relative; border: 2.5px solid #000; overflow: hidden; margin: 0;
+                        }
+                        .inner-border { position: absolute; top: 2mm; left: 2mm; right: 2mm; bottom: 2mm; border: 0.8px solid #333; pointer-events: none; z-index: 0; }
+                        .header { text-align: center; margin-bottom: 10px; z-index: 10; }
+                        .inst-row { display: flex; flex-direction: row; align-items: center; justify-content: center; gap: 15px; margin-bottom: 0; }
+                        .inst-logo { width: 80px; height: 80px; object-fit: contain; }
+                        .inst-name { font-size: 28px; white-space: nowrap; font-weight: 900; text-transform: uppercase; color: #1e1b4b; margin: 0; line-height: 1; margin-top: -10px; }
+                        .inst-affiliation { font-size: 17px; color: #4f46e5; font-weight: 700; margin-top: -27px; margin-bottom: 4px; margin-left: 60px; }
+                        .inst-sub { font-size: 13px; color: #444; font-weight: 700; margin-top: 2px; margin-bottom: 8px; line-height: 1.2; margin-left: 26px; }
+                        .exam-title-box { display: inline-block; background: #1e1b4b; color: #fff; padding: 6px 35px; border-radius: 4px; margin-top: 5px; transform: skewX(-10deg); font-weight: 900; font-size: 16px; }
+                        .student-section { display: flex; flex-direction: row; justify-content: space-between; margin-bottom: 15px; padding: 12px; background: #f8fafc; border: 1.5px solid #e2e8f0; border-radius: 12px; }
+                        .info-grid { flex: 1; }
+                        .info-row { display: flex; border-bottom: 1px solid #cbd5e1; padding: 6px 0; }
+                        .info-label { width: 140px; font-size: 10px; font-weight: bold; color: #64748b; }
+                        .info-value { flex: 1; font-size: 14px; font-weight: 900; color: #0f172a; }
+                        .photo-box { width: 90px; height: 110px; border: 4px solid #fff; box-shadow: 0 4px 8px rgba(0,0,0,0.1); border-radius: 4px; overflow: hidden; background: #eee; }
+                        .photo-box img { width: 100%; height: 100%; object-fit: cover; }
+                        table { width: 100%; border-collapse: collapse; border: 2px solid #1e1b4b; border-radius: 12px; overflow: hidden; margin-bottom: 15px; }
+                        th { background: #1e1b4b; color: #fff; padding: 8px; font-size: 11px; font-weight: 900; }
+                        td { border-bottom: 1px solid #e2e8f0; padding: 8px; text-align: center; font-size: 13px; font-weight: 800; }
+                        .text-left { text-align: left; padding-left: 15px; }
+                        tr:nth-child(even) { background-color: #f8fafc; }
+                        .summary-box { display: flex; flex-direction: row; justify-content: space-between; background: #1e1b4b; padding: 15px; border-radius: 12px; margin-bottom: 15px; color: #fff; }
+                        .stat-item { text-align: center; }
+                        .stat-label { font-size: 9px; font-weight: bold; color: #94a3b8; margin-bottom: 2px; }
+                        .stat-value { font-size: 20px; font-weight: 900; }
+                        .medal-row { display: flex; flex-direction: row; gap: 10px; margin-bottom: 15px; }
+                        .medal { flex: 1; border: 1.5px solid #4f46e5; background: #f5f3ff; padding: 10px; border-radius: 10px; display: flex; align-items: center; gap: 12px; }
+                        .medal-text { font-size: 13px; font-weight: 900; color: #1e1b4b; }
+                        .medal-score { font-size: 10px; font-weight: 800; color: #4338ca; }
+                        .remarks-box { padding: 10px; background: #fffbeb; border-radius: 10px; border-left: 5px solid #f59e0b; margin-bottom: 10px; }
+                        .remark-title { font-size: 10px; font-weight: 900; color: #92400e; margin-bottom: 3px; text-decoration: underline; }
+                        .remark-text { font-size: 12px; font-style: italic; color: #451a03; font-weight: 600; line-height: 1.2; }
+                        .footer { margin-top: auto; display: flex; flex-direction: row; justify-content: space-between; padding: 0 10px 25px 10px; }
+                        .sig-line { border-top: 2.5px solid #1e1b4b; width: 150px; text-align: center; font-size: 10px; font-weight: 900; padding-top: 8px; }
+                        
+                        /* Junior Mode Styles */
+                        .attendance-box { 
+                            margin-top: 10px; 
+                            background: #f1f5f9; 
+                            padding: 12px; 
+                            border-radius: 10px; 
+                            border: 1px solid #cbd5e1;
+                            display: flex;
+                            justify-content: space-around;
+                            align-items: center;
+                        }
+                        .att-item { text-align: center; }
+                        .att-label { font-size: 9px; font-weight: bold; color: #475569; text-transform: uppercase; }
+                        .att-val { font-size: 15px; font-weight: 900; color: #1e293b; }
+                    </style>
+                </head>
+                <body>
+            `;
+
+            for (const s of optimizedStudents) {
+                const marks = s.marks_data || [];
+                const stats = s.calculated_stats || {};
+                
+                htmlContent += `
+                    <div class="report-card">
+                        <div class="inner-border"></div>
+                        <div class="header">
+                            <div class="inst-row">
+                                ${logoBase64 ? `<img src="${logoBase64}" class="inst-logo" />` : ''}
+                                <h1 class="inst-name">${exam.institute_name}</h1>
+                            </div>
+                            ${exam.affiliation ? `<p class="inst-affiliation">${exam.affiliation}</p>` : ''}
+                            <p class="inst-sub" style="margin-top: 0;">${exam.address || ''} ${exam.landmark || ''} ${exam.district || ''} ${exam.state || ''} ${exam.pincode || ''}</p>
+                            <div class="exam-title-box">${exam.name}</div>
+                        </div>
+                        <div class="student-section">
+                            <div class="info-grid">
+                                <div class="info-row"><div class="info-label">STUDENT NAME</div><div class="info-value">${s.name}</div></div>
+                                <div class="info-row"><div class="info-label">CLASS & SECTION</div><div class="info-value">${s.class} - ${s.section}</div></div>
+                                <div class="info-row"><div class="info-label">ROLL NUMBER</div><div class="info-value">${s.roll_no}</div></div>
+                                <div class="info-row"><div class="info-label">FATHER'S NAME</div><div class="info-value">${s.father_name}</div></div>
+                                <div class="info-row"><div class="info-label">MOTHER'S NAME</div><div class="info-value">${s.mother_name || '-'}</div></div>
+                                <div class="info-row"><div class="info-label">DATE OF BIRTH</div><div class="info-value">${s.dob ? new Date(s.dob).toLocaleDateString('en-IN') : '-'}</div></div>
+                            </div>
+                            <div class="photo-box">${s.photoBase64 ? `<img src="${s.photoBase64}" />` : '<span style="font-size: 10px; color: #999; display: flex; align-items: center; justify-content: center; height: 100%;">PHOTO</span>'}</div>
+                        </div>
+                        
+                        ${isJunior ? `
+                            <table>
+                                <thead><tr><th class="text-left" style="width: 70%;">ASSESSMENT INDICATOR / SKILLS</th><th style="width: 30%;">GRADE / PERFORMANCE</th></tr></thead>
+                                <tbody>
+                                    ${subjects_blueprint.map(sub => {
+                                        const marksData = marks.find(mk => mk.subject === sub.name) || {};
+                                        return `<tr><td class="text-left" style="color: #1e293b; font-weight: 900;">${sub.name}</td><td style="color: #4f46e5; font-size: 15px; font-weight: 900;">${marksData.grade || '-'}</td></tr>`;
+                                    }).join('')}
+                                </tbody>
+                            </table>
+                        ` : `
+                            <table>
+                                <thead><tr><th class="text-left">SUBJECT</th><th>MAX</th><th>PASS</th><th>OBT</th>${exam.show_highest_marks ? '<th>HIGH</th>' : ''}<th>GRADE</th></tr></thead>
+                                <tbody>
+                                    ${subjects_blueprint.map(sub => {
+                                        const marksData = marks.find(mk => mk.subject === sub.name) || {};
+                                        return `<tr><td class="text-left" style="color: #1e293b;">${sub.name}</td><td>${(parseFloat(sub.max_theory) || 0) + (parseFloat(sub.max_practical) || 0)}</td><td>${sub.passing_marks || '-'}</td><td style="color: #4f46e5; font-size: 12px; font-weight: 900;">${marksData.theory || '-'}</td>${exam.show_highest_marks ? `<td style="color: #6366f1;">${manual_stats[`highest_${sub.name}`] || '-'}</td>` : ''}<td style="font-weight: 900;">${marksData.grade || '-'}</td></tr>`;
+                                    }).join('')}
+                                </tbody>
+                            </table>
+                            <div class="summary-box">
+                                <div class="stat-item"><div class="stat-label">GRAND TOTAL</div><div class="stat-value">${stats.total || 0} / ${totalMax}</div></div>
+                                <div class="stat-item"><div class="stat-label">PERCENTAGE</div><div class="stat-value">${stats.percentage || 0}%</div></div>
+                                <div class="stat-item"><div class="stat-label">FINAL GRADE</div><div class="stat-value" style="color: #fbbf24;">${stats.grade || '-'}</div></div>
+                            </div>
+                        `}
+
+                        <div class="remarks-box"><div class="remark-title">OFFICIAL REMARKS</div><div class="remark-text">"${s.overall_remark || 'Satisfactory performance. Aim for higher goals in the next academic term.'}"</div></div>
+
+                        ${isJunior ? `
+                            <div class="attendance-box">
+                                <div class="att-item"><div class="att-label">Total Days</div><div class="att-val">${s.attendance.total_days}</div></div>
+                                <div class="att-item"><div class="att-label">Days Present</div><div class="att-val">${s.attendance.present_days}</div></div>
+                                <div class="att-item"><div class="att-label">Attendance %</div><div class="att-val">${s.attendance.percentage}%</div></div>
+                            </div>
+                        ` : ''}
+
+                        ${!isJunior && (manual_stats.section_topper_name || manual_stats.class_topper_name) ? `<div class="medal-row" style="margin-top: 10px;">${manual_stats.section_topper_name ? `<div class="medal"><div style="font-size: 24px;">🏆</div><div><div class="medal-text">Section Topper: ${manual_stats.section_topper_name}</div><div class="medal-score">Score: ${manual_stats.section_topper_total} / ${totalMax}</div></div></div>` : ''}${manual_stats.class_topper_name ? `<div class="medal"><div style="font-size: 24px;">🎖️</div><div><div class="medal-text">Class Topper: ${manual_stats.class_topper_name}</div><div class="medal-score">Score: ${manual_stats.class_topper_total} / ${totalMax}</div></div></div>` : ''}</div>` : ''}
+                        
+                        <div class="footer">
+                            <div class="sig-line">CLASS TEACHER'S SIGNATURE</div>
+                            <div class="sig-line">PRINCIPAL'S SIGNATURE</div>
+                        </div>
+                    </div>
+                `;
+            }
+            htmlContent += `</body></html>`;
+
+            const browser = await getBrowser();
+            page = await browser.newPage();
+            
+            // Fast loading because all data is local (Base64 + HTML)
+            await page.setContent(htmlContent, { waitUntil: 'domcontentloaded' });
+            
+            const pdfBuffer = await page.pdf({ 
+                format: 'A4', 
+                printBackground: true, 
+                timeout: 60000, 
+                margin: { top: 0, right: 0, bottom: 0, left: 0 } 
+            });
+
+            return pdfBuffer;
+        });
+
+        res.set({ 
+            'Content-Type': 'application/pdf', 
+            'Content-Length': result.length, 
+            'Content-Disposition': `attachment; filename="marksheet.pdf"` 
+        });
+        res.send(result);
+
+    } catch (err) {
+        console.error('PDF Generation Error:', err.message);
+        res.status(500).json({ message: 'Server error generating PDF' });
+    } finally {
+        if (page) await page.close(); // Crucial: Always close page to free RAM
+    }
+};
+
+export const generateBulkPDF = async (req, res) => {
+    const { id } = req.params;
+    const { studentIds } = req.body;
+    const instituteId = req.user?.institute_id || req.user?.id;
+    if (!studentIds || !Array.isArray(studentIds) || studentIds.length === 0) return res.status(400).json({ message: 'No students selected' });
+    await generatePDFLogic(id, studentIds, instituteId, res);
+};
+
+export const generateStudentPDF = async (req, res) => {
+    const { id } = req.params; // examId
+    const studentId = req.user.id;
+    const instituteId = req.user.institute_id;
+    
+    // Check if result is published before allowing download
+    const checkPublish = await pool.query(`SELECT is_published FROM exams WHERE id = $1`, [id]);
+    if (!checkPublish.rows[0]?.is_published) {
+        return res.status(403).json({ message: 'Results for this exam are not published yet.' });
+    }
+
+    await generatePDFLogic(id, [studentId], instituteId, res);
+};
+
 export const getClassStudents = async (req, res) => {
     try {
         const { class_name } = req.query; // Passed as query param

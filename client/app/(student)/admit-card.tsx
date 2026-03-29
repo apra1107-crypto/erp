@@ -19,6 +19,7 @@ import axios from 'axios';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as Print from 'expo-print';
 import * as Sharing from 'expo-sharing';
+import { cacheDirectory, writeAsStringAsync } from 'expo-file-system/legacy';
 import { API_ENDPOINTS, BASE_URL } from '../../constants/Config';
 import { useNavigation, useRouter, useLocalSearchParams } from 'expo-router';
 import Toast from 'react-native-toast-message';
@@ -175,149 +176,48 @@ const StudentAdmitCardScreen = () => {
 
         try {
             setIsGeneratingPDF(true);
-            const [instLogoB64, studentPhotoB64] = await Promise.all([
-                toBase64(selectedCard.institute_logo),
-                toBase64(studentData.photo_url)
-            ]);
-
-            const fullAddress = [
-                selectedCard.institute_address,
-                selectedCard.landmark,
-                selectedCard.district,
-                selectedCard.state,
-                selectedCard.pincode
-            ].filter(Boolean).join(' ');
-
-            const formatDateString = (dateStr: string | null | undefined): string => {
-                if (!dateStr) return '';
-                try {
-                    const date = new Date(dateStr);
-                    if (isNaN(date.getTime())) return dateStr;
-                    const d = date.getDate().toString().padStart(2, '0');
-                    const m = (date.getMonth() + 1).toString().padStart(2, '0');
-                    const y = date.getFullYear();
-                    return `${d}-${m}-${y}`;
-                } catch (e) { return dateStr || ''; }
-            };
-
-            const htmlContent = `
-                <html>
-                <head>
-                    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-                    <style>
-                        @page { size: A4; margin: 0; }
-                        body { font-family: 'Helvetica', Arial, sans-serif; margin: 0; padding: 0; background: #fff; }
-                        .page-container {
-                            width: 210mm; height: 297mm; padding: 25px 35px; box-sizing: border-box;
-                            display: flex; flex-direction: column; background: #fff; position: relative;
-                        }
-                        .inner-border { position: absolute; top: 10px; left: 10px; right: 10px; bottom: 10px; border: 1px solid #333; pointer-events: none; }
-                        .header-container { display: flex; flex-direction: row; align-items: center; justify-content: center; margin-bottom: 5px; }
-                        .logo { width: 65px; height: 65px; margin-right: 15px; border-radius: 8px; }
-                        .institute-info { text-align: center; }
-                        .institute-name { font-size: 28px; font-weight: 900; color: #1A237E; margin: 0; text-transform: uppercase; letter-spacing: 1px; }
-                        .affiliation-text { font-size: 13px; color: #444; margin: 0; margin-top: 4px; font-weight: 700; }
-                        .address-text { font-size: 12px; color: #666; margin-top: 4px; font-weight: 600; text-align: center; }
-                        .divider { height: 2px; background-color: #000; margin: 12px 0; }
-                        .exam-box { font-size: 22px; font-weight: 900; text-align: center; margin: 10px auto; text-transform: uppercase; padding: 8px 45px; border: 2.5px solid #000; display: table; }
-                        .details-section { display: flex; flex-direction: row; justify-content: space-between; margin: 20px 0; }
-                        .info-table { width: 72%; border-collapse: collapse; }
-                        .info-table td { padding: 8px 0; font-size: 15px; border-bottom: 1px solid #f0f0f0; }
-                        .label { font-weight: bold; width: 170px; color: #555; font-size: 12px; text-transform: uppercase; }
-                        .value { font-weight: 900; color: #000; font-size: 17px; }
-                        .photo-box { width: 130px; height: 160px; border: 2.5px solid #000; display: flex; align-items: center; justify-content: center; background: #fff; overflow: hidden; }
-                        .photo-box img { width: 100%; height: 100%; object-fit: cover; }
-                        .timetable-section { width: 100%; margin-top: 10px; }
-                        .section-title { font-weight: 900; text-decoration: underline; font-size: 14px; margin-bottom: 10px; }
-                        table.schedule { width: 100%; border-collapse: collapse; border: 2px solid #000; }
-                        .schedule th { background-color: #f8f9fa; border: 1.5px solid #000; padding: 10px; text-align: left; font-size: 13px; font-weight: 900; }
-                        .schedule td { border: 1.5px solid #000; padding: 10px; font-size: 13px; font-weight: bold; }
-                        .instructions { border: 2px solid #000; padding: 15px; border-radius: 8px; margin-top: 20px; background: #fafafa; }
-                        .inst-title { font-weight: 900; font-size: 13px; text-decoration: underline; margin-bottom: 8px; }
-                        .inst-list { font-size: 12px; font-weight: bold; margin: 0; padding-left: 20px; line-height: 1.4; }
-                        .signature-section { margin-top: auto; padding-top: 40px; display: flex; justify-content: space-between; padding-bottom: 20px; }
-                        .sig-line { border-top: 2px solid #000; width: 200px; text-align: center; font-size: 12px; font-weight: 900; padding-top: 8px; text-transform: uppercase; }
-                    </style>
-                </head>
-                <body>
-                    <div class="page-container">
-                        <div class="inner-border"></div>
-                        <div class="header-container">
-                            ${instLogoB64 ? `<img src="${instLogoB64}" class="logo" />` : ''}
-                            <div class="institute-info">
-                                <h1 class="institute-name">${selectedCard.institute_name.toUpperCase()}</h1>
-                                ${selectedCard.affiliation ? `<p class="affiliation-text">${selectedCard.affiliation}</p>` : ''}
-                                <p class="address-text">${fullAddress}</p>
-                            </div>
-                        </div>
-                        <div class="divider"></div>
-                        <div class="exam-box">${selectedCard.exam_name}</div>
-                        <div class="details-section">
-                            <table class="info-table">
-                                <tr><td class="label">Student Name</td><td class="value">${studentData.name}</td></tr>
-                                <tr><td class="label">Class & Section</td><td class="value">${studentData.class} - ${studentData.section}</td></tr>
-                                <tr><td class="label">Roll Number</td><td class="value">${studentData.roll_no || 'TBD'}</td></tr>
-                                <tr><td class="label">Date of Birth</td><td class="value">${formatDateString((studentData as any).dob)}</td></tr>
-                                <tr><td class="label">Father's Name</td><td class="value">${studentData.father_name}</td></tr>
-                                <tr><td class="label">Contact Number</td><td class="value">${studentData.mobile}</td></tr>
-                            </table>
-                            <div class="photo-box">
-                                ${studentPhotoB64 ? `<img src="${studentPhotoB64}" />` : '<div style="font-size: 10px; color: #999; font-weight: bold; text-align: center;">AFFIX PHOTO</div>'}
-                            </div>
-                        </div>
-                        <div class="timetable-section">
-                            <div class="section-title">EXAMINATION TIMETABLE</div>
-                            <table class="schedule">
-                                <thead>
-                                    <tr>
-                                        <th>Date & Day</th>
-                                        <th>Subject Name</th>
-                                        <th>Time / Shift</th>
-                                    </tr>
-                                </thead>
-                                <tbody>
-                                    ${selectedCard.schedule.map(row => `
-                                        <tr>
-                                            <td>${formatDateString(row.date)} (${row.day})</td>
-                                            <td>${row.subject}</td>
-                                            <td>${row.time}</td>
-                                        </tr>
-                                    `).join('')}
-                                </tbody>
-                            </table>
-                        </div>
-                        <div class="instructions">
-                            <div class="inst-title">IMPORTANT INSTRUCTIONS:</div>
-                            <ol class="inst-list">
-                                <li>Candidate must carry this Admit Card to the examination hall for all sessions.</li>
-                                <li>Possession of mobile phones, electronic gadgets, or calculators is strictly prohibited.</li>
-                                <li>Candidates must report at the examination center at least 20 minutes before time.</li>
-                                <li>The card must be signed by the invigilator during every examination session.</li>
-                            </ol>
-                        </div>
-                        <div class="signature-section">
-                            <div class="sig-line">TEACHER'S SIGNATURE</div>
-                            <div class="sig-line">PRINCIPAL'S SIGNATURE</div>
-                        </div>
-                    </div>
-                </body>
-                </html>
-            `;
-
-            const { uri } = await Print.printToFileAsync({ html: htmlContent });
+            const token = await AsyncStorage.getItem('studentToken');
             
-            if (Platform.OS === 'ios') {
-                await Sharing.shareAsync(uri);
-            } else {
-                await Sharing.shareAsync(uri, {
-                    mimeType: 'application/pdf',
-                    dialogTitle: 'Admit Card',
-                    UTI: 'com.adobe.pdf'
-                });
+            // 1. Call the new Professional Backend API
+            const response = await axios.get(
+                `${API_ENDPOINTS.ADMIT_CARD}/generate-student-pdf/${selectedCard.id}`,
+                {
+                    headers: { Authorization: `Bearer ${token}` },
+                    responseType: 'arraybuffer',
+                    timeout: 60000 
+                }
+            );
+
+            // Efficient ArrayBuffer to Base64 conversion using chunking for large files
+            const arrayBuffer = response.data; // This is the ArrayBuffer
+            const chunkSize = 16 * 1024; // Process in 16KB chunks (adjust as needed)
+            let base64 = '';
+            const bytes = new Uint8Array(arrayBuffer);
+            const len = bytes.byteLength;
+
+            for (let i = 0; i < len; i += chunkSize) {
+                const chunk = bytes.subarray(i, Math.min(i + chunkSize, len));
+                base64 += String.fromCharCode.apply(null, Array.from(chunk));
             }
-        } catch (error) {
-            console.error('PDF error:', error);
-            Alert.alert('Error', 'Failed to generate PDF');
+            const base64data = btoa(base64);
+
+            const fileName = `admit_card_${selectedCard.id}_${Date.now()}.pdf`;
+            const fileUri = `${cacheDirectory}${fileName}`;
+
+            // 3. Write and Share
+            await writeAsStringAsync(fileUri, base64data, {
+                encoding: 'base64',
+            });
+
+            await Sharing.shareAsync(fileUri, {
+                UTI: '.pdf',
+                mimeType: 'application/pdf',
+                dialogTitle: 'My Admit Card'
+            });
+
+        } catch (error: any) {
+            console.error('Student Admit Card PDF Error:', error.message);
+            Alert.alert('Error', 'Failed to generate professional admit card. Please try again.');
         } finally {
             setIsGeneratingPDF(false);
         }

@@ -22,6 +22,7 @@ export default function PrincipalNoticeScreen() {
     const [institute, setInstitute] = useState<any>(null);
     const [refreshing, setRefreshing] = useState(false);
     const [currentUserId, setCurrentUserId] = useState<number | null>(null);
+    const [currentUserRole, setCurrentUserRole] = useState<string | null>(null);
 
     // Create/Edit Notice Modal State
     const [createModalVisible, setCreateModalVisible] = useState(false);
@@ -50,17 +51,18 @@ export default function PrincipalNoticeScreen() {
     );
 
     const loadUserData = async () => {
-        const data = await AsyncStorage.getItem('userData');
+        const data = await AsyncStorage.getItem('principalData') || await AsyncStorage.getItem('userData');
         if (data) {
             const parsed = JSON.parse(data);
             setCurrentUserId(parsed.id);
+            setCurrentUserRole(parsed.role || parsed.type || 'principal');
         }
     };
 
     const fetchNotices = async () => {
         try {
             setLoading(true);
-            const token = await AsyncStorage.getItem('token');
+            const token = await AsyncStorage.getItem('principalToken') || await AsyncStorage.getItem('token');
             const userData = await AsyncStorage.getItem('userData');
             const selectedSessionId = await AsyncStorage.getItem('selectedSessionId');
             const sessionId = selectedSessionId || (userData ? JSON.parse(userData).current_session_id : null);
@@ -83,7 +85,7 @@ export default function PrincipalNoticeScreen() {
 
     const fetchClasses = async () => {
         try {
-            const token = await AsyncStorage.getItem('token');
+            const token = await AsyncStorage.getItem('principalToken') || await AsyncStorage.getItem('token');
             // Principal uses the same endpoint logic or needs a specific one. 
             // Usually Principal can access teacher/student lists. 
             // The endpoint `/api/teacher/student/list` might be restricted to teachers.
@@ -145,7 +147,7 @@ export default function PrincipalNoticeScreen() {
 
         try {
             setPublishing(true);
-            const token = await AsyncStorage.getItem('token');
+            const token = await AsyncStorage.getItem('principalToken') || await AsyncStorage.getItem('token');
             const userData = await AsyncStorage.getItem('userData');
             const selectedSessionId = await AsyncStorage.getItem('selectedSessionId');
             const sessionId = selectedSessionId || (userData ? JSON.parse(userData).current_session_id : null);
@@ -206,7 +208,7 @@ export default function PrincipalNoticeScreen() {
     const handleDelete = async (id: number) => {
         // Simple confirm for now
         try {
-            const token = await AsyncStorage.getItem('token');
+            const token = await AsyncStorage.getItem('principalToken') || await AsyncStorage.getItem('token');
             await axios.delete(`${API_ENDPOINTS.NOTICE}/${id}`, {
                 headers: { Authorization: `Bearer ${token}` }
             });
@@ -277,7 +279,7 @@ export default function PrincipalNoticeScreen() {
 
         fab: {
             position: 'absolute',
-            bottom: Math.max(30, insets.bottom + 10),
+            bottom: 30,
             right: 25,
             width: 60,
             height: 60,
@@ -435,7 +437,10 @@ export default function PrincipalNoticeScreen() {
                 contentContainerStyle={styles.listContent}
                 refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} />}
                 renderItem={({ item }) => {
-                    const isCreator = item.created_by_role === 'principal' && item.created_by_id === currentUserId;
+                    // Check if current user is the creator (handles principal/institute roles)
+                    const isPrincipalCreator = (item.created_by_role === 'principal' || item.created_by_role === 'institute') && 
+                                               (currentUserRole === 'principal' || currentUserRole === 'institute');
+                    const isCreator = isPrincipalCreator && item.created_by_id === currentUserId;
                     
                     return (
                         <TouchableOpacity style={styles.noticeCard} onPress={() => openPreview(item)}>

@@ -13,7 +13,7 @@ const getDashboard = async (req, res) => {
 
     // Get institute details (to get current session if not provided)
     const instResult = await pool.query(
-      'SELECT id, institute_name, principal_name, email, mobile, state, district, landmark, pincode, address, affiliation, logo_url, created_at, current_session_id FROM institutes WHERE id = $1',
+      'SELECT id, institute_name, principal_name, email, mobile, state, district, landmark, pincode, address, affiliation, logo_url, principal_photo_url, created_at, current_session_id FROM institutes WHERE id = $1',
       [instituteId]
     );
 
@@ -157,7 +157,11 @@ const getDashboard = async (req, res) => {
                        parseFloat(dailyOneTimeRes.rows[0].collected || 0);
 
     const dashboardData = {
-      institute,
+      institute: {
+        ...institute,
+        logo_url: institute.logo_url?.startsWith('http') ? institute.logo_url : (institute.logo_url ? `${process.env.S3_BUCKET_URL}/${institute.logo_url}` : null),
+        principal_photo_url: institute.principal_photo_url?.startsWith('http') ? institute.principal_photo_url : (institute.principal_photo_url ? `${process.env.S3_BUCKET_URL}/${institute.principal_photo_url}` : null),
+      },
       today_events: todayEventsRes.rows,
       stats: {
         totalTeachers: parseInt(teacherCount.rows[0].count),
@@ -681,7 +685,14 @@ const getProfile = async (req, res) => {
       return res.status(404).json({ message: 'Institute not found' });
     }
 
-    res.status(200).json({ profile: result.rows[0] });
+    const profile = result.rows[0];
+    const absoluteProfile = {
+        ...profile,
+        logo_url: profile.logo_url?.startsWith('http') ? profile.logo_url : (profile.logo_url ? `${process.env.S3_BUCKET_URL}/${profile.logo_url}` : null),
+        principal_photo_url: profile.principal_photo_url?.startsWith('http') ? profile.principal_photo_url : (profile.principal_photo_url ? `${process.env.S3_BUCKET_URL}/${profile.principal_photo_url}` : null),
+    };
+
+    res.status(200).json({ profile: absoluteProfile });
   } catch (error) {
     console.error('Get profile error:', error);
     res.status(500).json({ message: 'Failed to fetch profile' });
@@ -1167,7 +1178,7 @@ const getStats = async (req, res) => {
             [instituteId, sessionId, statsMonth, statsYear]
         );
 
-        // One-Time Fees Stats - Expected is total for session, Collected is for THIS month
+        // One-Time Fees Stats - Expected & Collected both for the whole session
         const oneTimeExpectedRes = await pool.query(
             `SELECT COALESCE(SUM(due_amount), 0) as expected
              FROM one_time_fee_payments p
@@ -1177,14 +1188,12 @@ const getStats = async (req, res) => {
         );
 
         const oneTimeCollectedRes = await pool.query(
-            `SELECT COALESCE(SUM(amount), 0) as collected
+            `SELECT COALESCE(SUM(t.amount), 0) as collected
              FROM one_time_fee_transactions t
              JOIN one_time_fee_payments p ON t.payment_id = p.id
              JOIN one_time_fee_groups g ON p.group_id = g.id
-             WHERE g.institute_id = $1 AND g.session_id = $2 
-             AND EXTRACT(MONTH FROM t.created_at) = $3 
-             AND EXTRACT(YEAR FROM t.created_at) = $4`,
-            [instituteId, sessionId, statsMonth, statsYear]
+             WHERE g.institute_id = $1 AND g.session_id = $2`,
+            [instituteId, sessionId]
         );
 
         const revenueStats = {
@@ -1578,7 +1587,45 @@ const getDailyRevenueDetails = async (req, res) => {
             new Date(b.paid_at).getTime() - new Date(a.paid_at).getTime()
         );
 
-        res.status(200).json(allPayments);
+        // Calculate Monthly Total for the selected date's month/year
+        const selectedDateObj = new Date(date);
+        const m = selectedDateObj.getMonth() + 1;
+        const y = selectedDateObj.getFullYear();
+        let monthlyTotal = 0;
+
+        if (!type || type === 'monthly') {
+            const mTotalRes = await pool.query(
+                `SELECT 
+                    (SELECT COALESCE(SUM(s.monthly_fees + CASE WHEN s.transport_facility THEN s.transport_fees ELSE 0 END), 0)
+                     FROM students s
+                     JOIN student_fees f ON s.id = f.student_id AND f.month = $3::integer AND f.year = $4::integer AND f.session_id = $2
+                     WHERE s.institute_id = $1 AND s.session_id = $2 AND s.is_active = true AND f.status = 'paid') +
+                    (SELECT COALESCE(SUM(amount), 0) FROM monthly_extra_charges 
+                     WHERE institute_id = $1 AND session_id = $2 AND month = $3::integer AND year = $4::integer AND status = 'paid') as total`,
+                [instituteId, sessionId, m, y]
+            );
+            monthlyTotal += parseFloat(mTotalRes.rows[0]?.total || 0);
+        }
+
+        if (!type || type === 'onetime') {
+            const otTotalRes = await pool.query(
+                `SELECT COALESCE(SUM(t.amount), 0) as total
+                 FROM one_time_fee_transactions t
+                 JOIN one_time_fee_payments p ON t.payment_id = p.id
+                 JOIN one_time_fee_groups g ON p.group_id = g.id
+                 WHERE g.institute_id = $1 AND g.session_id = $2 
+                 AND EXTRACT(MONTH FROM t.created_at) = $3 
+                 AND EXTRACT(YEAR FROM t.created_at) = $4`,
+                [instituteId, sessionId, m, y]
+            );
+            monthlyTotal += parseFloat(otTotalRes.rows[0]?.total || 0);
+        }
+
+        res.status(200).json({
+            payments: allPayments,
+            monthlyTotal: monthlyTotal,
+            monthName: selectedDateObj.toLocaleDateString('en-IN', { month: 'long' })
+        });
     } catch (error) {
         console.error('Get daily revenue details error:', error);
         res.status(500).json({ message: 'Server error' });

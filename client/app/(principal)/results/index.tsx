@@ -71,6 +71,10 @@ export default function ResultsDashboard() {
 
   // Creation Modal States
   const [showCreateModal, setShowCreateModal] = useState(false);
+  const [showJuniorModal, setShowJuniorModal] = useState(false);
+  const [juniorStep, setJuniorStep] = useState(1);
+  const [showModeModal, setShowModeModal] = useState(false);
+  const [selectedMode, setSelectedMode] = useState<'senior' | 'junior' | null>(null);
   const [createStep, setCreateStep] = useState(1);
   const [availableClasses, setAvailableClasses] = useState<{class: string, section: string}[]>([]);
   const [isCreating, setIsCreating] = useState(false);
@@ -130,7 +134,7 @@ export default function ResultsDashboard() {
 
   const fetchExams = async () => {
     try {
-      const token = await AsyncStorage.getItem('token');
+      const token = await AsyncStorage.getItem('principalToken') || await AsyncStorage.getItem('token');
       const response = await axios.get(`${API_ENDPOINTS.EXAM}/list`, {
         headers: { Authorization: `Bearer ${token}` }
       });
@@ -146,7 +150,7 @@ export default function ResultsDashboard() {
 
   const fetchAvailableClasses = async () => {
     try {
-        const token = await AsyncStorage.getItem('token');
+        const token = await AsyncStorage.getItem('principalToken') || await AsyncStorage.getItem('token');
         const response = await axios.get(`${API_ENDPOINTS.PRINCIPAL}/student/list`, {
             headers: { Authorization: `Bearer ${token}` }
         });
@@ -191,11 +195,12 @@ export default function ResultsDashboard() {
     }
     try {
         setIsCreating(true);
-        const token = await AsyncStorage.getItem('token');
+        const token = await AsyncStorage.getItem('principalToken') || await AsyncStorage.getItem('token');
         const payload = {
             ...formData,
             subjects_blueprint: subjects,
             grading_rules: gradingRules,
+            evaluation_mode: selectedMode || 'senior',
             manual_stats: { class_topper_name: '', class_topper_marks: '', section_topper_name: '', section_topper_marks: '' }
         };
 
@@ -205,8 +210,11 @@ export default function ResultsDashboard() {
 
         Toast.show({ type: 'success', text1: 'Marksheet Created!' });
         setShowCreateModal(false);
+        setShowJuniorModal(false);
+        setJuniorStep(1);
         setCreateStep(1);
         setFormData({ name: '', class_name: '', section: '', show_highest_marks: false, include_percentage: true, include_grade: true });
+        setSubjects([]);
         fetchExams();
     } catch (error) {
         Toast.show({ type: 'error', text1: 'Creation Failed' });
@@ -231,7 +239,7 @@ export default function ResultsDashboard() {
           style: "destructive",
           onPress: async () => {
             try {
-              const token = await AsyncStorage.getItem('token');
+              const token = await AsyncStorage.getItem('principalToken') || await AsyncStorage.getItem('token');
               await axios.delete(`${API_ENDPOINTS.EXAM}/${id}`, {
                 headers: { Authorization: `Bearer ${token}` }
               });
@@ -249,7 +257,7 @@ export default function ResultsDashboard() {
   const toggleResultStatus = async (id: any, currentStatus: boolean) => {
     try {
         const newStatus = !currentStatus;
-        const token = await AsyncStorage.getItem('token');
+        const token = await AsyncStorage.getItem('principalToken') || await AsyncStorage.getItem('token');
         
         // Optimistic Update
         setExams(prev => prev.map((exam: any) => 
@@ -291,7 +299,7 @@ export default function ResultsDashboard() {
     emptyState: { alignItems: 'center', justifyContent: 'center', paddingTop: 100 },
     emptyText: { fontSize: 18, fontWeight: '800', marginTop: 16, color: theme.textLight },
     emptySubText: { fontSize: 14, marginTop: 8, color: theme.textLight },
-    fab: { position: 'absolute', bottom: Math.max(30, insets.bottom + 10), right: 25, width: 65, height: 65, borderRadius: 32.5, backgroundColor: theme.primary, justifyContent: 'center', alignItems: 'center', elevation: 8, shadowColor: theme.primary, shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.4, shadowRadius: 8 },
+    fab: { position: 'absolute', bottom: 30, right: 25, width: 65, height: 65, borderRadius: 32.5, backgroundColor: theme.primary, justifyContent: 'center', alignItems: 'center', elevation: 8, shadowColor: theme.primary, shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.4, shadowRadius: 8 },
     
     // Modal Styles
     modalOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.6)', justifyContent: 'center', alignItems: 'center' },
@@ -318,6 +326,12 @@ export default function ResultsDashboard() {
     btnText: { fontWeight: '800', fontSize: 14 },
     subRow: { flexDirection: 'row', gap: 8, marginBottom: 10, alignItems: 'center' },
     subInput: { flex: 1, backgroundColor: isDark ? '#1a1a1a' : '#f8fafc', padding: 8, borderRadius: 8, color: theme.text, borderWidth: 1, borderColor: theme.border, fontSize: 12, textAlign: 'center' },
+    
+    // Mode Selection Styles
+    modeCard: { flexDirection: 'row', alignItems: 'center', padding: 18, borderRadius: 20, borderWidth: 1.5, marginBottom: 15, backgroundColor: theme.background },
+    modeIcon: { width: 56, height: 56, borderRadius: 16, justifyContent: 'center', alignItems: 'center', marginRight: 15 },
+    modeName: { fontSize: 17, fontWeight: '900', marginBottom: 4 },
+    modeDesc: { fontSize: 11, color: theme.textLight, lineHeight: 15, fontWeight: '600' },
   }), [insets, theme, isDark, createStep]);
 
   const renderItem = ({ item }: { item: any }) => (
@@ -329,6 +343,9 @@ export default function ResultsDashboard() {
       <View style={{ padding: 18, flex: 1 }}>
         {/* Modern Visibility Toggle - Top Right */}
         <View style={{ position: 'absolute', top: 10, right: 10, zIndex: 10, alignItems: 'center' }}>
+            <Text style={{ fontSize: 7, fontWeight: '900', color: item.evaluation_mode === 'junior' ? '#0288D1' : '#E91E63', marginBottom: 2, letterSpacing: 0.5 }}>
+                {(item.evaluation_mode || 'senior').toUpperCase()}
+            </Text>
             <ModernToggle 
                 active={item.is_published} 
                 onToggle={() => toggleResultStatus(item.id, item.is_published)}
@@ -433,10 +450,274 @@ export default function ResultsDashboard() {
 
       <TouchableOpacity
         style={styles.fab}
-        onPress={() => setShowCreateModal(true)}
+        onPress={() => setShowModeModal(true)}
       >
         <Ionicons name="add" size={32} color="#fff" />
       </TouchableOpacity>
+
+      {/* MODE SELECTION MODAL */}
+      <Modal visible={showModeModal} transparent animationType="fade" onRequestClose={() => setShowModeModal(false)}>
+        <TouchableOpacity 
+            style={styles.modalOverlay} 
+            activeOpacity={1} 
+            onPress={() => setShowModeModal(false)}
+        >
+            <View style={[styles.modalBox, { padding: 25 }]}>
+                <Text style={[styles.modalTitle, { textAlign: 'center', marginBottom: 10 }]}>Select Evaluation Mode</Text>
+                <Text style={{ color: theme.textLight, textAlign: 'center', marginBottom: 25, fontSize: 13, fontWeight: '600' }}>
+                    Choose the type of marksheet you want to build
+                </Text>
+
+                <TouchableOpacity 
+                    style={[styles.modeCard, { borderColor: '#E91E63' }]}
+                    onPress={() => {
+                        setSelectedMode('senior');
+                        setShowModeModal(false);
+                        setShowCreateModal(true);
+                    }}
+                >
+                    <View style={[styles.modeIcon, { backgroundColor: '#FCE4EC' }]}>
+                        <Ionicons name="school" size={28} color="#E91E63" />
+                    </View>
+                    <View style={{ flex: 1 }}>
+                        <Text style={[styles.modeName, { color: theme.text }]}>Senior Mode</Text>
+                        <Text style={styles.modeDesc}>Numerical marks, theory/practical breakdown, and percentage.</Text>
+                    </View>
+                </TouchableOpacity>
+
+                <TouchableOpacity 
+                    style={[styles.modeCard, { borderColor: '#0288D1' }]}
+                    onPress={() => {
+                        setSelectedMode('junior');
+                        setShowModeModal(false);
+                        setShowJuniorModal(true);
+                    }}
+                >
+                    <View style={[styles.modeIcon, { backgroundColor: '#E1F5FE' }]}>
+                        <Ionicons name="color-palette" size={28} color="#0288D1" />
+                    </View>
+                    <View style={{ flex: 1 }}>
+                        <Text style={[styles.modeName, { color: theme.text }]}>Junior Mode</Text>
+                        <Text style={styles.modeDesc}>Skill-based grading, indicators, and descriptive assessment.</Text>
+                    </View>
+                </TouchableOpacity>
+
+                <TouchableOpacity 
+                    style={{ marginTop: 15, padding: 15, alignItems: 'center' }}
+                    onPress={() => setShowModeModal(false)}
+                >
+                    <Text style={{ color: theme.textLight, fontWeight: '800' }}>Cancel</Text>
+                </TouchableOpacity>
+            </View>
+        </TouchableOpacity>
+      </Modal>
+
+      {/* JUNIOR CREATION MODAL */}
+      <Modal visible={showJuniorModal} transparent animationType="slide" onRequestClose={() => { setShowJuniorModal(false); setJuniorStep(1); }}>
+        <View style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.6)' }}>
+            <KeyboardAvoidingView 
+                behavior={Platform.OS === 'ios' ? 'padding' : 'height'} 
+                keyboardVerticalOffset={60}
+                style={{ flex: 1, justifyContent: 'flex-end' }}
+            >
+                <TouchableOpacity 
+                    activeOpacity={1} 
+                    onPress={e => e.stopPropagation()} 
+                    style={{ 
+                        backgroundColor: theme.card, 
+                        borderRadius: 32, 
+                        marginHorizontal: 12,
+                        marginBottom: 40,
+                        width: SCREEN_WIDTH - 24,
+                        maxHeight: SCREEN_HEIGHT * 0.85,
+                        elevation: 25,
+                        shadowColor: '#000',
+                        shadowOffset: { width: 0, height: -10 },
+                        shadowOpacity: 0.2,
+                        shadowRadius: 15,
+                        overflow: 'hidden'
+                    }}
+                >
+                    <View style={{ width: 40, height: 5, backgroundColor: theme.border, borderRadius: 3, alignSelf: 'center', marginTop: 12 }} />
+
+                    <View style={[styles.modalHeader, { borderBottomWidth: 0 }]}>
+                        <View>
+                            <Text style={[styles.modalTitle, { color: '#0288D1', fontSize: 22 }]}>Junior Assessment</Text>
+                            <Text style={{ fontSize: 11, color: theme.textLight, fontWeight: '800', letterSpacing: 1 }}>
+                                STEP {juniorStep}: {juniorStep === 1 ? 'CONFIGURATION' : 'SKILLS BLUEPRINT'}
+                            </Text>
+                        </View>
+                        <TouchableOpacity onPress={() => { setShowJuniorModal(false); setJuniorStep(1); setSubjects([]); }}>
+                            <Ionicons name="close-circle" size={32} color={theme.textLight} />
+                        </TouchableOpacity>
+                    </View>
+
+                    <ScrollView 
+                        style={{ maxHeight: SCREEN_HEIGHT * 0.45 }} 
+                        contentContainerStyle={{ padding: 24, paddingBottom: 40 }}
+                        showsVerticalScrollIndicator={true}
+                        keyboardShouldPersistTaps="handled"
+                    >
+                        {juniorStep === 1 ? (
+                            <View>
+                                <Text style={[styles.label, { color: '#0288D1' }]}>Evaluation Title</Text>
+                                <TextInput 
+                                    style={[styles.input, { fontSize: 16, height: 56 }]} 
+                                    placeholder="e.g. Nursery First Term 2026" 
+                                    placeholderTextColor={theme.textLight}
+                                    value={formData.name}
+                                    onChangeText={t => setFormData({...formData, name: t})}
+                                />
+
+                                <Text style={[styles.label, { color: '#0288D1', marginTop: 10 }]}>1. Choose Grade</Text>
+                                <View style={styles.pickerContainer}>
+                                    {[...new Set(availableClasses.map(item => item.class))].map((cls, idx) => {
+                                        const isSelected = formData.class_name === cls;
+                                        return (
+                                            <TouchableOpacity 
+                                                key={idx} 
+                                                style={[
+                                                    styles.pickerChip, 
+                                                    { paddingHorizontal: 20, paddingVertical: 12 },
+                                                    isSelected && { borderColor: '#0288D1', backgroundColor: '#0288D115' }
+                                                ]}
+                                                onPress={() => setFormData({...formData, class_name: cls as string, section: ''})}
+                                            >
+                                                <Text style={[styles.pickerChipText, { fontSize: 15, fontWeight: '800' }, isSelected && { color: '#0288D1' }]}>
+                                                    Grade {cls}
+                                                </Text>
+                                            </TouchableOpacity>
+                                        );
+                                    })}
+                                </View>
+
+                                {formData.class_name ? (
+                                    <View style={{ marginTop: 10 }}>
+                                        <Text style={[styles.label, { color: '#0288D1' }]}>2. Select Section</Text>
+                                        <View style={styles.pickerContainer}>
+                                            {availableClasses
+                                                .filter(item => item.class === formData.class_name)
+                                                .map((item, idx) => {
+                                                    const isSelected = formData.section === item.section;
+                                                    return (
+                                                        <TouchableOpacity 
+                                                            key={idx} 
+                                                            style={[
+                                                                styles.pickerChip, 
+                                                                { minWidth: 60, alignItems: 'center' },
+                                                                isSelected && { borderColor: '#0288D1', backgroundColor: '#0288D1' }
+                                                            ]}
+                                                            onPress={() => setFormData({...formData, section: item.section})}
+                                                        >
+                                                            <Text style={[styles.pickerChipText, isSelected && { color: '#fff' }]}>
+                                                                {item.section}
+                                                            </Text>
+                                                        </TouchableOpacity>
+                                                    );
+                                                })
+                                            }
+                                        </View>
+                                    </View>
+                                ) : null}
+                            </View>
+                        ) : (
+                            <View>
+                                <Text style={[styles.label, { color: '#0288D1' }]}>Add Skills / Indicators to assess</Text>
+                                <Text style={{ fontSize: 11, color: theme.textLight, marginBottom: 20, fontWeight: '600' }}>
+                                    These are the items teachers will provide grades for (e.g. Handwriting, Social Interaction)
+                                </Text>
+
+                                {subjects.map((sub, idx) => (
+                                    <View key={idx} style={[styles.subRow, { marginBottom: 15 }]}>
+                                        <View style={{ flex: 1, backgroundColor: isDark ? '#333' : '#f8fafc', borderRadius: 15, paddingHorizontal: 15, height: 50, justifyContent: 'center', borderWidth: 1, borderColor: theme.border }}>
+                                            <TextInput 
+                                                style={{ color: theme.text, fontWeight: '700', fontSize: 14 }} 
+                                                value={sub.name} 
+                                                placeholder="e.g. Language Fluency"
+                                                placeholderTextColor={theme.textLight}
+                                                onChangeText={(text) => {
+                                                    const updated = [...subjects];
+                                                    updated[idx].name = text;
+                                                    setSubjects(updated);
+                                                }}
+                                            />
+                                        </View>
+                                        <TouchableOpacity 
+                                            onPress={() => setSubjects(subjects.filter((_, i) => i !== idx))}
+                                            style={{ width: 40, height: 40, borderRadius: 20, backgroundColor: theme.danger + '15', justifyContent: 'center', alignItems: 'center' }}
+                                        >
+                                            <Ionicons name="trash" size={18} color={theme.danger} />
+                                        </TouchableOpacity>
+                                    </View>
+                                ))}
+
+                                <TouchableOpacity 
+                                    style={{ 
+                                        flexDirection: 'row', 
+                                        alignItems: 'center', 
+                                        marginTop: 10, 
+                                        gap: 10, 
+                                        padding: 15, 
+                                        borderRadius: 15, 
+                                        borderWidth: 1, 
+                                        borderColor: '#0288D1', 
+                                        borderStyle: 'dashed',
+                                        backgroundColor: '#0288D105'
+                                    }}
+                                    onPress={() => setSubjects([...subjects, { name: '', max_theory: 0, max_practical: 0, passing_marks: 0 }])}
+                                >
+                                    <View style={{ width: 32, height: 32, borderRadius: 16, backgroundColor: '#0288D1', justifyContent: 'center', alignItems: 'center' }}>
+                                        <Ionicons name="add" size={20} color="#fff" />
+                                    </View>
+                                    <Text style={{ color: '#0288D1', fontWeight: '800', fontSize: 14 }}>Add Assessment Indicator</Text>
+                                </TouchableOpacity>
+                            </View>
+                        )}
+                    </ScrollView>
+
+                    <View style={{ padding: 24, borderTopWidth: 1, borderTopColor: theme.border, backgroundColor: theme.card, flexDirection: 'row', gap: 12 }}>
+                        {juniorStep === 2 && (
+                            <TouchableOpacity 
+                                style={[styles.btnSecondary, { flex: 1, height: 56, borderRadius: 18 }]}
+                                onPress={() => setJuniorStep(1)}
+                            >
+                                <Text style={[styles.btnText, { color: theme.text }]}>Back</Text>
+                            </TouchableOpacity>
+                        )}
+                        <TouchableOpacity 
+                            activeOpacity={0.8}
+                            style={{ 
+                                backgroundColor: (juniorStep === 1 ? (formData.name && formData.class_name && formData.section) : (subjects.length > 0 && subjects.every(s => s.name.trim()))) ? '#0288D1' : theme.border, 
+                                flex: 2, 
+                                height: 56, 
+                                borderRadius: 18, 
+                                justifyContent: 'center', 
+                                alignItems: 'center',
+                                elevation: (juniorStep === 1 ? (formData.name && formData.class_name && formData.section) : (subjects.length > 0)) ? 8 : 0,
+                                shadowColor: '#0288D1',
+                                shadowOffset: { width: 0, height: 4 },
+                                shadowOpacity: 0.3,
+                                shadowRadius: 8
+                            }} 
+                            disabled={juniorStep === 1 ? !(formData.name && formData.class_name && formData.section) : !(subjects.length > 0 && subjects.every(s => s.name.trim()))}
+                            onPress={() => {
+                                if (juniorStep === 1) setJuniorStep(2);
+                                else handleCreateSubmit();
+                            }}
+                        >
+                            {isCreating ? (
+                                <ActivityIndicator color="#fff" />
+                            ) : (
+                                <Text style={{ color: '#fff', fontSize: 16, fontWeight: '900' }}>
+                                    {juniorStep === 1 ? 'Next: Skills Setup ➔' : 'Finalize & Save ⚡️'}
+                                </Text>
+                            )}
+                        </TouchableOpacity>
+                    </View>
+                </TouchableOpacity>
+            </KeyboardAvoidingView>
+        </View>
+      </Modal>
 
       {/* REFINED CREATION MODAL */}
       <Modal visible={showCreateModal} transparent animationType="slide" onRequestClose={() => setShowCreateModal(false)}>

@@ -39,7 +39,7 @@ export default function AcademicCalendarScreen() {
     const fetchEvents = async () => {
         try {
             setLoading(true);
-            const token = await AsyncStorage.getItem('token');
+            const token = await AsyncStorage.getItem('principalToken') || await AsyncStorage.getItem('token');
             const userData = await AsyncStorage.getItem('userData');
             const selectedSessionId = await AsyncStorage.getItem('selectedSessionId');
             const sessionId = selectedSessionId || (userData ? JSON.parse(userData).current_session_id : null);
@@ -75,7 +75,7 @@ export default function AcademicCalendarScreen() {
 
         try {
             setSubmitting(true);
-            const token = await AsyncStorage.getItem('token');
+            const token = await AsyncStorage.getItem('principalToken') || await AsyncStorage.getItem('token');
             const userData = await AsyncStorage.getItem('userData');
             const selectedSessionId = await AsyncStorage.getItem('selectedSessionId');
             const sessionId = selectedSessionId || (userData ? JSON.parse(userData).current_session_id : null);
@@ -111,7 +111,7 @@ export default function AcademicCalendarScreen() {
 
     const handleDeleteEvent = async (id: number) => {
         try {
-            const token = await AsyncStorage.getItem('token');
+            const token = await AsyncStorage.getItem('principalToken') || await AsyncStorage.getItem('token');
             await axios.delete(`${API_ENDPOINTS.CALENDAR}/${id}`, {
                 headers: { Authorization: `Bearer ${token}` }
             });
@@ -190,7 +190,7 @@ export default function AcademicCalendarScreen() {
         
         fab: {
             position: 'absolute',
-            bottom: Math.max(30, insets.bottom + 30),
+            bottom: 30,
             right: 25,
             width: 60,
             height: 60,
@@ -358,7 +358,7 @@ export default function AcademicCalendarScreen() {
 
                             >
 
-                                <View style={styles.modalContent}>
+                                <View style={[styles.modalContent, { marginBottom: 20, borderRadius: 35 }]}>
 
                                     <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={{ flexGrow: 1 }}>
 

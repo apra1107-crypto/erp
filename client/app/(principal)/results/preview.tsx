@@ -25,7 +25,7 @@ export default function ReportCardPreview() {
 
     const fetchMarksheet = async () => {
         try {
-            const token = await AsyncStorage.getItem('token');
+            const token = await AsyncStorage.getItem('principalToken') || await AsyncStorage.getItem('token');
             const response = await axios.get(`${API_ENDPOINTS.EXAM}/${examId}/marksheet/${studentId}`, {
                 headers: { Authorization: `Bearer ${token}` }
             });
@@ -180,10 +180,11 @@ export default function ReportCardPreview() {
     if (loading) return <View style={{ flex: 1, backgroundColor: theme.background, justifyContent: 'center' }}><ActivityIndicator size="large" color={theme.primary} /></View>;
     if (!data) return null;
 
-    const { exam, student, institute, result } = data;
+    const { exam, student, institute, result, attendance } = data;
     const marks = result?.marks_data || [];
     const stats = result?.calculated_stats || {};
     const manualStats = exam?.manual_stats || {};
+    const isJunior = exam.evaluation_mode === 'junior';
 
     const totalMax = (exam.subjects_blueprint || []).reduce((sum: number, sub: any) => sum + (parseFloat(sub.max_theory) || 0) + (parseFloat(sub.max_practical) || 0), 0);
 
@@ -220,6 +221,7 @@ export default function ReportCardPreview() {
                                 <View style={styles.infoRow}><Text style={styles.infoLabel}>CLASS & SECTION</Text><Text style={styles.infoValue}>{student.class} - {student.section}</Text></View>
                                 <View style={styles.infoRow}><Text style={styles.infoLabel}>ROLL NUMBER</Text><Text style={styles.infoValue}>{student.roll_no}</Text></View>
                                 <View style={styles.infoRow}><Text style={styles.infoLabel}>FATHER'S NAME</Text><Text style={styles.infoValue}>{student.father_name}</Text></View>
+                                <View style={styles.infoRow}><Text style={styles.infoLabel}>MOTHER'S NAME</Text><Text style={styles.infoValue}>{student.mother_name || '-'}</Text></View>
                                 <View style={styles.infoRow}><Text style={styles.infoLabel}>DATE OF BIRTH</Text><Text style={styles.infoValue}>{student.dob ? new Date(student.dob).toLocaleDateString('en-IN') : '-'}</Text></View>
                             </View>
                             <View style={styles.photoBox}>
@@ -231,54 +233,64 @@ export default function ReportCardPreview() {
                             </View>
                         </View>
 
-                        {/* Marks Table */}
+                        {/* Marks/Assessment Table */}
                         <View style={styles.table}>
                             <View style={styles.tableHeader}>
-                                <View style={[styles.cell, { flex: 2.5, alignItems: 'flex-start' }]}><Text style={styles.headerCellText}>SUBJECT</Text></View>
-                                <View style={[styles.cell, { flex: 1 }]}><Text style={styles.headerCellText}>MAX</Text></View>
-                                <View style={[styles.cell, { flex: 1 }]}><Text style={styles.headerCellText}>PASS</Text></View>
-                                <View style={[styles.cell, { flex: 1 }]}><Text style={styles.headerCellText}>OBT</Text></View>
-                                {!!exam.show_highest_marks && (
-                                    <View style={[styles.cell, { flex: 1 }]}><Text style={styles.headerCellText}>HIGH</Text></View>
+                                <View style={[styles.cell, { flex: isJunior ? 3 : 2.5, alignItems: 'flex-start' }]}><Text style={styles.headerCellText}>{isJunior ? 'ASSESSMENT INDICATOR' : 'SUBJECT'}</Text></View>
+                                {!isJunior && (
+                                    <>
+                                        <View style={[styles.cell, { flex: 1 }]}><Text style={styles.headerCellText}>MAX</Text></View>
+                                        <View style={[styles.cell, { flex: 1 }]}><Text style={styles.headerCellText}>PASS</Text></View>
+                                        <View style={[styles.cell, { flex: 1 }]}><Text style={styles.headerCellText}>OBT</Text></View>
+                                        {!!exam.show_highest_marks && (
+                                            <View style={[styles.cell, { flex: 1 }]}><Text style={styles.headerCellText}>HIGH</Text></View>
+                                        )}
+                                    </>
                                 )}
-                                <View style={[styles.cell, { flex: 1, borderRightWidth: 0 }]}><Text style={styles.headerCellText}>GRADE</Text></View>
+                                <View style={[styles.cell, { flex: isJunior ? 1.5 : 1, borderRightWidth: 0 }]}><Text style={styles.headerCellText}>{isJunior ? 'GRADE / PERFORMANCE' : 'GRADE'}</Text></View>
                             </View>
                             {(exam.subjects_blueprint || []).map((sub: any, idx: number) => {
                                 const m = marks.find((m: any) => m.subject === sub.name) || {};
                                 const highest = manualStats[`highest_${sub.name}`] || '-';
                                 return (
                                     <View key={idx} style={[styles.tableRow, idx % 2 === 1 && { backgroundColor: '#f8fafc' }]}>
-                                        <View style={[styles.cell, { flex: 2.5, alignItems: 'flex-start' }]}><Text style={[styles.cellText, { fontWeight: '900', color: '#1e293b', textAlign: 'left' }]}>{sub.name}</Text></View>
-                                        <View style={[styles.cell, { flex: 1 }]}><Text style={styles.cellText}>{(parseFloat(sub.max_theory) || 0) + (parseFloat(sub.max_practical) || 0)}</Text></View>
-                                        <View style={[styles.cell, { flex: 1 }]}><Text style={styles.cellText}>{sub.passing_marks || '-'}</Text></View>
-                                        <View style={[styles.cell, { flex: 1 }]}><Text style={[styles.cellText, { color: '#4f46e5', fontSize: 12, fontWeight: '900' }]}>{m.theory || '-'}</Text></View>
-                                        {!!exam.show_highest_marks && (
-                                            <View style={[styles.cell, { flex: 1 }]}><Text style={[styles.cellText, { color: '#6366f1' }]}>{highest}</Text></View>
+                                        <View style={[styles.cell, { flex: isJunior ? 3 : 2.5, alignItems: 'flex-start' }]}><Text style={[styles.cellText, { fontWeight: '900', color: '#1e293b', textAlign: 'left' }]}>{sub.name}</Text></View>
+                                        {!isJunior && (
+                                            <>
+                                                <View style={[styles.cell, { flex: 1 }]}><Text style={styles.cellText}>{(parseFloat(sub.max_theory) || 0) + (parseFloat(sub.max_practical) || 0)}</Text></View>
+                                                <View style={[styles.cell, { flex: 1 }]}><Text style={styles.cellText}>{sub.passing_marks || '-'}</Text></View>
+                                                <View style={[styles.cell, { flex: 1 }]}><Text style={[styles.cellText, { color: '#4f46e5', fontSize: 12, fontWeight: '900' }]}>{m.theory || '-'}</Text></View>
+                                                {!!exam.show_highest_marks && (
+                                                    <View style={[styles.cell, { flex: 1 }]}><Text style={[styles.cellText, { color: '#6366f1' }]}>{highest}</Text></View>
+                                                )}
+                                            </>
                                         )}
-                                        <View style={[styles.cell, { flex: 1, borderRightWidth: 0 }]}><Text style={[styles.cellText, { fontWeight: '900' }]}>{m.grade || '-'}</Text></View>
+                                        <View style={[styles.cell, { flex: isJunior ? 1.5 : 1, borderRightWidth: 0 }]}><Text style={[styles.cellText, { fontWeight: '900', color: isJunior ? '#4f46e5' : '#000', fontSize: isJunior ? 13 : 10 }]}>{m.grade || '-'}</Text></View>
                                     </View>
                                 );
                             })}
                         </View>
 
-                        {/* Summary Footer */}
-                        <View style={styles.summaryBox}>
-                            <View style={styles.summaryItem}>
-                                <Text style={styles.summaryLabel}>GRAND TOTAL</Text>
-                                <Text style={styles.summaryValue}>{stats.total} / {totalMax}</Text>
+                        {/* Summary Footer (Only for Senior) */}
+                        {!isJunior && (
+                            <View style={styles.summaryBox}>
+                                <View style={styles.summaryItem}>
+                                    <Text style={styles.summaryLabel}>GRAND TOTAL</Text>
+                                    <Text style={styles.summaryValue}>{stats.total} / {totalMax}</Text>
+                                </View>
+                                <View style={styles.summaryItem}>
+                                    <Text style={styles.summaryLabel}>PERCENTAGE</Text>
+                                    <Text style={styles.summaryValue}>{stats.percentage}%</Text>
+                                </View>
+                                <View style={styles.summaryItem}>
+                                    <Text style={styles.summaryLabel}>FINAL GRADE</Text>
+                                    <Text style={[styles.summaryValue, { color: '#fbbf24' }]}>{stats.grade}</Text>
+                                </View>
                             </View>
-                            <View style={styles.summaryItem}>
-                                <Text style={styles.summaryLabel}>PERCENTAGE</Text>
-                                <Text style={styles.summaryValue}>{stats.percentage}%</Text>
-                            </View>
-                            <View style={styles.summaryItem}>
-                                <Text style={styles.summaryLabel}>FINAL GRADE</Text>
-                                <Text style={[styles.summaryValue, { color: '#fbbf24' }]}>{stats.grade}</Text>
-                            </View>
-                        </View>
+                        )}
 
-                        {/* Achievement Medals */}
-                        {(manualStats.section_topper_name || manualStats.class_topper_name) && (
+                        {/* Achievement Medals (Only for Senior) */}
+                        {!isJunior && (manualStats.section_topper_name || manualStats.class_topper_name) && (
                             <View style={styles.medalRow}>
                                 {manualStats.section_topper_name && (
                                     <View style={styles.medal}>
@@ -311,11 +323,29 @@ export default function ReportCardPreview() {
                             <Text style={styles.remarkText}>"{result.overall_remark || 'Satisfactory performance. Aim for higher goals in the next academic term.'}"</Text>
                         </View>
 
+                        {/* Attendance Summary (Junior Only) */}
+                        {isJunior && attendance && (
+                            <View style={{ backgroundColor: '#f1f5f9', padding: 12, borderRadius: 12, marginBottom: 20, flexDirection: 'row', justifyContent: 'space-around', borderWidth: 1, borderColor: '#cbd5e1' }}>
+                                <View style={{ alignItems: 'center' }}>
+                                    <Text style={{ fontSize: 8, fontWeight: '900', color: '#64748b', textTransform: 'uppercase' }}>TOTAL DAYS</Text>
+                                    <Text style={{ fontSize: 16, fontWeight: '900', color: '#1e293b' }}>{attendance.total_days}</Text>
+                                </View>
+                                <View style={{ alignItems: 'center' }}>
+                                    <Text style={{ fontSize: 8, fontWeight: '900', color: '#64748b', textTransform: 'uppercase' }}>PRESENT</Text>
+                                    <Text style={{ fontSize: 16, fontWeight: '900', color: '#1e293b' }}>{attendance.present_days}</Text>
+                                </View>
+                                <View style={{ alignItems: 'center' }}>
+                                    <Text style={{ fontSize: 8, fontWeight: '900', color: '#64748b', textTransform: 'uppercase' }}>PERCENTAGE</Text>
+                                    <Text style={{ fontSize: 16, fontWeight: '900', color: '#1e293b' }}>{attendance.percentage}%</Text>
+                                </View>
+                            </View>
+                        )}
+
                         {/* Signatures */}
                         <View style={styles.signatures}>
-                            <View style={styles.sigLine}><Text style={styles.sigText}>TEACHER</Text></View>
+                            <View style={styles.sigLine}><Text style={styles.sigText}>CLASS TEACHER</Text></View>
                             <View style={styles.sigLine}><Text style={styles.sigText}>PRINCIPAL</Text></View>
-                            <View style={styles.sigLine}><Text style={styles.sigText}>PARENT</Text></View>
+                            {isJunior ? null : <View style={styles.sigLine}><Text style={styles.sigText}>PARENT</Text></View>}
                         </View>
                     </View>
                 </View>

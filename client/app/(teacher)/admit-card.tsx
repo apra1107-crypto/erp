@@ -22,6 +22,7 @@ import axios from 'axios';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as Print from 'expo-print';
 import * as Sharing from 'expo-sharing';
+import { cacheDirectory, writeAsStringAsync } from 'expo-file-system/legacy';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { API_ENDPOINTS, BASE_URL } from '../../constants/Config';
 import { useNavigation } from 'expo-router';
@@ -587,210 +588,163 @@ const AdmitCardScreen = () => {
         return `${BASE_URL}${url.startsWith('/') ? '' : '/'}${url}`;
     };
 
-    const toBase64 = async (url: string | null | undefined) => {
-        if (!url) return null;
-        try {
-            const fullUrl = getFullImageUrl(url);
-            if (!fullUrl) return null;
-            const response = await fetch(fullUrl);
-            const blob = await response.blob();
-            return new Promise((resolve, reject) => {
-                const reader = new FileReader();
-                reader.onloadend = () => resolve(reader.result);
-                reader.onerror = reject;
-                reader.readAsDataURL(blob);
-            });
-        } catch (e) {
-            console.warn("Base64 conversion failed for:", url);
-            return null;
-        }
-    };
+        const generatePDF = async (isBulk: boolean) => {
 
-    const generatePDF = async () => {
-        if (!currentEvent) return Alert.alert('Error', 'No exam event selected');
-        
-        const selectedData = filteredStudents.filter(s => selectionMap[s.id]);
-        if (selectedData.length === 0 && !selectedStudent) {
-            return Alert.alert('Warning', 'Select students first');
-        }
+            if (!currentEvent) return Alert.alert('Error', 'No exam event selected');
 
-        const dataToPrint = selectedStudent && viewMode === 'individual-preview' ? [selectedStudent] : selectedData;
-
-        try {
-            setIsGeneratingPDF(true);
             
-            const instLogoB64 = await toBase64(instProfile?.logo_url || instProfile?.institute_logo);
-            const studentsWithPhotos = await Promise.all(dataToPrint.map(async (s) => ({
-                ...s,
-                photoB64: s.photo_url ? await toBase64(s.photo_url) : null
-            })));
 
-            const fullAddress = [
-                instProfile?.address || instProfile?.institute_address,
-                instProfile?.landmark,
-                instProfile?.district,
-                instProfile?.state,
-                instProfile?.pincode
-            ].filter(Boolean).join(' ');
+            let studentIdsToGenerate: (string | number)[] = [];
 
-            const eventName = currentEvent.exam_name;
-            const eventSchedule = currentEvent.schedule;
-            let htmlContent = `
-                <html>
-                <head>
-                    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-                    <style>
-                        @page { size: A4; margin: 0; }
-                        body { font-family: 'Helvetica Neue', Helvetica, Arial, sans-serif; padding: 0; margin: 0; color: #333; background: #fff; }
-                        
-                        .page-container {
-                            width: 210mm;
-                            height: 297mm;
-                            padding: 25px 35px;
-                            box-sizing: border-box;
-                            page-break-after: always;
-                            display: flex;
-                            flex-direction: column;
-                            background: #fff;
-                        }
-                        
-                        .header-container { display: flex; flex-direction: row; align-items: center; justify-content: center; margin-bottom: 5px; }
-                        .logo { width: 65px; height: 65px; margin-right: 15px; border-radius: 8px; }
-                        .institute-info { text-align: center; }
-                        
-                        .institute-name { font-size: 28px; font-weight: 900; color: #1A237E; margin: 0; text-transform: uppercase; letter-spacing: 1px; }
-                        .affiliation-text { font-size: 13px; color: #444; margin: 0; margin-top: 4px; margin-left: 20px; font-weight: 700; }
-                        .address-text { font-size: 12px; color: #666; margin-top: 4px; font-weight: 600; text-align: center; }
-                        
-                        .divider { height: 2px; background-color: #000; margin: 12px 0; }
-                        
-                        .exam-box { 
-                            font-size: 22px; font-weight: 900; text-align: center; margin: 10px auto; 
-                            text-transform: uppercase; padding: 8px 45px; border: 2.5px solid #000; display: table; 
-                        }
-                        
-                        .details-section { display: flex; flex-direction: row; justify-content: space-between; margin: 20px 0; }
-                        .info-table { width: 72%; border-collapse: collapse; }
-                        .info-table td { padding: 8px 0; font-size: 15px; border-bottom: 1px solid #f0f0f0; }
-                        .label { font-weight: bold; width: 170px; color: #555; font-size: 12px; text-transform: uppercase; }
-                        .value { font-weight: 900; color: #000; font-size: 17px; }
-                        
-                        .photo-box { width: 130px; height: 160px; border: 2.5px solid #000; display: flex; align-items: center; justify-content: center; background: #fff; overflow: hidden; }
-                        .photo-box img { width: 100%; height: 100%; object-fit: cover; }
-                        
-                        .timetable-section { width: 100%; margin-top: 10px; }
-                        .section-title { font-weight: 900; text-decoration: underline; font-size: 14px; margin-bottom: 10px; }
-                        
-                        table.schedule { width: 100%; border-collapse: collapse; border: 2px solid #000; }
-                        .schedule th { background-color: #f8f9fa; border: 1.5px solid #000; padding: 10px; text-align: left; font-size: 13px; font-weight: 900; }
-                        .schedule td { border: 1.5px solid #000; padding: 10px; font-size: 13px; font-weight: bold; }
-                        
-                        .instructions { border: 2px solid #000; padding: 15px; border-radius: 8px; margin-top: 20px; background: #fafafa; }
-                        .inst-title { font-weight: 900; font-size: 13px; text-decoration: underline; margin-bottom: 8px; }
-                        .inst-list { font-size: 12px; font-weight: bold; margin: 0; padding-left: 20px; line-height: 1.4; }
-                        
-                        .signature-section { margin-top: auto; padding-top: 40px; display: flex; justify-content: space-between; padding-bottom: 20px; }
-                        .sig-line { border-top: 2px solid #000; width: 200px; text-align: center; font-size: 12px; font-weight: 900; padding-top: 8px; text-transform: uppercase; }
-                    </style>
-                </head>
-                <body>
-            `;
+    
 
-            for (const student of studentsWithPhotos) {
-                const logoHtml = instLogoB64 ? `<img src="${instLogoB64}" class="logo" />` : '';
-                const photoHtml = student.photoB64 
-                    ? `<img src="${student.photoB64}" />` 
-                    : '<div style="font-size: 10px; color: #999; font-weight: bold; text-align: center;">AFFIX PHOTO</div>';
+            if (isBulk) {
 
-                htmlContent += `
-                    <div class="page-container">
-                        <div class="header-container">
-                            ${logoHtml}
-                            <div class="institute-info">
-                                <h1 class="institute-name">${(instProfile?.institute_name || 'INSTITUTE').toUpperCase()}</h1>
-                                ${instProfile?.affiliation ? `<p class="affiliation-text">${instProfile.affiliation}</p>` : ''}
-                                <p class="address-text">${fullAddress}</p>
-                            </div>
-                        </div>
+                studentIdsToGenerate = Object.keys(selectionMap).filter(id => selectionMap[id]);
 
-                        <div class="divider"></div>
-                        
-                        <div class="exam-box">${eventName}</div>
+                if (studentIdsToGenerate.length === 0) {
 
-                        <div class="details-section">
-                            <table class="info-table">
-                                <tr><td class="label">Student Name</td><td class="value">${student.name}</td></tr>
-                                <tr><td class="label">Class & Section</td><td class="value">${student.class} - ${student.section}</td></tr>
-                                <tr><td class="label">Roll Number</td><td class="value">${student.roll_no || 'TBD'}</td></tr>
-                                <tr><td class="label">Date of Birth</td><td class="value">${formatDateString(student.dob)}</td></tr>
-                                <tr><td class="label">Father's Name</td><td class="value">${student.father_name}</td></tr>
-                                <tr><td class="label">Contact Number</td><td class="value">${student.mobile}</td></tr>
-                            </table>
-                            <div class="photo-box">${photoHtml}</div>
-                        </div>
+                    return Alert.alert('Warning', 'Select students first for bulk generation');
 
-                        <div class="timetable-section">
-                            <div class="section-title">EXAMINATION TIMETABLE</div>
-                            <table class="schedule">
-                                <thead>
-                                    <tr>
-                                        <th>Date & Day</th>
-                                        <th>Subject Name</th>
-                                        <th>Time / Shift</th>
-                                    </tr>
-                                </thead>
-                                <tbody>
-                                    ${eventSchedule.map(row => `
-                                        <tr>
-                                            <td>${formatDateString(row.date)} (${row.day})</td>
-                                            <td>${row.subject}</td>
-                                            <td>${row.time}</td>
-                                        </tr>
-                                    `).join('')}
-                                </tbody>
-                            </table>
-                        </div>
+                }
 
-                        <div class="instructions">
-                            <div class="inst-title">IMPORTANT INSTRUCTIONS:</div>
-                            <ol class="inst-list">
-                                <li>Candidate must carry this Admit Card to the examination hall for all papers.</li>
-                                <li>Possession of mobile phones, electronic gadgets, or calculators is strictly prohibited.</li>
-                                <li>Candidates must report at the examination center at least 20 minutes before time.</li>
-                                <li>Ensure invigilator signature on this card during every examination session.</li>
-                            </ol>
-                        </div>
-
-                        <div class="signature-section">
-                            <div class="sig-line">TEACHER'S SIGNATURE</div>
-                            <div class="sig-line">PRINCIPAL'S SIGNATURE</div>
-                        </div>
-                    </div>
-                `;
-            }
-
-            htmlContent += `</body></html>`;
-
-            const { uri } = await Print.printToFileAsync({ html: htmlContent });
-            
-            if (Platform.OS === 'ios') {
-                await Sharing.shareAsync(uri);
             } else {
-                await Sharing.shareAsync(uri, {
-                    mimeType: 'application/pdf',
-                    dialogTitle: 'Admit Card',
-                    UTI: 'com.adobe.pdf'
-                });
+
+                // Individual generation
+
+                if (!selectedStudent) {
+
+                    return Alert.alert('Error', 'No student selected for individual PDF generation');
+
+                }
+
+                studentIdsToGenerate = [selectedStudent.id];
+
             }
-            setIsSelectionMode(false);
-            setSelectionMap({});
-        } catch (error) {
-            console.error('PDF generation error:', error);
-            Alert.alert('Error', 'Failed to generate PDF');
-        } finally {
-            setIsGeneratingPDF(false);
-        }
-    };
+
+    
+
+            try {
+
+                setIsGeneratingPDF(true);
+
+                const token = await AsyncStorage.getItem('teacherToken');
+
+                const storedSessionId = await AsyncStorage.getItem('selectedSessionId');
+
+                const userDataStr = await AsyncStorage.getItem('teacherData');
+
+                const userData = userDataStr ? JSON.parse(userDataStr) : null;
+
+                const sessionId = storedSessionId || (userData ? userData.current_session_id : null);
+
+                
+
+                const response = await axios.post(
+
+                    `${API_ENDPOINTS.ADMIT_CARD}/generate-bulk-pdf/${currentEvent.id}`,
+
+                    { studentIds: studentIdsToGenerate },
+
+                    {
+
+                        headers: { 
+
+                            Authorization: `Bearer ${token}`,
+
+                            'x-academic-session-id': sessionId?.toString()
+
+                        },
+
+                        responseType: 'arraybuffer',
+
+                        timeout: 300000 // 5 minutes for heavy PDF generation
+
+                    }
+
+                );
+
+    
+
+                // Efficient ArrayBuffer to Base64 conversion using chunking for large files
+
+                const arrayBuffer = response.data; // This is the ArrayBuffer
+
+                const chunkSize = 16 * 1024; // Process in 16KB chunks (adjust as needed)
+
+                let base64 = '';
+
+                const bytes = new Uint8Array(arrayBuffer);
+
+                const len = bytes.byteLength;
+
+    
+
+                for (let i = 0; i < len; i += chunkSize) {
+
+                    const chunk = bytes.subarray(i, Math.min(i + chunkSize, len));
+
+                    base64 += String.fromCharCode.apply(null, Array.from(chunk));
+
+                }
+
+                const base64data = btoa(base64);
+
+    
+
+                                const fileName = `admit_cards_${currentEvent.id}_${isBulk ? 'bulk' : studentIdsToGenerate[0]}_${Date.now()}.pdf`;
+
+    
+
+                                const fileUri = `${cacheDirectory}${fileName}`;
+
+    
+
+                
+
+    
+
+                                await writeAsStringAsync(fileUri, base64data, {
+
+    
+
+                                    encoding: 'base64',
+
+    
+
+                                });
+
+    
+
+                await Sharing.shareAsync(fileUri, {
+
+                    UTI: '.pdf',
+
+                    mimeType: 'application/pdf',
+
+                    dialogTitle: 'Admit Cards'
+
+                });
+
+    
+
+                setIsSelectionMode(false);
+
+                setSelectionMap({});
+
+            } catch (error: any) {
+
+                console.error('Admit Card PDF generation error:', error.message);
+
+                Alert.alert('Error', `Failed to generate PDF: ${error.message}`);
+
+            } finally {
+
+                setIsGeneratingPDF(false);
+
+            }
+
+        };
 
     const handleDeleteEvent = async (id: string | number) => {
         Alert.alert(
@@ -1322,7 +1276,7 @@ const AdmitCardScreen = () => {
 
             {isSelectionMode && getSelectedCount() > 0 && (
                 <View style={styles.bulkFooter}>
-                    <TouchableOpacity style={styles.downloadBtn} onPress={generatePDF} activeOpacity={0.9}>
+                    <TouchableOpacity style={styles.downloadBtn} onPress={() => generatePDF(true)} activeOpacity={0.9}>
                         {isGeneratingPDF ? (
                             <ActivityIndicator color="#fff" />
                         ) : (
@@ -1340,109 +1294,34 @@ const AdmitCardScreen = () => {
     const renderIndividualPreview = () => (
         <View style={[styles.container, { paddingTop: insets.top }]}>
             <View style={{ flexDirection: 'row', alignItems: 'center', paddingHorizontal: 20, paddingVertical: 15 }}>
-                <TouchableOpacity onPress={() => setViewMode('event-details')}>
+                <TouchableOpacity onPress={() => setViewMode('event-details')} style={{ padding: 5 }}>
                     <Ionicons name="chevron-back" size={28} color={theme.text} />
                 </TouchableOpacity>
-                <Text style={[styles.modalTitle, { marginLeft: 12 }]}>Preview</Text>
+                <Text style={[styles.modalTitle, { marginLeft: 12, flex: 1 }]}>Preview</Text>
+                <TouchableOpacity 
+                    style={{ backgroundColor: theme.primary, paddingHorizontal: 15, paddingVertical: 8, borderRadius: 12, flexDirection: 'row', alignItems: 'center', gap: 5 }}
+                    onPress={() => generatePDF(false)}
+                    disabled={isGeneratingPDF}
+                >
+                    {isGeneratingPDF ? (
+                        <ActivityIndicator color="#fff" size="small" />
+                    ) : (
+                        <>
+                            <Ionicons name="download-outline" size={20} color="#fff" />
+                            <Text style={{ color: '#fff', fontWeight: 'bold', fontSize: 13 }}>Download PDF</Text>
+                        </>
+                    )}
+                </TouchableOpacity>
             </View>
 
             <ScrollView style={styles.previewScroll} showsVerticalScrollIndicator={false}>
                 <View style={styles.previewContainer}>
-                    <View style={styles.admitCardPaper}>
-                        {/* Professional Header Section */}
-                        <View style={styles.paperHeader}>
-                            {/* Logo and Name Row */}
-                            <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'center', width: '100%', marginBottom: 5 }}>
-                                {instProfile?.logo_url || instProfile?.institute_logo ? (
-                                        <Image 
-                                            source={{ uri: getFullImageUrl(instProfile.logo_url || instProfile.institute_logo) || '' }} 
-                                            style={{ width: 50, height: 50, resizeMode: 'contain', marginRight: 12 }} 
-                                        />
-                                    ) : null}
-                                <Text 
-                                    style={[styles.paperInstName, { flexShrink: 1 }]} 
-                                    numberOfLines={1} 
-                                    adjustsFontSizeToFit
-                                >
-                                    {(instProfile?.institute_name || 'INSTITUTE NAME').toUpperCase()}
-                                </Text>
-                            </View>
-                            
-                            {/* Affiliation Row */}
-                            {instProfile?.affiliation && (
-                                <Text style={{ fontSize: 10, fontWeight: '700', color: '#333', textAlign: 'center', marginBottom: 8 }}>
-                                    {instProfile.affiliation}
-                                </Text>
-                            )}
-
-                            {/* Detailed Address Row */}
-                            <Text style={styles.paperInstSub}>
-                                {instProfile?.address || instProfile?.institute_address}
-                                {"\n"}{instProfile?.district} {instProfile?.state} {instProfile?.pincode}
-                            </Text>
-
-                            <View style={{ width: '100%', height: 2, backgroundColor: '#000', marginTop: 15 }} />
-                            
-                            <Text style={styles.paperExamTitle}>{currentEvent?.exam_name}</Text>
-                        </View>
-
-                        {/* Student Info Section */}
-                        <View style={styles.paperInfoRow}>
-                            <View style={styles.paperTable}>
-                                <View style={styles.paperTableRow}><Text style={styles.paperLabel}>STUDENT NAME</Text><Text style={styles.paperValue}>{selectedStudent?.name}</Text></View>
-                                <View style={styles.paperTableRow}><Text style={styles.paperLabel}>CLASS & SECTION</Text><Text style={styles.paperValue}>{selectedStudent?.class} - {selectedStudent?.section}</Text></View>
-                                <View style={styles.paperTableRow}><Text style={styles.paperLabel}>ROLL NUMBER</Text><Text style={styles.paperValue}>{selectedStudent?.roll_no || 'TBD'}</Text></View>
-                                <View style={styles.paperTableRow}><Text style={styles.paperLabel}>DATE OF BIRTH</Text><Text style={styles.paperValue}>{formatDateString(selectedStudent?.dob)}</Text></View>
-                                <View style={styles.paperTableRow}><Text style={styles.paperLabel}>FATHER'S NAME</Text><Text style={styles.paperValue}>{selectedStudent?.father_name}</Text></View>
-                                <View style={styles.paperTableRow}><Text style={styles.paperLabel}>MOBILE NO.</Text><Text style={styles.paperValue}>{selectedStudent?.mobile}</Text></View>
-                            </View>
-                            <View style={styles.paperPhoto}>
-                                {selectedStudent?.photo_url && getFullImageUrl(selectedStudent.photo_url) ? (
-                                    <Image source={{ uri: getFullImageUrl(selectedStudent.photo_url) as string }} style={{ width: '100%', height: '100%' }} />
-                                ) : (
-                                    <Text style={{ fontSize: 8, textAlign: 'center' }}>AFFIX PHOTO</Text>
-                                )}
-                            </View>
-                        </View>
-
-                        {/* Timetable */}
-                        <View style={styles.paperTimetable}>
-                            <Text style={styles.paperTableTitle}>EXAMINATION TIMETABLE</Text>
-                            <View style={styles.paperGrid}>
-                                <View style={styles.paperGridHeader}>
-                                    <View style={styles.paperGridCell}><Text style={styles.paperGridText}>DATE & DAY</Text></View>
-                                    <View style={styles.paperGridCell}><Text style={styles.paperGridText}>SUBJECT</Text></View>
-                                    <View style={styles.paperGridCell}><Text style={styles.paperGridText}>TIME / SHIFT</Text></View>
-                                </View>
-                                {currentEvent?.schedule.map((row, idx) => (
-                                    <View key={idx} style={styles.paperGridRow}>
-                                        <View style={styles.paperGridCell}><Text style={styles.paperGridText}>{`${String(formatDateString(row.date)).trim()} (${String(row.day).trim()})`}</Text></View>
-                                        <View style={styles.paperGridCell}><Text style={styles.paperGridText}>{row.subject}</Text></View>
-                                        <View style={styles.paperGridCell}><Text style={styles.paperGridText}>{row.time}</Text></View>
-                                    </View>
-                                ))}
-                            </View>
-                        </View>
-
-                        {/* Instructions */}
-                        <View style={styles.paperInstructions}>
-                            <Text style={styles.paperInstTitle}>IMPORTANT INSTRUCTIONS:</Text>
-                            <Text style={styles.paperInstItem}>1. Candidate must carry this Admit Card to the examination hall for all papers.</Text>
-                            <Text style={styles.paperInstItem}>2. Possession of mobile phones, electronic gadgets, or calculators is strictly prohibited.</Text>
-                            <Text style={styles.paperInstItem}>3. Candidates must report at the examination center at least 20 minutes before time.</Text>
-                            <Text style={styles.paperInstItem}>4. Ensure invigilator signature on this card during every examination session.</Text>
-                        </View>
-
-                        {/* Footer Signatures */}
-                        <View style={styles.paperFooter}>
-                            <View style={styles.paperSigLine}>
-                                <Text style={styles.paperSigText}>TEACHER'S SIGNATURE</Text>
-                            </View>
-                            <View style={styles.paperSigLine}>
-                                <Text style={styles.paperSigText}>PRINCIPAL'S SIGNATURE</Text>
-                            </View>
-                        </View>
-                    </View>
+                    <Text style={{ color: theme.textLight, fontSize: 16, textAlign: 'center', marginTop: 50 }}>
+                        Preview not available for individual generation.
+                    </Text>
+                    <Text style={{ color: theme.textLight, fontSize: 14, textAlign: 'center', marginTop: 10 }}>
+                        Tap 'Download PDF' to get the full document.
+                    </Text>
                 </View>
             </ScrollView>
         </View>

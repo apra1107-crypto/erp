@@ -55,49 +55,41 @@ export const createNotice = async (req, res) => {
         // 2. Push Notifications
         const pushTokens = [];
         
-        const fetchTokens = async () => {
-            try {
-                // Always fetch Principal Token
-                const pRes = await pool.query('SELECT push_token FROM institutes WHERE id = $1 AND push_token IS NOT NULL AND push_token != \'\'', [instituteId]);
-                pRes.rows.forEach(r => pushTokens.push(r.push_token));
+        // Always fetch Principal Token
+        const pRes = await pool.query('SELECT push_token FROM institutes WHERE id = $1 AND push_token IS NOT NULL AND push_token != \'\'', [instituteId]);
+        pRes.rows.forEach(r => pushTokens.push(r.push_token));
 
-                if (target_audience === 'all') {
-                    // Fetch ALL Students
-                    const sRes = await pool.query('SELECT push_token FROM students WHERE institute_id = $1 AND push_token IS NOT NULL AND push_token != \'\'', [instituteId]);
-                    sRes.rows.forEach(r => pushTokens.push(r.push_token));
-                    
-                    // Fetch ALL Teachers
-                    const tRes = await pool.query('SELECT push_token FROM teachers WHERE institute_id = $1 AND push_token IS NOT NULL AND push_token != \'\'', [instituteId]);
-                    tRes.rows.forEach(r => pushTokens.push(r.push_token));
-                } else if (target_audience === 'teachers') {
-                    // Fetch ALL Teachers
-                    const tRes = await pool.query('SELECT push_token FROM teachers WHERE institute_id = $1 AND push_token IS NOT NULL AND push_token != \'\'', [instituteId]);
-                    tRes.rows.forEach(r => pushTokens.push(r.push_token));
-                } else if (target_audience === 'class') {
-                    // Fetch Specific Class Students
-                    const sRes = await pool.query(
-                        'SELECT push_token FROM students WHERE institute_id = $1 AND class = $2 AND section = $3 AND push_token IS NOT NULL AND push_token != \'\'', 
-                        [instituteId, target_class, target_section]
-                    );
-                    sRes.rows.forEach(r => pushTokens.push(r.push_token));
-                }
+        if (target_audience === 'all') {
+            // Fetch ALL Students
+            const sRes = await pool.query('SELECT push_token FROM students WHERE institute_id = $1 AND push_token IS NOT NULL AND push_token != \'\'', [instituteId]);
+            sRes.rows.forEach(r => pushTokens.push(r.push_token));
+            
+            // Fetch ALL Teachers
+            const tRes = await pool.query('SELECT push_token FROM teachers WHERE institute_id = $1 AND push_token IS NOT NULL AND push_token != \'\'', [instituteId]);
+            tRes.rows.forEach(r => pushTokens.push(r.push_token));
+        } else if (target_audience === 'teachers') {
+            // Fetch ALL Teachers
+            const tRes = await pool.query('SELECT push_token FROM teachers WHERE institute_id = $1 AND push_token IS NOT NULL AND push_token != \'\'', [instituteId]);
+            tRes.rows.forEach(r => pushTokens.push(r.push_token));
+        } else if (target_audience === 'class') {
+            // Fetch Specific Class Students
+            const sRes = await pool.query(
+                'SELECT push_token FROM students WHERE institute_id = $1 AND class = $2 AND section = $3 AND push_token IS NOT NULL AND push_token != \'\'', 
+                [instituteId, target_class, target_section]
+            );
+            sRes.rows.forEach(r => pushTokens.push(r.push_token));
+        }
 
-                const uniqueTokens = [...new Set(pushTokens)];
-                if (uniqueTokens.length > 0) {
-                    const title = `New Notice: ${topic}`;
-                    const body = `${creatorName} published a new notice. Tap to view.`;
-                    await sendPushNotification(uniqueTokens, title, body, {
-                        type: 'notice',
-                        noticeId: newNotice.id,
-                        topic: topic
-                    });
-                }
-            } catch (err) {
-                console.error('Push notification background error:', err);
-            }
-        };
-
-        fetchTokens();
+        const uniqueTokens = [...new Set(pushTokens)];
+        if (uniqueTokens.length > 0) {
+            const title = `New Notice: ${topic}`;
+            const body = `${creatorName} published a new notice. Tap to view.`;
+            await sendPushNotification(uniqueTokens, title, body, {
+                type: 'notice',
+                noticeId: newNotice.id,
+                topic: topic
+            });
+        }
 
         res.status(201).json({ message: 'Notice published successfully', notice: newNotice });
     } catch (error) {

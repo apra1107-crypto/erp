@@ -1,3 +1,4 @@
+import * as FileSystem from 'expo-file-system/legacy';
 import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import { 
   View, 
@@ -22,7 +23,6 @@ import { Ionicons } from '@expo/vector-icons';
 import axios from 'axios';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import * as Print from 'expo-print';
 import * as Sharing from 'expo-sharing';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useTheme } from '../../../context/ThemeContext';
@@ -31,7 +31,7 @@ import Toast from 'react-native-toast-message';
 
 const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get('window');
 
-const SmartMarkInput = React.memo(({ value, onChange, placeholder, style, keyboardType = 'default', theme, isDark }: any) => {
+const SmartMarkInput = React.memo(({ value, onChange, placeholder, style, keyboardType = 'default', theme, isDark, ...props }: any) => {
     const [isFocused, setIsFocused] = useState(false);
     return (
         <TextInput
@@ -58,9 +58,61 @@ const SmartMarkInput = React.memo(({ value, onChange, placeholder, style, keyboa
             onFocus={() => setIsFocused(true)}
             onBlur={() => setIsFocused(false)}
             selectTextOnFocus={true}
+            {...props}
         />
     );
 });
+
+const GradePicker = React.memo(({ value, onSelect, grades, theme, isDark }: any) => {
+    const [pickerVisible, setPickerVisible] = useState(false);
+    const selectedGradeText = value || 'Select Grade';
+
+    return (
+        <View style={{ flex: 1, height: '100%', justifyContent: 'center', alignItems: 'center' }}>
+            <TouchableOpacity 
+                onPress={() => setPickerVisible(true)} 
+                style={{ 
+                    width: '90%', 
+                    height: 38, 
+                    borderRadius: 8, 
+                    borderWidth: 1, 
+                    borderColor: theme.border, 
+                    backgroundColor: isDark ? '#1a1a1a' : '#f8fafc',
+                    justifyContent: 'center', 
+                    alignItems: 'center',
+                    flexDirection: 'row',
+                    paddingHorizontal: 5
+                }}
+            >
+                <Text style={{ fontSize: 13, fontWeight: '700', color: value ? theme.primary : theme.textLight }}>
+                    {selectedGradeText}
+                </Text>
+                <Ionicons name="chevron-down" size={14} color={theme.textLight} style={{ marginLeft: 5 }} />
+            </TouchableOpacity>
+
+            <Modal transparent visible={pickerVisible} animationType="fade" onRequestClose={() => setPickerVisible(false)}>
+                <Pressable style={{ flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: 'rgba(0,0,0,0.5)' }} onPress={() => setPickerVisible(false)}>
+                    <View style={{ backgroundColor: theme.card, borderRadius: 15, width: '80%', maxHeight: '50%', overflow: 'hidden' }}>
+                        <ScrollView>
+                            {grades.map((grade: string, index: number) => (
+                                <TouchableOpacity 
+                                    key={index} 
+                                    onPress={() => { onSelect(grade); setPickerVisible(false); }}
+                                    style={{ paddingVertical: 15, paddingHorizontal: 20, borderBottomWidth: index === grades.length - 1 ? 0 : 1, borderBottomColor: theme.border }}
+                                >
+                                    <Text style={{ fontSize: 16, color: theme.text, fontWeight: value === grade ? '900' : '500' }}>
+                                        {grade}
+                                    </Text>
+                                </TouchableOpacity>
+                            ))}
+                        </ScrollView>
+                    </View>
+                </Pressable>
+            </Modal>
+        </View>
+    );
+});
+
 
 export default function ExamDetail() {
     const { id } = useLocalSearchParams();
@@ -73,6 +125,8 @@ export default function ExamDetail() {
     const [students, setStudents] = useState<any[]>([]);
     const [filteredStudents, setFilteredStudents] = useState<any[]>([]);
     const [searchQuery, setSearchQuery] = useState('');
+
+    const isJunior = exam?.evaluation_mode === 'junior';
 
     // Modal States
     const [fillModalVisible, setFillModalVisible] = useState(false);
@@ -103,7 +157,7 @@ export default function ExamDetail() {
     const fetchExamData = async () => {
         try {
             setLoading(true);
-            const token = await AsyncStorage.getItem('token');
+            const token = await AsyncStorage.getItem('principalToken') || await AsyncStorage.getItem('token');
             const response = await axios.get(`${API_ENDPOINTS.EXAM}/${id}/grid`, {
                 headers: { Authorization: `Bearer ${token}` }
             });
@@ -177,224 +231,57 @@ export default function ExamDetail() {
         return Object.values(selectionMap).filter(Boolean).length;
     };
 
-    const toBase64 = async (url: string | null | undefined) => {
-        if (!url) return null;
-        try {
-            const fullUrl = url.startsWith('http') ? url : `${BASE_URL}${url}`;
-            const response = await fetch(fullUrl);
-            const blob = await response.blob();
-            return new Promise((resolve, reject) => {
-                const reader = new FileReader();
-                reader.onloadend = () => resolve(reader.result);
-                reader.onerror = reject;
-                reader.readAsDataURL(blob);
-            });
-        } catch (e) {
-            console.warn("Base64 conversion failed for:", url);
-            return null;
-        }
-    };
-
     const generatePDF = async () => {
-        const selectedStudentsData = students.filter(s => selectionMap[s.student.id]);
-        if (selectedStudentsData.length === 0) return Alert.alert('Warning', 'Select students first');
+        const selectedIds = Object.keys(selectionMap).filter(id => selectionMap[id]);
+        if (selectedIds.length === 0) return Alert.alert('Warning', 'Select students first');
 
         try {
             setIsGeneratingPDF(true);
-            const token = await AsyncStorage.getItem('token');
-            const profileRes = await axios.get(`${API_ENDPOINTS.PRINCIPAL}/profile`, { headers: { Authorization: `Bearer ${token}` } });
-            const inst = profileRes.data.profile;
-            const logoB64 = await toBase64(inst.logo_url);
-
-            let htmlContent = `
-                <html>
-                <head>
-                    <style>
-                        @page { size: A4; margin: 0; }
-                        body { font-family: 'Helvetica', Arial, sans-serif; margin: 0; padding: 0; background: #fff; }
-                        .report-card { 
-                            width: 210mm; height: 290mm; padding: 12mm; padding-top: 6mm; box-sizing: border-box; 
-                            background: #fff; page-break-after: always; display: flex; flex-direction: column;
-                            position: relative; border: 2.5px solid #000; overflow: hidden;
-                            margin: 2mm 0;
-                        }
-                        .inner-border {
-                            position: absolute; top: 2mm; left: 2mm; right: 2mm; bottom: 2mm;
-                            border: 0.8px solid #333; pointer-events: none;
-                        }
-                        .header { text-align: center; margin-bottom: 10px; padding-top: 0; }
-                        .inst-name { font-size: 36px; font-weight: 900; text-transform: uppercase; color: #1e1b4b; margin: 0; line-height: 1; }
-                        .inst-sub { font-size: 13.5px; color: #444; font-weight: 700; margin-top: -5px; line-height: 1.2; }
-                        .inst-affiliation { font-size: 17px; color: #4f46e5; font-weight: 700; margin-top: -15px; margin-bottom: 2px; margin-left: 25px; }
-                        .exam-title-box { 
-                            display: inline-block; background: #1e1b4b; color: #fff; 
-                            padding: 6px 35px; border-radius: 4px; margin-top: 10px;
-                            transform: skewX(-10deg); font-weight: 900; font-size: 16px;
-                        }
-                        
-                        .student-section { 
-                            display: flex; justify-content: space-between; margin-bottom: 15px; 
-                            padding: 12px; background: #f8fafc; border: 1.5px solid #e2e8f0; border-radius: 12px;
-                        }
-                        .info-grid { flex: 1; }
-                        .info-row { display: flex; border-bottom: 1px solid #cbd5e1; padding: 6px 0; }
-                        .info-label { width: 140px; font-size: 10px; font-weight: bold; color: #64748b; }
-                        .info-value { flex: 1; font-size: 14px; font-weight: 900; color: #0f172a; }
-                        .photo-box { width: 90px; height: 110px; border: 4px solid #fff; box-shadow: 0 4px 8px rgba(0,0,0,0.1); border-radius: 4px; overflow: hidden; }
-                        .photo-box img { width: 100%; height: 100%; object-fit: cover; }
-
-                        table { width: 100%; border-collapse: collapse; border: 2px solid #1e1b4b; border-radius: 12px; overflow: hidden; margin-bottom: 15px; }
-                        th { background: #1e1b4b; color: #fff; padding: 8px; font-size: 11px; font-weight: 900; }
-                        td { border-bottom: 1px solid #e2e8f0; padding: 8px; text-align: center; font-size: 13px; font-weight: 800; }
-                        .text-left { text-align: left; padding-left: 15px; }
-                        tr:nth-child(even) { background-color: #f8fafc; }
-                        
-                        .summary-box { 
-                            display: flex; justify-content: space-between; background: #1e1b4b; 
-                            padding: 15px; border-radius: 12px; margin-bottom: 15px; color: #fff;
-                        }
-                        .stat-item { text-align: center; }
-                        .stat-label { font-size: 9px; font-weight: bold; color: #94a3b8; margin-bottom: 2px; }
-                        .stat-value { font-size: 20px; font-weight: 900; }
-
-                        .medal-row { display: flex; flex-direction: row; gap: 10px; margin-bottom: 15px; }
-                        .medal { 
-                            flex: 1; border: 1.5px solid #4f46e5; background: #f5f3ff; 
-                            padding: 10px; border-radius: 10px; display: flex; align-items: center; gap: 12px;
-                        }
-                        .medal-text { font-size: 13px; font-weight: 900; color: #1e1b4b; }
-                        .medal-score { font-size: 10px; font-weight: 800; color: #4338ca; }
-
-                        .remarks-box {
-                            padding: 10px; background: #fffbeb; border-radius: 10px; 
-                            border-left: 5px solid #f59e0b; margin-bottom: 10px;
-                        }
-                        .remark-title { font-size: 10px; font-weight: 900; color: #92400e; margin-bottom: 3px; text-decoration: underline; }
-                        .remark-text { font-size: 12px; font-style: italic; color: #451a03; font-weight: 600; line-height: 1.2; }
-
-                        .footer { margin-top: auto; display: flex; justify-content: space-between; padding: 0 10px 25px 10px; }
-                        .sig-line { border-top: 2.5px solid #1e1b4b; width: 150px; text-align: center; font-size: 10px; font-weight: 900; padding-top: 8px; }
-                    </style>
-                </head>
-                <body>
-            `;
-
-            const totalMax = exam.subjects_blueprint.reduce((sum: number, sub: any) => sum + (parseFloat(sub.max_theory) || 0) + (parseFloat(sub.max_practical) || 0), 0);
-
-            for (const item of selectedStudentsData) {
-                const photoB64 = await toBase64(item.student.profile_image || item.student.photo_url);
-                const s = item.student;
-                const r = item.calculated_stats || {};
-                const m = item.marks_data || [];
-
-                htmlContent += `
-                    <div class="report-card">
-                        <div class="inner-border"></div>
-                        <div class="header">
-                            <div style="display: flex; align-items: center; justify-content: center; gap: 15px; margin-bottom: 0;">
-                                ${logoB64 ? `<img src="${logoB64}" style="width: 80px; height: 80px; object-fit: contain;" />` : ''}
-                                <h1 class="inst-name">${inst.institute_name}</h1>
-                            </div>
-                            ${inst.affiliation ? `<p class="inst-affiliation">${inst.affiliation}</p>` : ''}
-                            <p class="inst-sub" style="margin-top: 0;">${inst.address || ''} ${inst.landmark || ''} ${inst.district || ''} ${inst.state || ''} ${inst.pincode || ''}</p>
-                            <div class="exam-title-box">${exam.name}</div>
-                        </div>
-
-                        <div class="student-section">
-                            <div class="info-grid">
-                                <div class="info-row"><div class="info-label">STUDENT NAME</div><div class="info-value">${s.name}</div></div>
-                                <div class="info-row"><div class="info-label">CLASS & SECTION</div><div class="info-value">${s.class} - ${s.section}</div></div>
-                                <div class="info-row"><div class="info-label">ROLL NUMBER</div><div class="info-value">${s.roll_no}</div></div>
-                                <div class="info-row"><div class="info-label">FATHER'S NAME</div><div class="info-value">${s.father_name}</div></div>
-                                <div class="info-row"><div class="info-label">DATE OF BIRTH</div><div class="info-value">${s.dob || '-'}</div></div>
-                            </div>
-                            <div class="photo-box">
-                                ${photoB64 ? `<img src="${photoB64}" />` : '<span style="font-size: 10px; color: #999;">PHOTO</span>'}
-                            </div>
-                        </div>
-
-                        <table>
-                            <thead>
-                                <tr>
-                                    <th class="text-left">SUBJECT</th>
-                                    <th>MAX</th>
-                                    <th>PASS</th>
-                                    <th>OBT</th>
-                                    ${exam.show_highest_marks ? '<th>HIGH</th>' : ''}
-                                    <th>GRADE</th>
-                                </tr>
-                            </thead>
-                            <tbody>
-                                ${exam.subjects_blueprint.map((sub: any) => {
-                                    const marksData = m.find((mk: any) => mk.subject === sub.name) || {};
-                                    const high = manualStats[`highest_${sub.name}`] || '-';
-                                    return `
-                                        <tr>
-                                            <td class="text-left" style="color: #1e293b;">${sub.name}</td>
-                                            <td>${(parseFloat(sub.max_theory) || 0) + (parseFloat(sub.max_practical) || 0)}</td>
-                                            <td>${sub.passing_marks || '-'}</td>
-                                            <td style="color: #4f46e5; font-size: 16px; font-weight: 900;">${marksData.theory || '-'}</td>
-                                            ${exam.show_highest_marks ? `<td style="color: #6366f1;">${high}</td>` : ''}
-                                            <td style="font-weight: 900;">${marksData.grade || '-'}</td>
-                                        </tr>
-                                    `;
-                                }).join('')}
-                            </tbody>
-                        </table>
-
-                        <div class="summary-box">
-                            <div class="stat-item"><div class="stat-label">GRAND TOTAL</div><div class="stat-value">${r.total || 0} / ${totalMax}</div></div>
-                            <div class="stat-item"><div class="stat-label">PERCENTAGE</div><div class="stat-value">${r.percentage || 0}%</div></div>
-                            <div class="stat-item"><div class="stat-label">FINAL GRADE</div><div class="stat-value" style="color: #fbbf24;">${r.grade || '-'}</div></div>
-                        </div>
-
-                        ${(manualStats.section_topper_name || manualStats.class_topper_name) ? `
-                            <div class="medal-row">
-                                ${manualStats.section_topper_name ? `
-                                    <div class="medal">
-                                        <div style="font-size: 24px;">🏆</div>
-                                        <div>
-                                            <div class="medal-text">Section Topper: ${manualStats.section_topper_name}</div>
-                                            <div class="medal-score">Score: ${manualStats.section_topper_total} / ${totalMax} (${((parseFloat(manualStats.section_topper_total) / totalMax) * 100).toFixed(1)}%)</div>
-                                        </div>
-                                    </div>
-                                ` : ''}
-                                ${manualStats.class_topper_name ? `
-                                    <div class="medal">
-                                        <div style="font-size: 24px;">🎖️</div>
-                                        <div>
-                                            <div class="medal-text">Class Topper: ${manualStats.class_topper_name}</div>
-                                            <div class="medal-score">Score: ${manualStats.class_topper_total} / ${totalMax} (${((parseFloat(manualStats.class_topper_total) / totalMax) * 100).toFixed(1)}%)</div>
-                                        </div>
-                                    </div>
-                                ` : ''}
-                            </div>
-                        ` : ''}
-
-                        <div class="remarks-box">
-                            <div class="remark-title">OFFICIAL REMARKS</div>
-                            <div class="remark-text">"${item.overall_remark || 'Satisfactory performance. Aim for higher goals in the next academic term.'}"</div>
-                        </div>
-
-                        <div class="footer">
-                            <div class="sig-line">TEACHER'S SIGNATURE</div>
-                            <div class="sig-line">PRINCIPAL'S SIGNATURE</div>
-                            <div class="sig-line">PARENT'S SIGNATURE</div>
-                        </div>
-                    </div>
-                `;
-            }
-
-            htmlContent += `</body></html>`;
-
-            const { uri } = await Print.printToFileAsync({ html: htmlContent });
-            await Sharing.shareAsync(uri, { UTI: '.pdf', mimeType: 'application/pdf', dialogTitle: 'Exam Results' });
+            const token = await AsyncStorage.getItem('principalToken') || await AsyncStorage.getItem('token');
             
+            // 1. Call the new Backend API with arraybuffer and long timeout
+            const response = await axios.post(
+                `${API_ENDPOINTS.EXAM}/${id}/generate-bulk-pdf`,
+                { studentIds: selectedIds },
+                {
+                    headers: { Authorization: `Bearer ${token}` },
+                    responseType: 'arraybuffer', // More stable than 'blob' in RN
+                    timeout: 60000 // 60 seconds for bulk generation
+                }
+            );
+
+            // 2. Convert ArrayBuffer to Base64
+            // @ts-ignore
+            const base64data = btoa(
+                new Uint8Array(response.data)
+                    .reduce((data, byte) => data + String.fromCharCode(byte), '')
+            );
+
+            const fileName = `marksheet_${id}_${Date.now()}.pdf`;
+            const fileUri = `${FileSystem.cacheDirectory}${fileName}`;
+
+            // 3. Write to local storage
+            await FileSystem.writeAsStringAsync(fileUri, base64data, {
+                encoding: 'base64',
+            });
+
+            // 4. Trigger Native Sharing
+            await Sharing.shareAsync(fileUri, {
+                UTI: '.pdf',
+                mimeType: 'application/pdf',
+                dialogTitle: 'Exam Results'
+            });
+
             setIsSelectionMode(false);
             setSelectionMap({});
-        } catch (error) {
-            console.error(error);
-            Alert.alert('Error', 'Failed to generate PDF');
+
+        } catch (error: any) {
+            console.error('PDF Generation Error:', error.message);
+            if (error.code === 'ECONNABORTED') {
+                Alert.alert('Timeout', 'The server took too long to generate the PDF. Try selecting fewer students.');
+            } else {
+                Alert.alert('Error', 'Failed to connect to server for PDF generation');
+            }
         } finally {
             setIsGeneratingPDF(false);
         }
@@ -472,7 +359,7 @@ export default function ExamDetail() {
     const handleSaveAllMarks = async () => {
         setSaving(true);
         try {
-            const token = await AsyncStorage.getItem('token');
+            const token = await AsyncStorage.getItem('principalToken') || await AsyncStorage.getItem('token');
             const promises = students.map(async (s) => {
                 const marks = gridMarks[s.student.id];
                 const remark = gridRemarks[s.student.id];
@@ -488,12 +375,17 @@ export default function ExamDetail() {
                     }
                 });
 
-                let percentage = maxTotal > 0 ? ((totalObtained / maxTotal) * 100).toFixed(2) : 0;
-                let grade = 'F';
-                if (exam.grading_rules) {
+                let percentage: any = maxTotal > 0 ? ((totalObtained / maxTotal) * 100).toFixed(2) : 0;
+                let grade = '-';
+
+                if (exam.evaluation_mode === 'junior') {
+                    grade = '-';
+                    percentage = '0';
+                } else if (exam.grading_rules) {
                     const p = parseFloat(percentage as string);
                     const rule = exam.grading_rules.find((r: any) => p >= r.min && p <= r.max);
                     if (rule) grade = rule.grade;
+                    else if (p < 0) grade = 'F';
                 }
 
                 return axios.post(`${API_ENDPOINTS.EXAM}/${id}/student/save`, {
@@ -518,7 +410,7 @@ export default function ExamDetail() {
 
     const handleSaveStats = async () => {
         try {
-            const token = await AsyncStorage.getItem('token');
+            const token = await AsyncStorage.getItem('principalToken') || await AsyncStorage.getItem('token');
             await axios.put(`${API_ENDPOINTS.EXAM}/${id}/stats`, {
                 manual_stats: manualStats
             }, { headers: { Authorization: `Bearer ${token}` } });
@@ -765,9 +657,9 @@ export default function ExamDetail() {
                 <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ paddingHorizontal: 20, gap: 10, paddingBottom: 15 }}>
                   <TouchableOpacity onPress={openFillModal} style={[styles.actionChip, { borderColor: theme.primary + '40', backgroundColor: theme.card }]}>
                       <Ionicons name="grid" size={16} color={theme.primary} />
-                      <Text style={[styles.actionChipText, { color: theme.primary }]}>Fill Marks</Text>
+                      <Text style={[styles.actionChipText, { color: theme.primary }]}>{isJunior ? 'Fill Grades' : 'Fill Marks'}</Text>
                   </TouchableOpacity>
-                  {!!exam?.show_highest_marks && (
+                  {!!exam?.show_highest_marks && exam?.evaluation_mode !== 'junior' && (
                       <TouchableOpacity onPress={() => setStatsModalVisible(true)} style={[styles.actionChip, { borderColor: '#FFD70080', backgroundColor: theme.card }]}>
                           <Ionicons name="trophy" size={16} color="#FFD700" />
                           <Text style={[styles.actionChipText, { color: isDark ? '#FFD700' : '#B8860B' }]}>Toppers</Text>
@@ -840,7 +732,10 @@ export default function ExamDetail() {
                 renderItem={({ item }) => {
                     const isFilled = item.marks_data && 
                                      item.marks_data.length > 0 && 
-                                     item.marks_data.some((m: any) => m.theory !== '' && m.theory !== null && m.theory !== undefined);
+                                     item.marks_data.some((m: any) => 
+                                        (m.theory !== '' && m.theory !== null && m.theory !== undefined) ||
+                                        (m.grade !== '' && m.grade !== null && m.grade !== undefined)
+                                     );
                     
                     return (
                         <TouchableOpacity 
@@ -894,7 +789,7 @@ export default function ExamDetail() {
 
             {/* Bulk Export Floating Button */}
             {isSelectionMode && getSelectedCount() > 0 && (
-                <View style={{ position: 'absolute', bottom: insets.bottom + 20, left: 20, right: 20, zIndex: 1000 }}>
+                <View style={{ position: 'absolute', bottom: 20, left: 20, right: 20, zIndex: 1000 }}>
                     <TouchableOpacity 
                         activeOpacity={0.9}
                         onPress={generatePDF}
@@ -940,7 +835,22 @@ export default function ExamDetail() {
             <Modal visible={fillModalVisible} animationType="slide">
                 <View style={styles.modalContainer}>
                     {/* Free Flow Header for Modal */}
-                    <View style={{ position: 'absolute', top: Platform.OS === 'ios' ? 60 : 40, left: 0, right: 0, zIndex: 100, flexDirection: 'row', alignItems: 'center', paddingHorizontal: 20, justifyContent: 'space-between' }}>
+                    <View style={{ 
+                        position: 'absolute', 
+                        top: 0, 
+                        left: 0, 
+                        right: 0, 
+                        zIndex: 100, 
+                        flexDirection: 'row', 
+                        alignItems: 'center', 
+                        paddingHorizontal: 20, 
+                        paddingTop: insets.top + 10,
+                        paddingBottom: 15,
+                        justifyContent: 'space-between',
+                        backgroundColor: theme.card,
+                        borderBottomWidth: 1,
+                        borderBottomColor: theme.border
+                    }}>
                         <TouchableOpacity 
                             onPress={() => setFillModalVisible(false)} 
                             style={styles.floatingHeaderBtn}
@@ -949,7 +859,7 @@ export default function ExamDetail() {
                         </TouchableOpacity>
 
                         <View style={{ flex: 1, alignItems: 'center' }}>
-                            <Text style={[styles.modalTitle, { fontSize: 18, fontWeight: '900' }]}>Bulk Marks Entry</Text>
+                            <Text style={[styles.modalTitle, { fontSize: 18, fontWeight: '900', color: theme.text }]}>Bulk Marks Entry</Text>
                         </View>
 
                         <TouchableOpacity 
@@ -957,40 +867,46 @@ export default function ExamDetail() {
                             disabled={saving}
                             style={[styles.floatingHeaderBtn, { backgroundColor: theme.primary }]}
                         >
-                            {saving ? <ActivityIndicator size="small" color="#fff" /> : <Ionicons name="checkmark" size={28} color="#fff" />}
+                            {saving ? (
+                                <ActivityIndicator size="small" color="#fff" />
+                            ) : (
+                                <Ionicons name="checkmark" size={28} color="#fff" />
+                            )}
                         </TouchableOpacity>
                     </View>
 
                     <ScrollView 
                         horizontal 
                         showsHorizontalScrollIndicator={true}
-                        style={{ marginTop: 120, flex: 1 }}
+                        style={{ marginTop: insets.top + 80, flex: 1 }}
                         directionalLockEnabled={false}
                         nestedScrollEnabled={true}
                         keyboardShouldPersistTaps="always"
                     >
                         <View>
                             {/* Column Headers */}
-                            <View style={[styles.gridRow, { backgroundColor: isDark ? '#1a1a1a' : '#f8fafc', borderBottomWidth: 2, borderBottomColor: theme.border, padding: 0 }]}>
+                            <View style={[styles.gridRow, { backgroundColor: isDark ? '#111' : '#f1f5f9', borderBottomWidth: 2, borderBottomColor: theme.border, padding: 0 }]}>
                                 <View style={{ width: 150, padding: 15, borderRightWidth: 1, borderRightColor: theme.border, justifyContent: 'center' }}>
-                                    <Text style={[styles.subHeaderLabel, { textAlign: 'left' }]}>STUDENT</Text>
+                                    <Text style={[styles.subHeaderLabel, { textAlign: 'left', color: theme.text, fontSize: 11 }]}>STUDENT</Text>
                                 </View>
                                 {exam?.subjects_blueprint?.map((sub: any, i: number) => (
                                     <View key={i} style={{ flexDirection: 'row', borderRightWidth: 1, borderRightColor: theme.border }}>
-                                        <View style={{ width: 80, padding: 10, justifyContent: 'center', alignItems: 'center' }}>
-                                            <Text style={styles.subHeaderLabel} numberOfLines={1}>{sub.name.toUpperCase()}</Text>
-                                            <Text style={[styles.subHeaderLabel, { fontSize: 8 }]}>MARKS</Text>
+                                        <View style={{ width: exam?.evaluation_mode === 'junior' ? 140 : 80, padding: 10, justifyContent: 'center', alignItems: 'center' }}>
+                                            <Text style={[styles.subHeaderLabel, { color: theme.text, fontSize: 11 }]} numberOfLines={1}>{sub.name.toUpperCase()}</Text>
+                                            <Text style={[styles.subHeaderLabel, { fontSize: 8, color: theme.primary, fontWeight: '900' }]}>
+                                                {exam?.evaluation_mode === 'junior' ? 'GRADE' : 'MARKS'}
+                                            </Text>
                                         </View>
-                                        {!!exam.include_grade && (
+                                        {exam?.evaluation_mode !== 'junior' && !!exam.include_grade && (
                                             <View style={{ width: 60, padding: 10, justifyContent: 'center', alignItems: 'center', borderLeftWidth: 1, borderLeftColor: theme.border + '20' }}>
                                                 <Text style={styles.subHeaderLabel} numberOfLines={1}> </Text>
-                                                <Text style={[styles.subHeaderLabel, { fontSize: 8 }]}>GRADE</Text>
+                                                <Text style={[styles.subHeaderLabel, { fontSize: 9, color: theme.primary, fontWeight: '900' }]}>GRADE</Text>
                                             </View>
                                         )}
                                     </View>
                                 ))}
-                                <View style={{ width: 180, padding: 15, justifyContent: 'center' }}>
-                                    <Text style={styles.subHeaderLabel}>REMARK</Text>
+                                <View style={{ width: 200, padding: 15, justifyContent: 'center' }}>
+                                    <Text style={[styles.subHeaderLabel, { color: theme.text, fontSize: 11 }]}>REMARK</Text>
                                 </View>
                             </View>
 
@@ -1009,31 +925,46 @@ export default function ExamDetail() {
                                         </View>
                                         {gridMarks[s.student.id]?.map((mark: any, idx: number) => (
                                             <View key={idx} style={{ flexDirection: 'row', borderRightWidth: 1, borderRightColor: theme.border }}>
-                                                <View style={{ width: 80, height: 50 }}>
-                                                    <SmartMarkInput
-                                                        value={mark.theory}
-                                                        placeholder="0"
-                                                        onChange={(v: string) => updateGridMark(s.student.id, idx, 'theory', v)}
-                                                        theme={theme}
-                                                        isDark={isDark}
-                                                    />
-                                                </View>
-                                                {!!exam.include_grade && (
-                                                    <View style={{ width: 60, height: 50, borderLeftWidth: 1, borderLeftColor: theme.border + '20' }}>
+                                                {exam?.evaluation_mode === 'junior' ? (
+                                                    <View style={{ width: 140, height: 50 }}>
                                                         <SmartMarkInput
-                                                            style={{ color: theme.primary }}
                                                             value={mark.grade}
-                                                            placeholder="-"
+                                                            placeholder="Enter Grade..."
                                                             onChange={(v: string) => updateGridMark(s.student.id, idx, 'grade', v.toUpperCase())}
                                                             autoCapitalize="characters"
                                                             theme={theme}
                                                             isDark={isDark}
                                                         />
                                                     </View>
+                                                ) : (
+                                                    <>
+                                                        <View style={{ width: 80, height: 50 }}>
+                                                            <SmartMarkInput
+                                                                value={mark.theory}
+                                                                placeholder="0"
+                                                                onChange={(v: string) => updateGridMark(s.student.id, idx, 'theory', v)}
+                                                                theme={theme}
+                                                                isDark={isDark}
+                                                            />
+                                                        </View>
+                                                        {!!exam.include_grade && (
+                                                            <View style={{ width: 60, height: 50, borderLeftWidth: 1, borderLeftColor: theme.border + '20' }}>
+                                                                <SmartMarkInput
+                                                                    style={{ color: theme.primary }}
+                                                                    value={mark.grade}
+                                                                    placeholder="-"
+                                                                    onChange={(v: string) => updateGridMark(s.student.id, idx, 'grade', v.toUpperCase())}
+                                                                    autoCapitalize="characters"
+                                                                    theme={theme}
+                                                                    isDark={isDark}
+                                                                />
+                                                            </View>
+                                                        )}
+                                                    </>
                                                 )}
                                             </View>
                                         ))}
-                                        <View style={{ width: 180, height: 50 }}>
+                                        <View style={{ width: 200, height: 50 }}>
                                             <SmartMarkInput
                                                 style={{ textAlign: 'left', paddingHorizontal: 12 }}
                                                 value={gridRemarks[s.student.id]}

@@ -24,11 +24,11 @@ const UpdateModal = () => {
     const checkVersion = async () => {
         try {
             const response = await axios.get(VERSION_INFO_URL);
-            const latestVersion = response.data.version;
+            const latestVersion = response.data?.version;
             const currentVersion = Constants.expoConfig?.version || '1.0.0';
 
             // Simple comparison: 1.1.0 > 1.0.0
-            if (isVersionHigher(latestVersion, currentVersion)) {
+            if (latestVersion && isVersionHigher(latestVersion, currentVersion)) {
                 setUpdateInfo(response.data);
                 setVisible(true);
             }
@@ -38,6 +38,7 @@ const UpdateModal = () => {
     };
 
     const isVersionHigher = (latest: string, current: string) => {
+        if (!latest || !current) return false;
         const v1 = latest.split('.').map(Number);
         const v2 = current.split('.').map(Number);
         for (let i = 0; i < 3; i++) {

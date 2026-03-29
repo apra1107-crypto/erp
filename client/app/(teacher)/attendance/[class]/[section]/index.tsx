@@ -93,51 +93,20 @@ export default function TakeAttendance() {
                 'x-academic-session-id': sessionId?.toString()
             };
 
-            // Fetch students
-            const studentsRes = await axios.get(
-                `${API_ENDPOINTS.TEACHER}/student/list?class=${className}&section=${section}&date=${dateStr}`,
+            // ONE SINGLE CALL for all dashboard data
+            const res = await axios.get(
+                `${API_ENDPOINTS.ATTENDANCE}/sync?class=${className}&section=${section}&date=${dateStr}`,
                 { headers }
             );
 
-            const allStudents = studentsRes.data.students || [];
-            const filtered = allStudents
-                .filter((s: any) => String(s.class).trim() === String(className).trim() && String(s.section).trim() === String(section).trim())
-                .sort((a: any, b: any) => {
-                    const rollA = parseInt(a.roll_no) || 0;
-                    const rollB = parseInt(b.roll_no) || 0;
-                    return rollA - rollB;
-                });
-            setStudents(filtered);
+            // BATCH STATE UPDATE
+            setStudents(res.data.students || []);
+            setAttendance(res.data.attendance || {});
+            setLogs(res.data.logs || []);
+            setAbsentRequests(res.data.absentRequests || []);
 
-            // Fetch existing attendance
-            const attendanceRes = await axios.get(
-                `${API_ENDPOINTS.TEACHER}/attendance/view?class=${className}&section=${section}&date=${dateStr}`,
-                { headers }
-            );
-
-            const existingAttendance = attendanceRes.data.attendance || [];
-            const attendanceMap: { [key: number]: 'present' | 'absent' } = {};
-            existingAttendance.forEach((a: any) => {
-                attendanceMap[a.student_id] = a.status;
-            });
-            setAttendance(attendanceMap);
-
-            // Fetch logs
-            const logsRes = await axios.get(
-                `${API_ENDPOINTS.TEACHER}/attendance/logs?class=${className}&section=${section}&date=${dateStr}`,
-                { headers }
-            );
-
-            setLogs(logsRes.data.logs || []);
-
-            // Fetch absent requests
-            const requestsRes = await axios.get(
-                `${API_ENDPOINTS.ABSENT_REQUEST}/view?class=${className}&section=${section}&date=${dateStr}`,
-                { headers }
-            );
-            setAbsentRequests(requestsRes.data.requests || []);
         } catch (error) {
-            console.error('Error fetching data:', error);
+            console.error('Error fetching teacher attendance dashboard:', error);
         } finally {
             setLoading(false);
         }
@@ -250,41 +219,40 @@ export default function TakeAttendance() {
     const styles = useMemo(() => StyleSheet.create({
         container: { flex: 1, backgroundColor: theme.background },
         header: {
-            backgroundColor: theme.card,
             paddingTop: insets.top + 10,
             paddingBottom: 15,
-            paddingHorizontal: 20,
+            paddingHorizontal: 24,
             flexDirection: 'row',
             alignItems: 'center',
-            borderBottomWidth: 1,
-            borderBottomColor: theme.border,
             zIndex: 10,
-            shadowColor: '#000',
-            shadowOffset: { width: 0, height: 2 },
-            shadowOpacity: isDark ? 0.2 : 0.05,
-            shadowRadius: 10,
-            elevation: 5,
         },
-        backBtn: { padding: 8, borderRadius: 12, backgroundColor: theme.background, marginRight: 15 },
-        headerTitle: { fontSize: 18, fontWeight: '900', color: theme.text },
+        backBtn: { 
+            width: 40, 
+            height: 40, 
+            borderRadius: 12, 
+            backgroundColor: isDark ? '#333' : '#f4f4f5', 
+            justifyContent: 'center', 
+            alignItems: 'center', 
+            marginRight: 16 
+        },
+        headerTitle: { fontSize: 24, fontWeight: '900', color: theme.text, letterSpacing: -0.5 },
         content: { flex: 1 },
         dateSection: {
-            backgroundColor: theme.card,
-            padding: 20,
-            borderBottomWidth: 1,
-            borderBottomColor: theme.border,
+            paddingHorizontal: 24,
+            paddingVertical: 10,
         },
-        dateLabel: { fontSize: 13, fontWeight: '700', color: theme.textLight, marginBottom: 10 },
+        dateLabel: { fontSize: 12, fontWeight: '800', color: theme.primary, marginBottom: 8, textTransform: 'uppercase', letterSpacing: 1 },
         dateButton: {
             flexDirection: 'row',
             alignItems: 'center',
-            backgroundColor: theme.background,
-            padding: 15,
-            borderRadius: 15,
-            borderWidth: 1,
-            borderColor: theme.border,
+            backgroundColor: isDark ? '#333' : '#f4f4f5',
+            paddingVertical: 10,
+            paddingHorizontal: 16,
+            borderRadius: 14,
+            alignSelf: 'flex-start',
+            gap: 10,
         },
-        dateText: { flex: 1, fontSize: 16, fontWeight: '700', color: theme.text, marginLeft: 10 },
+        dateText: { fontSize: 16, fontWeight: '700', color: theme.text },
         logsSection: {
             backgroundColor: theme.card,
             padding: 20,
@@ -372,20 +340,20 @@ export default function TakeAttendance() {
         absentText: { color: theme.danger },
         saveButton: {
             position: 'absolute',
-            bottom: Math.max(20, insets.bottom),
-            left: 20,
-            right: 20,
+            bottom: 25,
+            alignSelf: 'center',
+            width: '60%',
             backgroundColor: theme.primary,
-            padding: 18,
-            borderRadius: 20,
+            paddingVertical: 14,
+            borderRadius: 18,
             alignItems: 'center',
-            shadowColor: '#000',
-            shadowOffset: { width: 0, height: 4 },
+            shadowColor: theme.primary,
+            shadowOffset: { width: 0, height: 8 },
             shadowOpacity: 0.3,
-            shadowRadius: 10,
-            elevation: 5,
+            shadowRadius: 12,
+            elevation: 8,
         },
-        saveButtonText: { color: '#fff', fontSize: 17, fontWeight: '900' },
+        saveButtonText: { color: '#fff', fontSize: 16, fontWeight: '900', letterSpacing: 0.5 },
         emptyText: { textAlign: 'center', color: theme.textLight, marginTop: 20, fontSize: 14 },
         loadingContainer: { flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: theme.background },
 
@@ -694,14 +662,17 @@ export default function TakeAttendance() {
                 {/* Save Button */}
                 {students.length > 0 && (
                     <TouchableOpacity
-                        style={[styles.saveButton, saving && { opacity: 0.7 }]}
+                        style={[styles.saveButton, saving && { opacity: 0.7, backgroundColor: theme.textLight }]}
                         onPress={handleSave}
                         disabled={saving}
                     >
                         {saving ? (
-                            <ActivityIndicator color="#fff" />
+                            <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+                                <ActivityIndicator color="#fff" size="small" style={{ marginRight: 10 }} />
+                                <Text style={styles.saveButtonText}>Saving...</Text>
+                            </View>
                         ) : (
-                            <Text style={styles.saveButtonText}>Save Attendance</Text>
+                            <Text style={styles.saveButtonText}>Save</Text>
                         )}
                     </TouchableOpacity>
                 )}

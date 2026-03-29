@@ -54,22 +54,29 @@ export default function RoutineManager() {
 
     const fetchInitialData = async () => {
         try {
-            const token = await AsyncStorage.getItem('token');
-            const userDataStr = await AsyncStorage.getItem('userData');
+            setLoading(true);
+            const token = await AsyncStorage.getItem('principalToken') || await AsyncStorage.getItem('token');
+            const userDataStr = await AsyncStorage.getItem('principalData') || await AsyncStorage.getItem('userData');
             const userData = userDataStr ? JSON.parse(userDataStr) : null;
             const userType = await AsyncStorage.getItem('userType');
             const storedSessionId = await AsyncStorage.getItem('selectedSessionId');
             const sessionId = storedSessionId || (userData ? userData.current_session_id : null);
 
-            if (!userData) return;
+            if (!userData) {
+                console.error('No user data found');
+                setLoading(false);
+                return;
+            }
 
-            const instId = userType === 'principal' ? userData.id : (userData.institute_id || userData.id);
+            const instId = userData.id; // For principals, id is instituteId
             setInstituteId(instId);
 
             const headers = { 
                 Authorization: `Bearer ${token}`,
                 'x-academic-session-id': sessionId?.toString()
             };
+
+            console.log(`[Routine] Fetching overview for inst: ${instId}, session: ${sessionId}`);
 
             const overviewRes = await axios.get(`${API_ENDPOINTS.ROUTINE}/overview/${instId}`, {
                 headers
@@ -124,9 +131,9 @@ export default function RoutineManager() {
     const handleViewRoutine = async (r: any) => {
         try {
             setLoading(true);
-            const token = await AsyncStorage.getItem('token');
+            const token = await AsyncStorage.getItem('principalToken') || await AsyncStorage.getItem('token');
             const storedSessionId = await AsyncStorage.getItem('selectedSessionId');
-            const userDataStr = await AsyncStorage.getItem('userData');
+            const userDataStr = await AsyncStorage.getItem('principalData') || await AsyncStorage.getItem('userData');
             const sessionId = storedSessionId || (userDataStr ? JSON.parse(userDataStr).current_session_id : null);
 
             const res = await axios.get(`${API_ENDPOINTS.ROUTINE}/${instituteId}/${r.class_name}/${r.section}`, {
@@ -163,9 +170,9 @@ export default function RoutineManager() {
                     style: "destructive",
                     onPress: async () => {
                         try {
-                            const token = await AsyncStorage.getItem('token');
+                            const token = await AsyncStorage.getItem('principalToken') || await AsyncStorage.getItem('token');
                             const storedSessionId = await AsyncStorage.getItem('selectedSessionId');
-                            const userDataStr = await AsyncStorage.getItem('userData');
+                            const userDataStr = await AsyncStorage.getItem('principalData') || await AsyncStorage.getItem('userData');
                             const sessionId = storedSessionId || (userDataStr ? JSON.parse(userDataStr).current_session_id : null);
 
                             await axios.delete(`${API_ENDPOINTS.ROUTINE}/${instituteId}/${r.class_name}/${r.section}`, {
@@ -191,9 +198,9 @@ export default function RoutineManager() {
             return;
         }
         try {
-            const token = await AsyncStorage.getItem('token');
+            const token = await AsyncStorage.getItem('principalToken') || await AsyncStorage.getItem('token');
             const storedSessionId = await AsyncStorage.getItem('selectedSessionId');
-            const userDataStr = await AsyncStorage.getItem('userData');
+            const userDataStr = await AsyncStorage.getItem('principalData') || await AsyncStorage.getItem('userData');
             const sessionId = storedSessionId || (userDataStr ? JSON.parse(userDataStr).current_session_id : null);
 
             await axios.post(`${API_ENDPOINTS.ROUTINE}/save`, {
@@ -333,7 +340,7 @@ export default function RoutineManager() {
         deleteBtn: { position: 'absolute', top: 15, right: 15, padding: 8 },
         fab: {
             position: 'absolute',
-            bottom: Math.max(30, insets.bottom + 15),
+            bottom: 30,
             right: 25,
             width: 65,
             height: 65,

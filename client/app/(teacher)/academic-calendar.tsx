@@ -204,13 +204,22 @@ export default function TeacherAcademicCalendarScreen() {
         },
 
         // Modal
-        modalOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.5)', justifyContent: 'flex-end' },
+        modalOverlay: { 
+            flex: 1, 
+            backgroundColor: 'rgba(0,0,0,0.5)', 
+            justifyContent: 'center',
+            paddingHorizontal: 20,
+        },
         modalContent: {
             backgroundColor: theme.card,
-            borderTopLeftRadius: 35,
-            borderTopRightRadius: 35,
+            borderRadius: 35,
             padding: 25,
             maxHeight: '80%',
+            elevation: 10,
+            shadowColor: '#000',
+            shadowOffset: { width: 0, height: 10 },
+            shadowOpacity: 0.3,
+            shadowRadius: 20,
         },
         modalHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20 },
         modalTitle: { fontSize: 22, fontWeight: '900', color: theme.text },
@@ -355,7 +364,7 @@ export default function TeacherAcademicCalendarScreen() {
 
                             >
 
-                                <View style={styles.modalContent}>
+                                <View style={[styles.modalContent, { marginBottom: 20, borderRadius: 35 }]}>
 
                                     <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={{ flexGrow: 1 }}>
 

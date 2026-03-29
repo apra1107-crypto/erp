@@ -31,7 +31,7 @@ const AttendanceHistoryBottomSheet = ({ visible, onClose, student }: AttendanceH
     }, [visible, student, attendanceMonth]);
 
     const getToken = async () => {
-        return await AsyncStorage.getItem('token') || await AsyncStorage.getItem('teacherToken');
+        return await AsyncStorage.getItem('principalToken') || await AsyncStorage.getItem('token') || await AsyncStorage.getItem('teacherToken');
     };
 
     const fetchAllData = async () => {
@@ -58,9 +58,9 @@ const AttendanceHistoryBottomSheet = ({ visible, onClose, student }: AttendanceH
                 { headers }
             );
             
-            // Fetch Absent Requests
+            // Fetch Absent Requests with month/year filter
             const reqRes = await axios.get(
-                `${API_ENDPOINTS.ABSENT_REQUEST}/student/${student.id}`,
+                `${API_ENDPOINTS.ABSENT_REQUEST}/student/${student.id}?month=${attendanceMonth.getMonth() + 1}&year=${year}`,
                 { headers }
             );
 
@@ -82,10 +82,12 @@ const AttendanceHistoryBottomSheet = ({ visible, onClose, student }: AttendanceH
         const daysInMonth = new Date(year, month + 1, 0).getDate();
 
         const days = [];
+        // Lead empty cells
         for (let i = 0; i < firstDay; i++) {
             days.push({ isEmpty: true });
         }
 
+        // Actual dates
         for (let i = 1; i <= daysInMonth; i++) {
             const dateStr = `${year}-${String(month + 1).padStart(2, '0')}-${String(i).padStart(2, '0')}`;
             const attendance = attendanceData.find(a => a.date?.split('T')[0] === dateStr);
@@ -96,6 +98,13 @@ const AttendanceHistoryBottomSheet = ({ visible, onClose, student }: AttendanceH
                 status: attendance?.status || null
             });
         }
+
+        // Trail empty cells to complete the 7-column grid
+        const totalCells = Math.ceil(days.length / 7) * 7;
+        while (days.length < totalCells) {
+            days.push({ isEmpty: true });
+        }
+
         return days;
     };
 

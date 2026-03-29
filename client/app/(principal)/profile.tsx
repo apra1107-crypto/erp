@@ -35,7 +35,7 @@ export default function Profile() {
 
     const fetchProfile = async () => {
         try {
-            const token = await AsyncStorage.getItem('token');
+            const token = await AsyncStorage.getItem('principalToken') || await AsyncStorage.getItem('token');
             const url = `${API_ENDPOINTS.PRINCIPAL}/profile`;
             
             const response = await axios.get(url, {
@@ -80,7 +80,7 @@ export default function Profile() {
     const handleUpdate = async () => {
         try {
             setSaving(true);
-            const token = await AsyncStorage.getItem('token');
+            const token = await AsyncStorage.getItem('principalToken') || await AsyncStorage.getItem('token');
             const data = new FormData();
 
             Object.keys(formData).forEach(key => {

@@ -1,8 +1,9 @@
-import React, { useState, useMemo } from 'react';
-import { View, Text, StyleSheet, Modal, TouchableOpacity, TextInput, ScrollView, FlatList, ActivityIndicator, Dimensions } from 'react-native';
+import React, { useState, useMemo, useEffect } from 'react';
+import { View, Text, StyleSheet, Modal, TouchableOpacity, TextInput, ScrollView, FlatList, ActivityIndicator, Dimensions, KeyboardAvoidingView, Platform, Keyboard, Image } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { useTheme } from '../context/ThemeContext';
+import { BASE_URL } from '../constants/Config';
 
 const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get('window');
 
@@ -21,11 +22,21 @@ export default function AddExtraChargeModal({ isOpen, onClose, onConfirm, studen
     const [charges, setCharges] = useState([{ reason: '', amount: '' }]);
     const [selectedStudentIds, setSelectedStudentIds] = useState<number[]>([]);
     const [processing, setProcessing] = useState(false);
+    const [isKeyboardActive, setIsKeyboardActive] = useState(false);
     
     // Selection filters
     const [searchTerm, setSearchTerm] = useState('');
     const [classFilter, setClassFilter] = useState('');
     const [sectionFilter, setSectionFilter] = useState('');
+
+    useEffect(() => {
+        const showSubscription = Keyboard.addListener('keyboardDidShow', () => setIsKeyboardActive(true));
+        const hideSubscription = Keyboard.addListener('keyboardDidHide', () => setIsKeyboardActive(false));
+        return () => {
+            showSubscription.remove();
+            hideSubscription.remove();
+        };
+    }, []);
 
     const filteredStudents = useMemo(() => {
         return students.filter(s => {
@@ -84,14 +95,29 @@ export default function AddExtraChargeModal({ isOpen, onClose, onConfirm, studen
         onClose();
     };
 
+    const getFullImageUrl = (url: string | null | undefined): string | null => {
+        if (!url) return null;
+        if (url.startsWith('http')) return url;
+        return `${BASE_URL}${url.startsWith('/') ? '' : '/'}${url}`;
+    };
+
     const styles = StyleSheet.create({
-        overlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.5)', justifyContent: 'flex-end' },
+        overlay: { 
+            flex: 1, 
+            backgroundColor: 'rgba(0,0,0,0.5)', 
+            justifyContent: 'center', 
+            paddingHorizontal: 20 
+        },
         container: { 
             backgroundColor: theme.card, 
-            borderTopLeftRadius: 30, 
-            borderTopRightRadius: 30, 
-            height: SCREEN_HEIGHT * 0.85, 
-            paddingBottom: Math.max(insets.bottom, 20) 
+            borderRadius: 30, 
+            height: SCREEN_HEIGHT * 0.8,
+            overflow: 'hidden',
+            elevation: 10,
+            shadowColor: '#000',
+            shadowOffset: { width: 0, height: 10 },
+            shadowOpacity: 0.3,
+            shadowRadius: 20,
         },
         header: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', padding: 20, borderBottomWidth: 1, borderBottomColor: theme.border },
         title: { fontSize: 18, fontWeight: '800', color: theme.text },
@@ -107,7 +133,7 @@ export default function AddExtraChargeModal({ isOpen, onClose, onConfirm, studen
         removeBtn: { width: 30, height: 30, borderRadius: 15, backgroundColor: '#F4433615', justifyContent: 'center', alignItems: 'center' },
         addRowBtn: { flexDirection: 'row', alignItems: 'center', gap: 8, marginTop: 10, alignSelf: 'flex-start' },
         addRowText: { color: theme.primary, fontWeight: '700' },
-        summaryBar: { marginTop: 'auto', padding: 15, backgroundColor: theme.primary + '10', borderRadius: 15, flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
+        summaryBar: { padding: 15, backgroundColor: theme.primary + '10', borderRadius: 15, flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10 },
         summaryLabel: { fontSize: 14, color: theme.text, fontWeight: '600' },
         summaryValue: { fontSize: 18, fontWeight: '800', color: theme.primary },
 
@@ -130,33 +156,60 @@ export default function AddExtraChargeModal({ isOpen, onClose, onConfirm, studen
         checkCircle: { width: 20, height: 20, borderRadius: 10, borderWidth: 2, borderColor: theme.border, justifyContent: 'center', alignItems: 'center' },
         checkCircleSelected: { backgroundColor: theme.primary, borderColor: theme.primary },
 
-        footer: { padding: 20, borderTopWidth: 1, borderTopColor: theme.border, flexDirection: 'row', gap: 12 },
+        footer: { padding: 20, borderTopWidth: 1, borderTopColor: theme.border, flexDirection: 'row', gap: 12, paddingBottom: Math.max(insets.bottom, 20) },
         backBtn: { flex: 1, height: 50, borderRadius: 15, backgroundColor: theme.border, justifyContent: 'center', alignItems: 'center' },
         backBtnText: { color: theme.text, fontWeight: '700' },
         nextBtn: { flex: 2, height: 50, borderRadius: 15, backgroundColor: theme.primary, justifyContent: 'center', alignItems: 'center' },
-        nextBtnText: { color: '#fff', fontWeight: '800', fontSize: 16 }
+        nextBtnText: { color: '#fff', fontWeight: '800', fontSize: 16 },
+
+        headerAction: { paddingVertical: 6, paddingHorizontal: 15, borderRadius: 10, backgroundColor: theme.primary },
+        headerActionText: { color: '#fff', fontWeight: '700', fontSize: 14 },
     });
 
     const totalExtra = charges.reduce((sum, c) => sum + parseFloat(c.amount || '0'), 0);
 
+    const isNextDisabled = step === 1 ? charges.some(c => !c.reason || !c.amount) : (selectedStudentIds.length === 0 || processing);
+
+    const handleAction = () => {
+        if (isNextDisabled) return;
+        if (step === 1) setStep(2);
+        else handleConfirm();
+    };
+
     return (
         <Modal visible={isOpen} transparent animationType="slide" onRequestClose={resetAndClose}>
             <View style={styles.overlay}>
-                <View style={styles.container}>
+                <KeyboardAvoidingView 
+                    behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+                    style={styles.container}
+                >
                     <View style={styles.header}>
-                        <View>
-                            <Text style={styles.title}>Add Extra Charges</Text>
-                            <Text style={styles.subtitle}>{step === 1 ? 'Define Charges' : 'Select Students'} • {monthName}</Text>
-                        </View>
                         <TouchableOpacity onPress={resetAndClose}>
                             <Ionicons name="close" size={24} color={theme.textLight} />
                         </TouchableOpacity>
+                        <View style={{ flex: 1, marginLeft: 15 }}>
+                            <Text style={styles.title}>Extra Charges</Text>
+                            <Text style={styles.subtitle}>{step === 1 ? 'Step 1/2' : 'Step 2/2'}</Text>
+                        </View>
+                        {isKeyboardActive && (
+                            <TouchableOpacity 
+                                style={[styles.headerAction, isNextDisabled && { opacity: 0.5 }]}
+                                onPress={handleAction}
+                                disabled={isNextDisabled}
+                            >
+                                {processing ? (
+                                    <ActivityIndicator size="small" color="#fff" />
+                                ) : (
+                                    <Text style={styles.headerActionText}>{step === 1 ? 'Next' : 'Confirm'}</Text>
+                                )}
+                            </TouchableOpacity>
+                        )}
                     </View>
 
                     <View style={styles.stepContainer}>
                         {step === 1 ? (
                             <View style={{ flex: 1 }}>
-                                <ScrollView showsVerticalScrollIndicator={false}>
+                                <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={{ paddingBottom: 20 }}>
                                     {charges.map((charge, idx) => (
                                         <View key={idx} style={styles.chargeRow}>
                                             <TextInput 
@@ -191,7 +244,7 @@ export default function AddExtraChargeModal({ isOpen, onClose, onConfirm, studen
                                 </ScrollView>
                                 
                                 <View style={styles.summaryBar}>
-                                    <Text style={styles.summaryLabel}>Total Extra per Student:</Text>
+                                    <Text style={styles.summaryLabel}>Total per Student:</Text>
                                     <Text style={styles.summaryValue}>₹{totalExtra.toLocaleString()}</Text>
                                 </View>
                             </View>
@@ -244,7 +297,14 @@ export default function AddExtraChargeModal({ isOpen, onClose, onConfirm, studen
                                                 onPress={() => toggleStudent(item.id)}
                                             >
                                                 <View style={styles.studentAvatar}>
-                                                    <Text style={styles.studentAvatarText}>{item.name?.charAt(0)}</Text>
+                                                    {item.photo_url ? (
+                                                        <Image 
+                                                            source={{ uri: getFullImageUrl(item.photo_url) as string }} 
+                                                            style={{ width: '100%', height: '100%', resizeMode: 'cover' }} 
+                                                        />
+                                                    ) : (
+                                                        <Text style={styles.studentAvatarText}>{item.name?.charAt(0)}</Text>
+                                                    )}
                                                 </View>
                                                 <View style={styles.studentInfo}>
                                                     <Text style={styles.studentName}>{item.name}</Text>
@@ -262,34 +322,36 @@ export default function AddExtraChargeModal({ isOpen, onClose, onConfirm, studen
                         )}
                     </View>
 
-                    <View style={styles.footer}>
-                        {step === 1 ? (
-                            <TouchableOpacity 
-                                style={[styles.nextBtn, (charges.some(c => !c.reason || !c.amount)) && { opacity: 0.5 }]} 
-                                onPress={() => !charges.some(c => !c.reason || !c.amount) && setStep(2)}
-                            >
-                                <Text style={styles.nextBtnText}>Next: Select Students</Text>
-                            </TouchableOpacity>
-                        ) : (
-                            <>
-                                <TouchableOpacity style={styles.backBtn} onPress={() => setStep(1)}>
-                                    <Text style={styles.backBtnText}>Back</Text>
-                                </TouchableOpacity>
+                    {!isKeyboardActive && (
+                        <View style={styles.footer}>
+                            {step === 1 ? (
                                 <TouchableOpacity 
-                                    style={[styles.nextBtn, (selectedStudentIds.length === 0 || processing) && { opacity: 0.5 }]} 
-                                    onPress={handleConfirm}
-                                    disabled={processing || selectedStudentIds.length === 0}
+                                    style={[styles.nextBtn, isNextDisabled && { opacity: 0.5 }]} 
+                                    onPress={() => !isNextDisabled && setStep(2)}
                                 >
-                                    {processing ? (
-                                        <ActivityIndicator color="#fff" />
-                                    ) : (
-                                        <Text style={styles.nextBtnText}>Confirm & Add</Text>
-                                    )}
+                                    <Text style={styles.nextBtnText}>Next: Select Students</Text>
                                 </TouchableOpacity>
-                            </>
-                        )}
-                    </View>
-                </View>
+                            ) : (
+                                <>
+                                    <TouchableOpacity style={styles.backBtn} onPress={() => setStep(1)}>
+                                        <Text style={styles.backBtnText}>Back</Text>
+                                    </TouchableOpacity>
+                                    <TouchableOpacity 
+                                        style={[styles.nextBtn, isNextDisabled && { opacity: 0.5 }]} 
+                                        onPress={handleConfirm}
+                                        disabled={isNextDisabled}
+                                    >
+                                        {processing ? (
+                                            <ActivityIndicator color="#fff" />
+                                        ) : (
+                                            <Text style={styles.nextBtnText}>Confirm & Add</Text>
+                                        )}
+                                    </TouchableOpacity>
+                                </>
+                            )}
+                        </View>
+                    )}
+                </KeyboardAvoidingView>
             </View>
         </Modal>
     );

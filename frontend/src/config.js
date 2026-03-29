@@ -1,4 +1,5 @@
-export const BASE_URL = `https://klassin.co.in`;
+
+export const BASE_URL = `http://localhost:5000`;
 
 export const API_ENDPOINTS = {
     AUTH: {

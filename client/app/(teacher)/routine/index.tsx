@@ -360,7 +360,7 @@ export default function RoutineManager() {
         deleteBtn: { position: 'absolute', top: 15, right: 15, padding: 8 },
         fab: {
             position: 'absolute',
-            bottom: Math.max(30, insets.bottom + 15),
+            bottom: 20,
             right: 25,
             width: 65,
             height: 65,

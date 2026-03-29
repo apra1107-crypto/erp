@@ -35,6 +35,7 @@ export default function FeesScreen() {
     const [feeData, setFeeData] = useState<any>(null);
     const [activeTab, setActiveTab] = useState<'pending' | 'history'>('pending');
     const [studentData, setStudentData] = useState<any>(null);
+    const [downloadingReceiptId, setDownloadingReceiptId] = useState<string | null>(null);
 
     // Payment Modal State
     const [showPayModal, setShowPayModal] = useState(false);
@@ -80,12 +81,18 @@ export default function FeesScreen() {
     };
 
     const handlePayNow = (item: any, total: number, extraCharges: any[], type: 'MONTHLY' | 'ONE-TIME' = 'MONTHLY') => {
+        const baseAmount = total;
+        // Logic: 2% platform fee + 18% GST on that 2% (Total = 2.36%)
+        const convenienceFee = baseAmount * 0.0236;
+        const finalTotal = baseAmount + convenienceFee;
+
         let breakage = [];
         if (type === 'MONTHLY') {
             breakage = [
                 { label: 'Monthly Tuition Fee', amount: feeData.fee_structure.monthly_fees },
                 ...(feeData.fee_structure.transport_facility ? [{ label: 'Transport Fee', amount: feeData.fee_structure.transport_fees }] : []),
-                ...extraCharges.map(ec => ({ label: ec.reason, amount: parseFloat(ec.amount) }))
+                ...extraCharges.map(ec => ({ label: ec.reason, amount: parseFloat(ec.amount) })),
+                { label: 'Platform Fee (2% + GST)', amount: convenienceFee }
             ];
         } else {
             breakage = item.breakdown && Array.isArray(item.breakdown) 
@@ -95,10 +102,11 @@ export default function FeesScreen() {
             if (parseFloat(item.paid_amount) > 0) {
                 breakage.push({ label: 'Already Paid', amount: -parseFloat(item.paid_amount) });
             }
+            breakage.push({ label: 'Platform Fee (2% + GST)', amount: convenienceFee });
         }
         
         setSelectedItem(item);
-        setModalTotal(total);
+        setModalTotal(finalTotal);
         setModalBreakage(breakage);
         setActivePaymentType(type);
         setCustomAmount(type === 'ONE-TIME' ? total.toString() : '');
@@ -106,7 +114,9 @@ export default function FeesScreen() {
     };
 
     const handleDownloadReceipt = async (payment: any) => {
+        const receiptId = payment.type === 'MONTHLY' ? `m-${payment.month}-${payment.year}` : `ot-${payment.payment_id}`;
         try {
+            setDownloadingReceiptId(receiptId);
             const token = await AsyncStorage.getItem('studentToken');
             const storedSessionId = await AsyncStorage.getItem('selectedSessionId');
             const studentStr = await AsyncStorage.getItem('studentData');
@@ -154,6 +164,8 @@ export default function FeesScreen() {
         } catch (error) {
             console.error('Receipt error:', error);
             Toast.show({ type: 'error', text1: 'Error', text2: 'Failed to generate receipt' });
+        } finally {
+            setDownloadingReceiptId(null);
         }
     };
 
@@ -168,7 +180,12 @@ export default function FeesScreen() {
             const studentDataStr = await AsyncStorage.getItem('studentData');
             const student = JSON.parse(studentDataStr || '{}');
 
-            const finalAmount = paymentType === 'MONTHLY' ? modalTotal : parseFloat(customAmount);
+            const inputAmount = paymentType === 'MONTHLY' ? modalTotal : parseFloat(customAmount);
+            // If it's one-time and they entered a custom amount, we need to add the convenience fee to that custom amount too
+            // because the user expects to pay the amount they typed, but Razorpay charges extra.
+            // Actually, usually when a user types "500", they want to pay 500 total.
+            // But here we want the school to get 500. So we add the fee.
+            const finalAmount = paymentType === 'MONTHLY' ? inputAmount : inputAmount + (inputAmount * 0.0236);
             
             if (!student.id || isNaN(finalAmount) || finalAmount <= 0) {
                 Toast.show({ type: 'error', text1: 'Error', text2: 'Invalid payment data' });
@@ -265,18 +282,33 @@ export default function FeesScreen() {
         ...(feeData?.one_time_fees || []).filter((f: any) => f.status === 'paid').map((f: any) => ({ ...f, type: 'ONE-TIME', month: new Date(f.updated_at).getMonth() + 1, year: new Date(f.updated_at).getFullYear(), paid_at: f.updated_at }))
     ].sort((a, b) => new Date(b.paid_at).getTime() - new Date(a.paid_at).getTime());
 
-    const renderHistoryItem = ({ item, index }: any) => (
-        <View style={[styles.historyItem, index !== combinedHistory.length - 1 && { borderBottomWidth: 1, borderBottomColor: theme.border }]}>
-            <View style={styles.historyLeft}>
-                <View style={[styles.iconCircle, { backgroundColor: theme.success + '15' }]}><Ionicons name="checkmark-circle" size={20} color={theme.success} /></View>
-                <View><Text style={[styles.historyMonth, { color: theme.text }]} numberOfLines={1}>{item.type === 'ONE-TIME' ? item.reason : `${MONTHS[item.month - 1]} ${item.year}`}</Text><Text style={[styles.historyDate, { color: theme.textLight }]}>{item.paid_at ? new Date(item.paid_at).toLocaleDateString('en-IN', { day: '2-digit', month: 'short' }) : 'N/A'} • {item.type}</Text></View>
+    const renderHistoryItem = ({ item, index }: any) => {
+        const receiptId = item.type === 'MONTHLY' ? `m-${item.month}-${item.year}` : `ot-${item.payment_id}`;
+        const isDownloading = downloadingReceiptId === receiptId;
+
+        return (
+            <View style={[styles.historyItem, index !== combinedHistory.length - 1 && { borderBottomWidth: 1, borderBottomColor: theme.border }]}>
+                <View style={styles.historyLeft}>
+                    <View style={[styles.iconCircle, { backgroundColor: theme.success + '15' }]}><Ionicons name="checkmark-circle" size={20} color={theme.success} /></View>
+                    <View><Text style={[styles.historyMonth, { color: theme.text }]} numberOfLines={1}>{item.type === 'ONE-TIME' ? item.reason : `${MONTHS[item.month - 1]} ${item.year}`}</Text><Text style={[styles.historyDate, { color: theme.textLight }]}>{item.paid_at ? new Date(item.paid_at).toLocaleDateString('en-IN', { day: '2-digit', month: 'short' }) : 'N/A'} • {item.type}</Text></View>
+                </View>
+                <View style={styles.historyRight}>
+                    <TouchableOpacity 
+                        style={styles.downloadReceiptIcon} 
+                        onPress={() => !isDownloading && handleDownloadReceipt(item)}
+                        disabled={isDownloading}
+                    >
+                        {isDownloading ? (
+                            <ActivityIndicator size="small" color={theme.primary} />
+                        ) : (
+                            <Ionicons name="download-outline" size={18} color={theme.primary} />
+                        )}
+                    </TouchableOpacity>
+                    <Text style={[styles.historyAmount, { color: theme.success, marginTop: 4 }]}>₹{(item.type === 'ONE-TIME' ? parseFloat(item.paid_amount) : (feeData.fee_structure.monthly_fees + (feeData.fee_structure.transport_facility ? feeData.fee_structure.transport_fees : 0) + (feeData.extra_charges || []).filter((ec: any) => ec.month === item.month && ec.year === item.year).reduce((sum: number, ec: any) => sum + parseFloat(ec.amount), 0))).toLocaleString()}</Text>
+                </View>
             </View>
-            <View style={styles.historyRight}>
-                <TouchableOpacity style={styles.downloadReceiptIcon} onPress={() => handleDownloadReceipt(item)}><Ionicons name="download-outline" size={18} color={theme.primary} /></TouchableOpacity>
-                <Text style={[styles.historyAmount, { color: theme.success, marginTop: 4 }]}>₹{(item.type === 'ONE-TIME' ? parseFloat(item.paid_amount) : (feeData.fee_structure.monthly_fees + (feeData.fee_structure.transport_facility ? feeData.fee_structure.transport_fees : 0) + (feeData.extra_charges || []).filter((ec: any) => ec.month === item.month && ec.year === item.year).reduce((sum: number, ec: any) => sum + parseFloat(ec.amount), 0))).toLocaleString()}</Text>
-            </View>
-        </View>
-    );
+        );
+    };
 
     return (
         <View style={[styles.container, { backgroundColor: theme.background, paddingTop: insets.top }]}>
@@ -456,8 +488,8 @@ const styles = StyleSheet.create({
     downloadReceiptIcon: { width: 30, height: 30, borderRadius: 8, backgroundColor: 'rgba(0,0,0,0.05)', justifyContent: 'center', alignItems: 'center' },
     emptyState: { alignItems: 'center', paddingVertical: 60 },
     emptyText: { marginTop: 10 },
-    centeredModal: { flex: 1, justifyContent: 'flex-end', backgroundColor: 'rgba(0,0,0,0.5)' },
-    payModalContent: { borderTopLeftRadius: 30, borderTopRightRadius: 30, padding: 25, paddingBottom: 40 },
+    centeredModal: { flex: 1, justifyContent: 'center', backgroundColor: 'rgba(0,0,0,0.5)', paddingHorizontal: 20 },
+    payModalContent: { borderRadius: 30, padding: 25, paddingBottom: 30 },
     modalHeaderBar: { alignItems: 'center', marginBottom: 15 },
     modalHandle: { width: 40, height: 4, backgroundColor: '#ccc', borderRadius: 2 },
     payModalTitle: { fontSize: 20, fontWeight: '900', textAlign: 'center' },

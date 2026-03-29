@@ -39,7 +39,7 @@ export default function AccountSetup() {
 
     const fetchBankAccounts = async () => {
         try {
-            const token = await AsyncStorage.getItem('token');
+            const token = await AsyncStorage.getItem('principalToken') || await AsyncStorage.getItem('token');
             const response = await axios.get(`${BASE_URL}/api/principal/bank-accounts`, {
                 headers: { Authorization: `Bearer ${token}` }
             });
@@ -62,7 +62,7 @@ export default function AccountSetup() {
 
         try {
             setSaving(true);
-            const token = await AsyncStorage.getItem('token');
+            const token = await AsyncStorage.getItem('principalToken') || await AsyncStorage.getItem('token');
             
             if (editingAccount) {
                 await axios.put(
@@ -99,7 +99,7 @@ export default function AccountSetup() {
                 style: 'destructive', 
                 onPress: async () => {
                     try {
-                        const token = await AsyncStorage.getItem('token');
+                        const token = await AsyncStorage.getItem('principalToken') || await AsyncStorage.getItem('token');
                         await axios.delete(`${BASE_URL}/api/principal/bank-accounts/${id}`, {
                             headers: { Authorization: `Bearer ${token}` }
                         });

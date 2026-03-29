@@ -756,7 +756,7 @@ export default function TeacherDashboard() {
 
     const styles = useMemo(() => StyleSheet.create({
         container: { flex: 1, backgroundColor: theme.background },
-        header: { paddingTop: insets.top + 5, paddingBottom: 5, paddingRight: 20, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', zIndex: 10 },
+        header: { paddingTop: insets.top, paddingBottom: 5, paddingRight: 20, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', zIndex: 10 },
         headerLogo: { width: 140, height: 50 },
         headerRight: { flexDirection: 'row', alignItems: 'center' },
         avatarWrapper: { marginLeft: 12, position: 'relative' },
@@ -844,7 +844,7 @@ export default function TeacherDashboard() {
                     contentContainerStyle={{ paddingBottom: insets.bottom + 100 }} 
                     refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} colors={[theme.primary]} tintColor={theme.primary} />}
                 >
-                <View style={{ width: SCREEN_WIDTH, height: 185, marginTop: 15, marginBottom: 5 }}>
+                <View style={{ width: SCREEN_WIDTH, height: 205, marginTop: 15, marginBottom: 5 }}>
                     <Animated.FlatList 
                         ref={flatListRef as any} 
                         data={flashcardData} 
@@ -859,7 +859,7 @@ export default function TeacherDashboard() {
                         decelerationRate="fast" 
                         style={{ flex: 1 }} 
                     />
-                    <View style={{ flexDirection: 'row', justifyContent: 'center', marginTop: 10 }}>
+                    <View style={{ flexDirection: 'row', justifyContent: 'center', marginTop: 15 }}>
                         {flashcardData.map((_, idx) => (
                             <View 
                                 key={idx} 

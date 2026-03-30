@@ -45,7 +45,7 @@ export default function RoleSelection() {
             subtext="Manage school operations, staff, and overall administration."
             icon="business-outline"
             color={theme.primary}
-            onPress={() => router.push('/(auth)/institute-login')}
+            onPress={() => router.replace('/(auth)/institute-login')}
             theme={theme}
           />
 
@@ -54,7 +54,7 @@ export default function RoleSelection() {
             subtext="Access your classes, mark attendance, and post homework."
             icon="people-outline"
             color={theme.success}
-            onPress={() => router.push('/(auth)/teacher-login')}
+            onPress={() => router.replace('/(auth)/teacher-login')}
             theme={theme}
           />
 
@@ -63,7 +63,7 @@ export default function RoleSelection() {
             subtext="Check attendance, homework, exams, and fee status."
             icon="school-outline"
             color={theme.secondary}
-            onPress={() => router.push('/(auth)/student-login')}
+            onPress={() => router.replace('/(auth)/student-login')}
             theme={theme}
           />
         </View>

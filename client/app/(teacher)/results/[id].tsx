@@ -452,7 +452,11 @@ export default function TeacherExamDetail() {
                 </View>
             )}
 
-            <Modal visible={fillModalVisible} animationType="slide">
+            <Modal 
+                visible={fillModalVisible} 
+                animationType="slide"
+                onRequestClose={() => setFillModalVisible(false)}
+            >
                 <View style={{ flex: 1, backgroundColor: theme.background }}>
                     <View style={{ position: 'absolute', top: 50, left: 0, right: 0, zIndex: 100, flexDirection: 'row', alignItems: 'center', paddingHorizontal: 20, justifyContent: 'space-between' }}>
                         <TouchableOpacity onPress={() => setFillModalVisible(false)} style={styles.floatingHeaderBtn}><Ionicons name="close" size={28} color={theme.text} /></TouchableOpacity>

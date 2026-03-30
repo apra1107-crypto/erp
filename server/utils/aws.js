@@ -286,7 +286,6 @@ const sendTeacherCredentials = async (email, teacherName, uniqueCode, instituteN
                     <p><strong>Date of Birth:</strong> ${teacherDetails.dob}</p>
                     <p><strong>Mobile:</strong> ${teacherDetails.mobile}</p>
                     <p><strong>Email:</strong> ${teacherDetails.email}</p>
-                    ${teacherDetails.special_permission ? '<p><strong>Special Permission:</strong> Granted</p>' : ''}
                   </div>
                   
                   <p>You can now access the school portal using your credentials. If you have any questions, please contact the administration.</p>

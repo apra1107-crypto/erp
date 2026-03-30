@@ -2,7 +2,7 @@ export default {
   "expo": {
     "name": "Klassin",
     "slug": "klassin",
-    "version": "1.0.0",
+    "version": "1.1.0",
     "orientation": "portrait",
     "icon": "./assets/images/icon2.png",
     "scheme": "klassin",
@@ -20,7 +20,7 @@ export default {
     "android": {
       "adaptiveIcon": {
         "backgroundColor": "#E6F4FE",
-        "foregroundImage": "./assets/images/android-icon-foreground.png"
+        "foregroundImage": "./assets/images/KLassin.png"
       },
       "edgeToEdgeEnabled": true,
       "predictiveBackGestureEnabled": false,

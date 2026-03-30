@@ -168,7 +168,7 @@ async function sendAttendanceNotifications(attendance, date, teacherName) {
                     to: studentData.token,
                     sound: 'default',
                     title: `${statusIcon} Attendance: ${statusText}`,
-                    body: `Dear ${studentData.name}, you have been marked ${statusText} today (${formattedDate}).\n📅 ${formattedDate}  ⏰ ${timeStr}`,
+                    body: `Dear ${studentData.name}, you have been marked ${statusText} on ${formattedDate}.\n📅 ${formattedDate}  ⏰ ${timeStr}`,
                     priority: 'high',
                     channelId: 'klassin-alerts-v3',
                     data: { 

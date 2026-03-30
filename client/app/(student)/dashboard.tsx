@@ -1,7 +1,7 @@
 import * as FileSystem from 'expo-file-system/legacy';
 import * as Sharing from 'expo-sharing';
 import { useState, useEffect, useMemo, useCallback, useRef } from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, ActivityIndicator, Image, ScrollView, Modal, TextInput, Dimensions, KeyboardAvoidingView, Platform, StatusBar, LayoutAnimation, RefreshControl, UIManager, FlatList, Pressable } from 'react-native';
+import { View, Text, StyleSheet, TouchableOpacity, ActivityIndicator, Image, ScrollView, Modal, TextInput, Dimensions, KeyboardAvoidingView, Platform, StatusBar, LayoutAnimation, RefreshControl, UIManager, FlatList, Pressable, Alert, BackHandler } from 'react-native';
 
 if (Platform.OS === 'android' && UIManager.setLayoutAnimationEnabledExperimental) {
     UIManager.setLayoutAnimationEnabledExperimental(true);
@@ -93,7 +93,7 @@ const PREMIUM_GRADIENTS = [
     ['#85FFBD', '#FFFB7D'],             // Fresh Mint
     ['#21D4FD', '#B721FF'],             // Electric Violet
     ['#08AEEA', '#2AF598'],             // Arctic Cyan
-];
+] as const;
 
 const getGreetingAndQuote = () => {
     const now = new Date();
@@ -125,6 +125,21 @@ const getGreetingAndQuote = () => {
 export default function StudentDashboard() {
 
     const router = useRouter();
+
+    useFocusEffect(
+        useCallback(() => {
+            const onBackPress = () => {
+                Alert.alert('Exit App', 'Are you sure you want to close the app?', [
+                    { text: 'Cancel', style: 'cancel', onPress: () => null },
+                    { text: 'Exit', onPress: () => BackHandler.exitApp() },
+                ], { cancelable: true });
+                return true;
+            };
+
+            const subscription = BackHandler.addEventListener('hardwareBackPress', onBackPress);
+            return () => subscription.remove();
+        }, [])
+    );
 
     const [studentData, setStudentData] = useState<any>(null);
     const [isDownloading, setIsDownloading] = useState(false);
@@ -546,6 +561,26 @@ export default function StudentDashboard() {
     const [savedAccounts, setSavedAccounts] = useState<any[]>([]);
     const [fetchingAccounts, setFetchingAccounts] = useState(false);
 
+    const combinedAccounts = useMemo(() => {
+        // Create a map keyed by unique_code to ensure only 1 row per person
+        const deduplicated = new Map<string, any>();
+
+        // 1. Process server-discovered accounts first (default profile info)
+        allAccounts.forEach(acc => {
+            if (acc.unique_code) deduplicated.set(acc.unique_code, acc);
+        });
+
+        // 2. Overwrite with saved/verified accounts (prefer verified info/tokens)
+        savedAccounts.forEach(saved => {
+            if (saved.unique_code) {
+                // If this is a verified account, it takes precedence in the list
+                deduplicated.set(saved.unique_code, { ...saved, isSaved: true });
+            }
+        });
+
+        return Array.from(deduplicated.values());
+    }, [allAccounts, savedAccounts]);
+
     // Routine State
     const [routine, setRoutine] = useState<any>(null);
     const [teachers, setTeachers] = useState<any[]>([]);
@@ -619,7 +654,7 @@ export default function StudentDashboard() {
             
             // 2. Add to saved accounts list
             let updatedSaved = [...savedAccounts];
-            const existingIdx = updatedSaved.findIndex(acc => acc.id === student.id);
+            const existingIdx = updatedSaved.findIndex(acc => String(acc.unique_code) === String(student.unique_code));
             if (existingIdx !== -1) {
                 updatedSaved[existingIdx] = studentWithToken;
             } else {
@@ -757,6 +792,9 @@ export default function StudentDashboard() {
             fetchMyRoutine();
             fetchTeachers();
             fetchDashboardData();
+            if (studentData.mobile) {
+                fetchAllAccounts(studentData.mobile);
+            }
         }
     }, [studentData]);
 
@@ -962,7 +1000,7 @@ export default function StudentDashboard() {
                 const accountsStr = await AsyncStorage.getItem('studentAccounts');
                 let accounts = accountsStr ? JSON.parse(accountsStr) : [];
                 
-                const existingIdx = accounts.findIndex((acc: any) => acc.id === parsed.id);
+                const existingIdx = accounts.findIndex((acc: any) => String(acc.unique_code) === String(parsed.unique_code));
                 if (existingIdx === -1) {
                     accounts.push(parsed);
                     await AsyncStorage.setItem('studentAccounts', JSON.stringify(accounts));
@@ -998,13 +1036,42 @@ export default function StudentDashboard() {
         }
     };
 
-    const fetchAllAccounts = async (mobile: string) => {
+    const fetchAllAccounts = async (currentMobile?: string) => {
         setFetchingAccounts(true);
         try {
-            const response = await axios.post(`${API_URL}/get-all-accounts`, { mobile });
-            if (response.data.accounts) {
-                setAllAccounts(response.data.accounts);
-            }
+            // 1. Collect all unique mobile numbers ever used on this device
+            const mobiles = new Set<string>();
+            if (currentMobile) mobiles.add(currentMobile);
+            if (studentData?.mobile) mobiles.add(studentData.mobile);
+            savedAccounts.forEach(acc => {
+                if (acc.mobile) mobiles.add(acc.mobile);
+            });
+
+            if (mobiles.size === 0) return;
+
+            // 2. Fetch accounts for ALL these mobile numbers in parallel
+            const fetchPromises = Array.from(mobiles).map(m => 
+                axios.post(`${API_URL}/get-all-accounts`, { mobile: m })
+            );
+            
+            const results = await Promise.all(fetchPromises);
+            
+            // 3. Flatten and deduplicate by unique_code
+            const aggregated: any[] = [];
+            const seenCodes = new Set();
+
+            results.forEach(res => {
+                if (res.data.accounts) {
+                    res.data.accounts.forEach((acc: any) => {
+                        if (!seenCodes.has(acc.unique_code)) {
+                            seenCodes.add(acc.unique_code);
+                            aggregated.push(acc);
+                        }
+                    });
+                }
+            });
+
+            setAllAccounts(aggregated);
         } catch (error) {
             console.error('Fetch all accounts error:', error);
         } finally {
@@ -1013,13 +1080,13 @@ export default function StudentDashboard() {
     };
 
     const handleSwitchPress = (account: any) => {
-        if (account.id === studentData.id) {
+        if (String(account.unique_code) === String(studentData.unique_code)) {
             setShowAccountModal(false);
             return;
         }
         
         // Check if we have this account saved WITH an authentication token
-        const savedAccount = savedAccounts.find(acc => acc.id === account.id);
+        const savedAccount = savedAccounts.find(acc => String(acc.unique_code) === String(account.unique_code));
         const hasToken = !!savedAccount?.authToken;
 
         if (hasToken) {
@@ -1091,7 +1158,7 @@ export default function StudentDashboard() {
             await AsyncStorage.setItem('studentData', JSON.stringify(studentWithToken));
             
             let updatedSaved = [...savedAccounts];
-            const existingIdx = updatedSaved.findIndex(acc => acc.id === student.id);
+            const existingIdx = updatedSaved.findIndex(acc => String(acc.unique_code) === String(student.unique_code));
             if (existingIdx !== -1) {
                 updatedSaved[existingIdx] = studentWithToken;
             } else {
@@ -1548,7 +1615,10 @@ export default function StudentDashboard() {
 
             <View style={styles.header}>
                 <TouchableOpacity 
-                    onPress={() => setShowAccountModal(true)} 
+                    onPress={() => {
+                        setShowAccountModal(true);
+                        if (studentData?.mobile) fetchAllAccounts(studentData.mobile);
+                    }} 
                     style={styles.headerTouchArea}
                 >
                     {studentData?.institute_logo ? (
@@ -2085,13 +2155,13 @@ export default function StudentDashboard() {
                                         {fetchingAccounts ? (
                                             <ActivityIndicator style={{ margin: 20 }} color={theme.primary} />
                                         ) : (
-                                            allAccounts.map((acc) => {
-                                                const isActive = acc.id === studentData.id;
-                                                const isLoggedIn = savedAccounts.some(s => s.id === acc.id);
+                                            combinedAccounts.map((acc) => {
+                                                const isActive = String(acc.unique_code) === String(studentData.unique_code);
+                                                const isLoggedIn = savedAccounts.some(s => String(s.unique_code) === String(acc.unique_code));
 
                                                 return (
                                                     <TouchableOpacity
-                                                        key={acc.id}
+                                                        key={acc.unique_code || acc.id}
                                                         style={[styles.accItem, isActive && styles.accItemActive]}
                                                         onPress={() => handleSwitchPress(acc)}
                                                         activeOpacity={0.7}
@@ -2110,7 +2180,6 @@ export default function StudentDashboard() {
                                                         <View style={styles.accInfo}>
                                                             <Text style={styles.accName}>{acc.name}</Text>
                                                             <Text style={styles.accSchool}>{acc?.institute_name || 'Institute'}</Text>
-                                                            <Text style={styles.accMeta}>Class {acc.class} • {acc.section}</Text>
                                                         </View>
 
                                                         {isActive ? (
@@ -2202,7 +2271,7 @@ export default function StudentDashboard() {
                                                 </View>
                                                 <View style={{ marginLeft: 15, flex: 1 }}>
                                                     <Text style={[styles.accName, { fontSize: 16 }]}>{stu.name}</Text>
-                                                    <Text style={styles.accSchool}>Roll: {stu.roll_no} • Class {stu.class}</Text>
+                                                    <Text style={styles.accSchool}>Roll: {stu.roll_no}</Text>
                                                 </View>
                                                 <Ionicons name="add-circle-outline" size={24} color={theme.primary} />
                                             </TouchableOpacity>
@@ -2221,7 +2290,9 @@ export default function StudentDashboard() {
                                                 style={styles.modernInput}
                                                 placeholder="6-digit access code"
                                                 placeholderTextColor={theme.textLight}
-                                                keyboardType="numeric"
+                                                keyboardType="default"                             
+                                                autoCapitalize="none"                                                 
+                                                autoCorrect={false} 
                                                 maxLength={6}
                                                 value={accessCode}
                                                 onChangeText={setAccessCode}
@@ -2416,5 +2487,3 @@ export default function StudentDashboard() {
         </View>
     );
 }
-
-

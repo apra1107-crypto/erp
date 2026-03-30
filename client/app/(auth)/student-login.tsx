@@ -249,7 +249,7 @@ export default function StudentLogin() {
     profileSection: { alignItems: 'center', marginBottom: 25 },
     avatarWrapper: { position: 'relative', marginBottom: 15 },
     largeAvatar: { width: 100, height: 100, borderRadius: 50, borderWidth: 4, borderColor: theme.primary + '20' },
-    verificationBadge: { position: 'absolute', bottom: 0, right: 0, width: 32, height: 32, borderRadius: 16, backgroundColor: theme.primary, borderContent: '#fff', borderWidth: 3, justifyContent: 'center', alignItems: 'center' },
+    verificationBadge: { position: 'absolute', bottom: 0, right: 0, width: 32, height: 32, borderRadius: 16, backgroundColor: theme.primary, borderColor: '#fff', borderWidth: 3, justifyContent: 'center', alignItems: 'center' },
     studentName: { fontSize: 22, fontWeight: '900', color: theme.text, marginBottom: 4 },
     studentInfo: { fontSize: 14, color: theme.textLight, fontWeight: '600' },
     
@@ -360,7 +360,7 @@ export default function StudentLogin() {
             </View>
             <View style={styles.listContent}>
               <Text style={styles.listTitle}>{stud.name}</Text>
-              <Text style={styles.listSubtitle}>Class {stud.class}-{stud.section} • Roll: {stud.roll_no}</Text>
+              <Text style={styles.listSubtitle}>Roll: {stud.roll_no}</Text>
             </View>
             <Ionicons name="chevron-forward" size={20} color={theme.textLight} />
           </TouchableOpacity>
@@ -410,6 +410,7 @@ export default function StudentLogin() {
             maxLength={6}
             autoFocus
             autoCapitalize="none"
+            autoCorrect={false}
           />
           <View style={styles.codeCellsRow}>
             {[0, 1, 2, 3, 4, 5].map((index) => (

@@ -21,7 +21,7 @@ import { Ionicons } from '@expo/vector-icons';
 
 import { LinearGradient } from 'expo-linear-gradient';
 
-const toastConfig = {
+export const toastConfig = {
   subscription: ({ props }: any) => {
     // Define stunning gradient backgrounds and text colors based on status
     const themes: {

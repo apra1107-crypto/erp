@@ -201,12 +201,6 @@ export default function TeacherProfile() {
                     <Text style={styles.sectionTitle}>Professional Details</Text>
                     <DetailItem icon="book-outline" label="Main Subject" value={profile?.subject} />
                     <DetailItem icon="school-outline" label="Qualification" value={profile?.qualification} />
-                    <DetailItem
-                        icon={profile?.special_permission ? "shield-checkmark-outline" : "lock-closed-outline"}
-                        label="Special Edit Permission"
-                        value={profile?.special_permission ? "Enabled" : "Disabled"}
-                        valueColor={profile?.special_permission ? theme.success : theme.textLight}
-                    />
                 </View>
 
                 <View style={styles.section}>

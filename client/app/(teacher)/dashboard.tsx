@@ -1,5 +1,5 @@
 import { useState, useEffect, useMemo, useRef, useCallback } from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, ActivityIndicator, Image, ScrollView, Modal, TextInput, Dimensions, KeyboardAvoidingView, Platform, StatusBar, RefreshControl, FlatList, LayoutAnimation, UIManager, Alert, TouchableWithoutFeedback, Keyboard } from 'react-native';
+import { View, Text, StyleSheet, TouchableOpacity, ActivityIndicator, Image, ScrollView, Modal, TextInput, Dimensions, KeyboardAvoidingView, Platform, StatusBar, RefreshControl, FlatList, LayoutAnimation, UIManager, Alert, TouchableWithoutFeedback, Keyboard, BackHandler } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useRouter, useFocusEffect } from 'expo-router';
 import axios from 'axios';
@@ -113,6 +113,21 @@ export default function TeacherDashboard() {
     const { isDark, theme, toggleTheme } = useTheme();
     const insets = useSafeAreaInsets();
     const { socket } = useSocket();
+
+    useFocusEffect(
+        useCallback(() => {
+            const onBackPress = () => {
+                Alert.alert('Exit App', 'Are you sure you want to close the app?', [
+                    { text: 'Cancel', style: 'cancel', onPress: () => null },
+                    { text: 'Exit', onPress: () => BackHandler.exitApp() },
+                ], { cancelable: true });
+                return true;
+            };
+
+            const subscription = BackHandler.addEventListener('hardwareBackPress', onBackPress);
+            return () => subscription.remove();
+        }, [])
+    );
 
     const [teacherData, setTeacherData] = useState<any>(null);
     const [loading, setLoading] = useState(true);

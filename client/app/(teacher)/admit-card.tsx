@@ -178,7 +178,7 @@ const AdmitCardScreen = () => {
         subtitle: { fontSize: 13, color: theme.textLight, fontWeight: '600', marginTop: 2 },
         floatingAddBtn: {
             position: 'absolute',
-            bottom: Math.max(30, insets.bottom + 15),
+            bottom: 15,
             right: 25,
             width: 65,
             height: 65,
@@ -219,11 +219,10 @@ const AdmitCardScreen = () => {
         chipText: { color: theme.textLight, fontSize: 14, fontWeight: '700' },
         chipTextSelected: { color: '#fff', fontWeight: '800' },
         footer: { 
-            padding: 20, 
-            paddingBottom: Math.max(20, insets.bottom + 15),
-            backgroundColor: theme.card, 
-            borderTopWidth: 1, 
-            borderTopColor: theme.border 
+            paddingHorizontal: 25, 
+            paddingTop: 0,
+            paddingBottom: 5,
+            backgroundColor: 'transparent', 
         },
         footerRow: { flexDirection: 'row', gap: 12 },
         primaryBtn: { backgroundColor: theme.primary, padding: 18, borderRadius: 18, alignItems: 'center', elevation: 4, shadowColor: theme.primary, shadowOpacity: 0.3 },

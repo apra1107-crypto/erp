@@ -19,7 +19,7 @@ const BLENDING_COLORS = {
     orange: ['#FF9100', '#FF6D00'],
     pink: ['#F06292', '#E91E63'],
     blue: ['#448AFF', '#2979FF'],
-};
+} as const;
 
 const MONTHS = [
     "January", "February", "March", "April", "May", "June",
@@ -267,7 +267,7 @@ export default function FeesScreen() {
         );
     }
 
-    const getMonthColor = (index: number) => {
+    const getMonthColor = (index: number): readonly [string, string] => {
         const keys = Object.keys(BLENDING_COLORS);
         const key = keys[index % keys.length] as keyof typeof BLENDING_COLORS;
         return BLENDING_COLORS[key];
@@ -501,7 +501,10 @@ const styles = StyleSheet.create({
     totalLabel: { fontWeight: '800' }, totalAmount: { fontSize: 18, fontWeight: '900' },
     customAmountArea: { marginTop: 10 },
     inputLabel: { fontSize: 11, fontWeight: '800', marginBottom: 5 },
+    inputWrapper: { flexDirection: 'row', alignItems: 'center', gap: 10 },
     customInput: { height: 45, borderWidth: 2, borderRadius: 12, paddingHorizontal: 15, fontSize: 18, fontWeight: '800' },
+    fullPayShortcut: { height: 45, paddingHorizontal: 14, borderRadius: 12, justifyContent: 'center', backgroundColor: 'rgba(0,0,0,0.06)' },
+    shortcutText: { fontSize: 13, fontWeight: '800' },
     proceedPayBtn: { height: 55, borderRadius: 15, justifyContent: 'center', alignItems: 'center', marginTop: 25 },
     proceedPayText: { color: '#fff', fontSize: 16, fontWeight: '900' }
 });

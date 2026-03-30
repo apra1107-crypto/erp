@@ -1,5 +1,5 @@
-import { useState, useEffect, useMemo, useRef, useCallback } from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, ActivityIndicator, TextInput, FlatList, Image, ScrollView, RefreshControl, Modal, StatusBar, Platform, Dimensions, LayoutAnimation, UIManager, Alert, TouchableWithoutFeedback, Keyboard, Pressable, KeyboardAvoidingView } from 'react-native';
+import React, { useState, useEffect, useMemo, useRef, useCallback } from 'react';
+import { View, Text, StyleSheet, TouchableOpacity, ActivityIndicator, TextInput, FlatList, Image, ScrollView, RefreshControl, Modal, StatusBar, Platform, Dimensions, LayoutAnimation, UIManager, Alert, TouchableWithoutFeedback, Keyboard, Pressable, KeyboardAvoidingView, BackHandler } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useTheme } from '../../context/ThemeContext';
 import { useSocket } from '../../context/SocketContext';
@@ -50,7 +50,7 @@ if (Platform.OS === 'android' && UIManager.setLayoutAnimationEnabledExperimental
   UIManager.setLayoutAnimationEnabledExperimental(true);
 }
 
-const { width: SCREEN_WIDTH } = Dimensions.get('window');
+const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get('window');
 
 const GRADIENTS = {
     student: ['#FF2D55', '#5856D6'],
@@ -79,6 +79,21 @@ export default function PrincipalDashboard() {
   const [loading, setLoading] = useState(true);
   const { socket } = useSocket();
   const { isDark, theme, toggleTheme } = useTheme();
+
+    useFocusEffect(
+        useCallback(() => {
+            const onBackPress = () => {
+                Alert.alert('Exit App', 'Are you sure you want to close the app?', [
+                    { text: 'Cancel', style: 'cancel', onPress: () => null },
+                    { text: 'Exit', onPress: () => BackHandler.exitApp() },
+                ], { cancelable: true });
+                return true; // Always return true to consume the event
+            };
+
+            const subscription = BackHandler.addEventListener('hardwareBackPress', onBackPress);
+            return () => subscription.remove();
+        }, [])
+    );
 
   useEffect(() => {
     const loadInitialData = async () => {
@@ -135,7 +150,7 @@ export default function PrincipalDashboard() {
     { title: 'Stats', icon: 'stats-chart', color: '#27AE60', bgDark: '#1B2C1B', bgLight: '#E8F5E9', path: '/(principal)/stats' },
     { title: 'Notice', icon: 'notifications-outline', color: '#E91E63', bgDark: '#3E1A23', bgLight: '#FCE4EC', path: '/(principal)/notice' },
     { title: 'Add Student', icon: 'person-add', color: '#27AE60', bgDark: '#1B2C1B', bgLight: '#E8F5E9', path: '/(principal)/add-student' },
-    { title: 'Add Teacher', icon: 'shirt-outline', color: '#AF52DE', bgDark: '#2D1B36', bgLight: '#F3E5F5', path: '/(principal)/add-teacher' },
+    { title: 'Add Teacher', icon: 'person-add-outline', color: '#AF52DE', bgDark: '#2D1B36', bgLight: '#F3E5F5', path: '/(principal)/add-teacher' },
     { title: 'Students', icon: 'school', color: '#3498DB', bgDark: '#1B263B', bgLight: '#E3F2FD', path: '/(principal)/students' },
     { title: 'Teachers', icon: 'people', color: '#AF52DE', bgDark: '#2D1B36', bgLight: '#F3E5F5', path: '/(principal)/teachers' },
     { title: 'Attendance', icon: 'checkmark-done', color: '#9C27B0', bgDark: '#2E1A47', bgLight: '#F3E5F5', path: '/(principal)/attendance' },
@@ -913,7 +928,7 @@ export default function PrincipalDashboard() {
         <View style={styles.actionsContainer}>
           <View style={styles.actionsBox}>
             <View style={styles.row}>
-              {(isActionsExpanded ? actions : actions.slice(0, 3)).map((action, index) => {
+              {(isActionsExpanded ? actions : actions.slice(0, 12)).map((action, index) => {
                 return (
                   <TouchableOpacity 
                     key={index} 
@@ -978,12 +993,60 @@ export default function PrincipalDashboard() {
       </ScrollView>
 
       {/* Profile Menu with Session Management Restore */}
-      <Modal visible={showProfileMenu} transparent animationType="fade" onRequestClose={() => setShowProfileMenu(false)}><TouchableOpacity style={styles.modalOverlay} activeOpacity={1} onPress={() => setShowProfileMenu(false)}><View style={styles.profileMenu}><View style={styles.menuHeader}><View style={{ flexDirection: 'row', alignItems: 'center' }}>{profileData?.principal_photo_url ? <Image source={{ uri: profileData.principal_photo_url }} style={styles.menuAvatar} /> : <View style={[styles.menuAvatar, { backgroundColor: theme.primary + '20', justifyContent: 'center', alignItems: 'center' }]}><Text style={{ color: theme.primary, fontSize: 24, fontWeight: 'bold' }}>{userData?.principal_name?.charAt(0)}</Text></View>}<View style={{ marginLeft: 15 }}><Text style={styles.menuName}>{userData?.principal_name}</Text><Text style={styles.menuInfo}>{userData?.mobile}</Text></View></View></View><TouchableOpacity style={styles.menuItem} onPress={() => { setShowProfileMenu(false); router.push('/(principal)/profile'); }}><Ionicons name="person-outline" size={20} color={theme.text} /><Text style={styles.menuText}>Profile</Text></TouchableOpacity>
+      <Modal visible={showProfileMenu} transparent animationType="fade" onRequestClose={() => setShowProfileMenu(false)}>
+        <TouchableOpacity style={styles.modalOverlay} activeOpacity={1} onPress={() => setShowProfileMenu(false)}>
+            <View style={styles.profileMenu}>
+                <LinearGradient
+                    colors={isDark ? ['#2d1b36', '#1a1a1a'] : ['#fdf2ff', '#ffffff']}
+                    style={[styles.menuHeader, { padding: 25 }]}
+                >
+                    <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+                        <View style={{ position: 'relative' }}>
+                            {profileData?.principal_photo_url ? (
+                                <Image source={{ uri: profileData.principal_photo_url }} style={styles.menuAvatar} />
+                            ) : (
+                                <View style={[styles.menuAvatar, { backgroundColor: theme.primary + '20', justifyContent: 'center', alignItems: 'center' }]}>
+                                    <Text style={{ color: theme.primary, fontSize: 24, fontWeight: 'bold' }}>
+                                        {(profileData?.principal_name || userData?.principal_name || 'P').charAt(0)}
+                                    </Text>
+                                </View>
+                            )}
+                            <View style={{ position: 'absolute', bottom: 5, right: 0, width: 14, height: 14, borderRadius: 7, backgroundColor: '#27AE60', borderWidth: 2, borderColor: theme.card }} />
+                        </View>
+                        <View style={{ marginLeft: 18, flex: 1 }}>
+                            <Text style={[styles.menuName, { fontSize: 20, marginBottom: 2 }]} numberOfLines={1}>
+                                {profileData?.principal_name || userData?.principal_name}
+                            </Text>
+                            <View style={{ flexDirection: 'row', alignItems: 'center', opacity: 0.8 }}>
+                                <Ionicons name="call-outline" size={12} color={theme.textLight} />
+                                <Text style={[styles.menuInfo, { marginLeft: 4, fontWeight: '700' }]}>
+                                    {profileData?.mobile || userData?.mobile}
+                                </Text>
+                            </View>
+                            {(profileData?.email || userData?.email) && (
+                                <View style={{ flexDirection: 'row', alignItems: 'center', opacity: 0.8, marginTop: 2 }}>
+                                    <Ionicons name="mail-outline" size={12} color={theme.textLight} />
+                                    <Text style={[styles.menuInfo, { marginLeft: 4, fontWeight: '700' }]} numberOfLines={1}>
+                                        {profileData?.email || userData?.email}
+                                    </Text>
+                                </View>
+                            )}
+                        </View>
+                    </View>
+                </LinearGradient>
+
+                <ScrollView showsVerticalScrollIndicator={false} style={{ maxHeight: SCREEN_HEIGHT * 0.6 }}>
+                    <TouchableOpacity style={styles.menuItem} onPress={() => { setShowProfileMenu(false); router.push('/(principal)/profile'); }}>
+                        <Ionicons name="person-outline" size={20} color={theme.text} />
+                        <Text style={styles.menuText}>Profile Settings</Text>
+                        <Ionicons name="chevron-forward" size={16} color={theme.textLight} style={{ marginLeft: 'auto' }} />
+                    </TouchableOpacity>
         
-        <TouchableOpacity style={styles.menuItem} onPress={() => { setShowProfileMenu(false); router.push('/(principal)/account-setup' as any); }}>
-          <Text style={{ fontSize: 18, color: theme.text, width: 20, textAlign: 'center', fontWeight: 'bold' }}>₹</Text>
-          <Text style={styles.menuText}>Account Setup</Text>
-        </TouchableOpacity>
+                    <TouchableOpacity style={styles.menuItem} onPress={() => { setShowProfileMenu(false); router.push('/(principal)/account-setup' as any); }}>
+                        <Ionicons name="wallet-outline" size={20} color={theme.text} />
+                        <Text style={styles.menuText}>Account Setup</Text>
+                        <Ionicons name="chevron-forward" size={16} color={theme.textLight} style={{ marginLeft: 'auto' }} />
+                    </TouchableOpacity>
         
         {/* Session Picker & Management */}
         <TouchableOpacity style={styles.menuItem} onPress={() => setShowSessionPicker(!showSessionPicker)}><Ionicons name="calendar-outline" size={20} color={theme.text} /><View style={{ flex: 1 }}><Text style={styles.menuText}>Academic Session</Text><Text style={{ fontSize: 11, color: theme.primary, fontWeight: '700' }}>{sessions.find(s => s.id === selectedSessionId)?.name || 'Select Session'}</Text></View><Ionicons name={showSessionPicker ? "chevron-up" : "chevron-down"} size={16} color={theme.textLight} /></TouchableOpacity>
@@ -1032,9 +1095,10 @@ export default function PrincipalDashboard() {
             <Ionicons name="log-out-outline" size={20} color={theme.danger} />
             <Text style={[styles.menuText, { color: theme.danger }]}>Logout</Text>
         </TouchableOpacity>
-    </View>
-</TouchableOpacity>
-</Modal>
+                </ScrollView>
+            </View>
+        </TouchableOpacity>
+      </Modal>
 
       <Modal 
         visible={showNotifList} 

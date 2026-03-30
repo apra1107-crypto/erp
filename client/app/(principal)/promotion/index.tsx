@@ -1,5 +1,5 @@
 import { useState, useEffect, useMemo, useRef } from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, ScrollView, ActivityIndicator, Image, StatusBar, Modal, TextInput, Alert, Switch, Platform, Animated, Easing, RefreshControl } from 'react-native';
+import { View, Text, StyleSheet, TouchableOpacity, ScrollView, ActivityIndicator, Image, StatusBar, Modal, TextInput, Alert, Switch, Platform, Animated, Easing, RefreshControl, KeyboardAvoidingView } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
 import axios from 'axios';
@@ -482,107 +482,128 @@ export default function PromotionScreen() {
                 )}
             </ScrollView>
 
-            <Modal visible={promotionModalVisible} animationType="fade" transparent={true}>
-                <View style={styles.modalOverlay}>
-                    <ScrollView contentContainerStyle={{ flexGrow: 1, justifyContent: 'center' }}>
-                        <View style={styles.modalContent}>
-                            <View style={{flexDirection:'row', justifyContent:'space-between', alignItems:'center'}}>
-                                <Text style={styles.modalTitle}>Promote Student</Text>
-                                <TouchableOpacity onPress={() => setPromotionModalVisible(false)}><Ionicons name="close-circle" size={30} color={theme.textLight}/></TouchableOpacity>
-                            </View>
-                            <Text style={{color: theme.textLight, marginBottom: 20}}>Promoting {selectedStudent?.name}</Text>
+            <Modal 
+                visible={promotionModalVisible} 
+                animationType="fade" 
+                transparent={true}
+                onRequestClose={() => setPromotionModalVisible(false)}
+            >
+                <KeyboardAvoidingView 
+                    behavior={Platform.OS === 'ios' ? 'padding' : 'height'} 
+                    style={{ flex: 1 }}
+                >
+                    <View style={styles.modalOverlay}>
+                        <ScrollView 
+                            contentContainerStyle={{ flexGrow: 1, justifyContent: 'center' }}
+                            showsVerticalScrollIndicator={false}
+                            keyboardShouldPersistTaps="handled"
+                        >
+                            <View style={styles.modalContent}>
+                                <View style={{flexDirection:'row', justifyContent:'space-between', alignItems:'center'}}>
+                                    <Text style={styles.modalTitle}>Promote Student</Text>
+                                    <TouchableOpacity onPress={() => setPromotionModalVisible(false)}><Ionicons name="close-circle" size={30} color={theme.textLight}/></TouchableOpacity>
+                                </View>
+                                <Text style={{color: theme.textLight, marginBottom: 20}}>Promoting {selectedStudent?.name}</Text>
 
-                            <Text style={styles.label}>Target Session</Text>
-                            <View style={{flexDirection: 'row', flexWrap: 'wrap'}}>
-                                {sessions.map(s => (
+                                <Text style={styles.label}>Target Session</Text>
+                                <View style={{flexDirection: 'row', flexWrap: 'wrap'}}>
+                                    {sessions.map(s => (
+                                        <TouchableOpacity 
+                                            key={s.id} 
+                                            style={[styles.sessionChip, promotionData.targetSessionId === s.id && styles.activeSessionChip]} 
+                                            onPress={() => {
+                                                setPromotionData({...promotionData, targetSessionId: s.id});
+                                                fetchPromotedTracking(s.id);
+                                            }}
+                                        >
+                                            <Text style={{color: promotionData.targetSessionId === s.id ? '#fff' : theme.text}}>{s.name}</Text>
+                                        </TouchableOpacity>
+                                    ))}
+                                </View>
+
+                                <Text style={styles.label}>New Class</Text>
+                                <TextInput style={styles.modalInput} value={promotionData.newClass} onChangeText={t => setPromotionData({...promotionData, newClass: t})} />
+                                
+                                <View style={{flexDirection:'row', gap: 15}}>
+                                    <View style={{flex:1}}>
+                                        <Text style={styles.label}>Section</Text>
+                                        <TextInput style={styles.modalInput} value={promotionData.newSection} onChangeText={t => setPromotionData({...promotionData, newSection: t})} />
+                                    </View>
+                                    <View style={{flex:1}}>
+                                        <Text style={styles.label}>Roll No</Text>
+                                        <TextInput style={styles.modalInput} value={promotionData.newRollNo} onChangeText={t => setPromotionData({...promotionData, newRollNo: t})} />
+                                    </View>
+                                </View>
+
+                                <Text style={styles.label}>Monthly Tuition Fees</Text>
+                                <TextInput 
+                                    style={styles.modalInput} 
+                                    placeholder="Amount in ₹" 
+                                    keyboardType="numeric" 
+                                    value={promotionData.monthlyFees} 
+                                    onChangeText={t => setPromotionData({...promotionData, monthlyFees: t})} 
+                                />
+
+                                <View style={styles.switchRow}>
+                                    <View>
+                                        <Text style={{ fontSize: 15, fontWeight: '700', color: theme.text }}>Transport Facility</Text>
+                                        <Text style={{ fontSize: 11, color: theme.textLight, marginTop: 2 }}>Include bus service for next session</Text>
+                                    </View>
                                     <TouchableOpacity 
-                                        key={s.id} 
-                                        style={[styles.sessionChip, promotionData.targetSessionId === s.id && styles.activeSessionChip]} 
-                                        onPress={() => {
-                                            setPromotionData({...promotionData, targetSessionId: s.id});
-                                            fetchPromotedTracking(s.id);
-                                        }}
+                                        activeOpacity={0.8}
+                                        onPress={() => setPromotionData({...promotionData, transportFacility: !promotionData.transportFacility})}
                                     >
-                                        <Text style={{color: promotionData.targetSessionId === s.id ? '#fff' : theme.text}}>{s.name}</Text>
-                                    </TouchableOpacity>
-                                ))}
-                            </View>
-
-                            <Text style={styles.label}>New Class</Text>
-                            <TextInput style={styles.modalInput} value={promotionData.newClass} onChangeText={t => setPromotionData({...promotionData, newClass: t})} />
-                            
-                            <View style={{flexDirection:'row', gap: 15}}>
-                                <View style={{flex:1}}>
-                                    <Text style={styles.label}>Section</Text>
-                                    <TextInput style={styles.modalInput} value={promotionData.newSection} onChangeText={t => setPromotionData({...promotionData, newSection: t})} />
-                                </View>
-                                <View style={{flex:1}}>
-                                    <Text style={styles.label}>Roll No</Text>
-                                    <TextInput style={styles.modalInput} value={promotionData.newRollNo} onChangeText={t => setPromotionData({...promotionData, newRollNo: t})} />
-                                </View>
-                            </View>
-
-                            <Text style={styles.label}>Monthly Tuition Fees</Text>
-                            <TextInput 
-                                style={styles.modalInput} 
-                                placeholder="Amount in ₹" 
-                                keyboardType="numeric" 
-                                value={promotionData.monthlyFees} 
-                                onChangeText={t => setPromotionData({...promotionData, monthlyFees: t})} 
-                            />
-
-                            <View style={styles.switchRow}>
-                                <View>
-                                    <Text style={{ fontSize: 15, fontWeight: '700', color: theme.text }}>Transport Facility</Text>
-                                    <Text style={{ fontSize: 11, color: theme.textLight, marginTop: 2 }}>Include bus service for next session</Text>
-                                </View>
-                                <TouchableOpacity 
-                                    activeOpacity={0.8}
-                                    onPress={() => setPromotionData({...promotionData, transportFacility: !promotionData.transportFacility})}
-                                >
-                                    <Animated.View style={[
-                                        styles.pillToggle, 
-                                        {
-                                            backgroundColor: switchAnim.interpolate({
-                                                inputRange: [0, 1],
-                                                outputRange: [isDark ? '#333' : '#E9E9EB', '#34C759']
-                                            })
-                                        }
-                                    ]}>
                                         <Animated.View style={[
-                                            styles.pillThumb,
+                                            styles.pillToggle, 
                                             {
-                                                transform: [{
-                                                    translateX: switchAnim.interpolate({
-                                                        inputRange: [0, 1],
-                                                        outputRange: [2, 22]
-                                                    })
-                                                }]
+                                                backgroundColor: switchAnim.interpolate({
+                                                    inputRange: [0, 1],
+                                                    outputRange: [isDark ? '#333' : '#E9E9EB', '#34C759']
+                                                })
                                             }
-                                        ]} />
-                                    </Animated.View>
+                                        ]}>
+                                            <Animated.View style={[
+                                                styles.pillThumb,
+                                                {
+                                                    transform: [{
+                                                        translateX: switchAnim.interpolate({
+                                                            inputRange: [0, 1],
+                                                            outputRange: [2, 22]
+                                                        })
+                                                    }]
+                                                }
+                                            ]} />
+                                        </Animated.View>
+                                    </TouchableOpacity>
+                                </View>
+
+                                {promotionData.transportFacility && (
+                                    <>
+                                        <Text style={styles.label}>Monthly Transport Fees</Text>
+                                        <TextInput 
+                                            style={styles.modalInput} 
+                                            placeholder="Amount in ₹" 
+                                            keyboardType="numeric" 
+                                            value={promotionData.transportFees} 
+                                            onChangeText={t => setPromotionData({...promotionData, transportFees: t})} 
+                                        />
+                                    </>
+                                )}
+
+                                <TouchableOpacity style={styles.promoteSubmitBtn} onPress={handlePromoteSubmit} disabled={promoting}>
+                                    {promoting ? <ActivityIndicator color="#fff"/> : <Text style={styles.promoteSubmitText}>Confirm Promotion</Text>}
+                                </TouchableOpacity>
+
+                                <TouchableOpacity 
+                                    style={{ marginTop: 15, paddingVertical: 10, alignItems: 'center' }}
+                                    onPress={() => setPromotionModalVisible(false)}
+                                >
+                                    <Text style={{ color: theme.textLight, fontWeight: '700' }}>Cancel</Text>
                                 </TouchableOpacity>
                             </View>
-
-                            {promotionData.transportFacility && (
-                                <>
-                                    <Text style={styles.label}>Monthly Transport Fees</Text>
-                                    <TextInput 
-                                        style={styles.modalInput} 
-                                        placeholder="Amount in ₹" 
-                                        keyboardType="numeric" 
-                                        value={promotionData.transportFees} 
-                                        onChangeText={t => setPromotionData({...promotionData, transportFees: t})} 
-                                    />
-                                </>
-                            )}
-
-                            <TouchableOpacity style={styles.promoteSubmitBtn} onPress={handlePromoteSubmit} disabled={promoting}>
-                                {promoting ? <ActivityIndicator color="#fff"/> : <Text style={styles.promoteSubmitText}>Confirm Promotion</Text>}
-                            </TouchableOpacity>
-                        </View>
-                    </ScrollView>
-                </View>
+                        </ScrollView>
+                    </View>
+                </KeyboardAvoidingView>
             </Modal>
         </View>
     );

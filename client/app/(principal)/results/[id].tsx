@@ -832,7 +832,11 @@ export default function ExamDetail() {
             {/* Processing state is now handled by the button spinner */}
 
             {/* Fill Marks Modal */}
-            <Modal visible={fillModalVisible} animationType="slide">
+            <Modal 
+                visible={fillModalVisible} 
+                animationType="slide"
+                onRequestClose={() => setFillModalVisible(false)}
+            >
                 <View style={styles.modalContainer}>
                     {/* Free Flow Header for Modal */}
                     <View style={{ 

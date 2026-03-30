@@ -64,6 +64,7 @@
   "devDependencies": {
     "@types/babel__template": "^7.4.4",
     "@types/react": "~19.1.0",
+    "@types/react-native-razorpay": "^2.2.6",
     "eslint": "^9.25.0",
     "eslint-config-expo": "~10.0.0",
     "typescript": "~5.9.2"

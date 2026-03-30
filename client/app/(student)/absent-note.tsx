@@ -509,7 +509,12 @@ export default function AbsentNote() {
             </TouchableOpacity>
 
             {/* Add Note Modal */}
-            <Modal visible={isModalVisible} animationType="slide" transparent={true}>
+            <Modal 
+                visible={isModalVisible} 
+                animationType="slide" 
+                transparent={true}
+                onRequestClose={() => setIsModalVisible(false)}
+            >
                 <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : 'height'} style={styles.modalOverlay}>
                     <View style={styles.modalContent}>
                         <View style={styles.modalHandle} />

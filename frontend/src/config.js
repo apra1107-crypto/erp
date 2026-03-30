@@ -1,4 +1,4 @@
-export const BASE_URL = `https://klasin.co.in`;
+export const BASE_URL = `https://klassin.co.in`;
 
 export const API_ENDPOINTS = {
     AUTH: {

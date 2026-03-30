@@ -7,12 +7,21 @@ let io;
 export const initSocket = (httpServer) => {
     io = new Server(httpServer, {
         cors: {
-            origin: '*',
-            methods: ['GET', 'POST']
-        }
+            origin: [
+                'https://klassin.co.in', 
+                'http://klassin.co.in',
+                'https://www.klassin.co.in',
+                'http://localhost:5173' // for local development
+            ],
+            methods: ['GET', 'POST'],
+            credentials: true,
+            allowedHeaders: ['my-custom-header', 'Authorization', 'x-academic-session-id'],
+        },
+        transports: ['websocket', 'polling'], // ensure fallback is enabled
+        allowEIO3: true // compatibility mode
     });
 
-    console.log('✅ Socket.io initialized');
+    console.log('✅ Socket.io initialized with production CORS');
 
     io.on('connection', (socket) => {
         console.log('🔌 Client connected:', socket.id);

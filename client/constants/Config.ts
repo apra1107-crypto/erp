@@ -1,6 +1,6 @@
 import { Platform } from 'react-native';
 
-export const BASE_URL = 'http://10.69.149.252:5000';
+export const BASE_URL = 'https://klasin.co.in';
 
 export const API_ENDPOINTS = {
     AUTH: {

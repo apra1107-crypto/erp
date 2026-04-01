@@ -22,6 +22,11 @@ export default {
         "backgroundColor": "#E6F4FE",
         "foregroundImage": "./assets/images/KLassin.png"
       },
+      "permissions": [
+        "android.permission.REQUEST_INSTALL_PACKAGES",
+        "android.permission.WRITE_EXTERNAL_STORAGE",
+        "android.permission.READ_EXTERNAL_STORAGE"
+      ],
       "edgeToEdgeEnabled": true,
       "predictiveBackGestureEnabled": false,
       "package": "com.atul004.klassin",

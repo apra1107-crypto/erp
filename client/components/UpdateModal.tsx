@@ -72,11 +72,16 @@ const UpdateModal = () => {
 
             const result = await downloadResumable.downloadAsync();
             if (result && result.uri) {
+                // First, hide the progress UI
+                setIsDownloading(false);
+                setVisible(false);
+                // Then, trigger the system install
                 installApk(result.uri);
             }
         } catch (error) {
             console.error('Download failed:', error);
             setIsDownloading(false);
+            alert("Download failed. Please check your internet connection and try again.");
         }
     };
 
@@ -120,11 +125,12 @@ const UpdateModal = () => {
                     {isDownloading ? (
                         <View style={styles.progressContainer}>
                             <Text style={styles.progressLabel}>
-                                Downloading... {Math.round(downloadProgress * 100)}%
+                                {downloadProgress === 1 ? 'Opening Installer...' : `Downloading... ${Math.round(downloadProgress * 100)}%`}
                             </Text>
                             <View style={styles.progressBarBg}>
                                 <View style={[styles.progressBarFill, { width: `${downloadProgress * 100}%` }]} />
                             </View>
+                            <ActivityIndicator size="small" color="#007AFF" style={{ marginTop: 12 }} />
                         </View>
                     ) : (
                         <View style={styles.buttonContainer}>

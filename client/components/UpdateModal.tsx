@@ -1,7 +1,6 @@
 import React, { useState, useEffect } from 'react';
-import { Modal, View, Text, TouchableOpacity, StyleSheet, Platform, ProgressBarAndroid, ActivityIndicator } from 'react-native';
-import * as FileSystem from 'expo-file-system';
-import { Paths } from 'expo-file-system';
+import { Modal, View, Text, TouchableOpacity, StyleSheet, Platform } from 'react-native';
+import * as FileSystem from 'expo-file-system/legacy';
 import * as IntentLauncher from 'expo-intent-launcher';
 import * as Sharing from 'expo-sharing';
 import Constants from 'expo-constants';
@@ -23,11 +22,11 @@ const UpdateModal = () => {
 
     const checkVersion = async () => {
         try {
-            const response = await axios.get(VERSION_INFO_URL);
+            const url = `${VERSION_INFO_URL}?t=${Date.now()}`;
+            const response = await axios.get(url);
             const latestVersion = response.data?.version;
             const currentVersion = Constants.expoConfig?.version || '1.0.0';
 
-            // Simple comparison: 1.1.0 > 1.0.0
             if (latestVersion && isVersionHigher(latestVersion, currentVersion)) {
                 setUpdateInfo(response.data);
                 setVisible(true);
@@ -52,11 +51,12 @@ const UpdateModal = () => {
         if (!updateInfo?.url) return;
 
         setIsDownloading(true);
-        const fileUri = new FileSystem.File(Paths.cache, 'klassin-update.apk').uri;
+        const fileUri = FileSystem.cacheDirectory + 'klassin-update.apk';
+        const downloadUrl = `${updateInfo.url}${updateInfo.url.includes('?') ? '&' : '?'}t=${Date.now()}`;
 
         try {
             const downloadResumable = FileSystem.createDownloadResumable(
-                updateInfo.url,
+                downloadUrl,
                 fileUri,
                 {},
                 (downloadProgress) => {

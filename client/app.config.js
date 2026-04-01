@@ -2,7 +2,7 @@ export default {
   "expo": {
     "name": "Klassin",
     "slug": "klassin",
-    "version": "1.5.1",
+    "version": "1.5.2",
     "orientation": "portrait",
     "icon": "./assets/images/icon2.png",
     "scheme": "klassin",

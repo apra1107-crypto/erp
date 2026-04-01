@@ -29,6 +29,9 @@ const UpdateModal = () => {
             const latestVersion = response.data?.version;
             const currentVersion = Constants.expoConfig?.version || '1.0.0';
 
+            // THIS ALERT WILL SHOW YOU BOTH NOW
+            alert(`From Server: ${latestVersion}\nOn Phone: ${currentVersion}`);
+
             if (latestVersion && isVersionHigher(latestVersion, currentVersion)) {
                 setUpdateInfo(response.data);
                 setVisible(true);

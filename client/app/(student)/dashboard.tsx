@@ -490,6 +490,23 @@ export default function StudentDashboard() {
     const [notifications, setNotifications] = useState<any[]>([]);
     const [showNotifList, setShowNotifList] = useState(false);
 
+    const addNotif = useCallback((notif: any) => {
+        // High-quality spring animation for adding
+        if (Platform.OS === 'android' && UIManager.setLayoutAnimationEnabledExperimental) {
+            UIManager.setLayoutAnimationEnabledExperimental(true);
+        }
+        LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
+        
+        setNotifications(prev => {
+            const newNotif = {
+                id: Math.random().toString(36).substr(2, 9),
+                time: new Date().toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit' }),
+                ...notif
+            };
+            return [newNotif, ...prev];
+        });
+    }, []);
+
     const clearAllNotifications = () => {
         // High-quality spring animation for clearing
         LayoutAnimation.configureNext({
@@ -870,15 +887,6 @@ export default function StudentDashboard() {
     useEffect(() => {
         if (!socket || !studentData) return;
 
-        const addNotif = (notif: any) => {
-            LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
-            setNotifications(prev => [{
-                id: Math.random().toString(36).substr(2, 9),
-                time: new Date().toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit' }),
-                ...notif
-            }, ...prev]);
-        };
-
         const handleAttendance = (data: any) => {
             const status = data.status === 'present' ? 'PRESENT' : 'ABSENT';
             addNotif({ 
@@ -973,8 +981,10 @@ export default function StudentDashboard() {
             socket.off('new_homework', handleHomework);
             socket.off('new_notice', handleNotice);
             socket.off('monthly_fees_activated', handleFeesActivated);
+            socket.off('one_time_fee_published', handleOneTimeFee);
+            socket.off('fee_payment_received');
         };
-    }, [socket, studentData]);
+    }, [socket, studentData, addNotif]);
 
     const loadInitialData = async () => {
         // Only show full-screen loader if we don't have any data yet

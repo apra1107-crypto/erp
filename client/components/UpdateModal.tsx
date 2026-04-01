@@ -86,18 +86,32 @@ const UpdateModal = () => {
         try {
             if (Platform.OS === 'android') {
                 const contentUri = await FileSystem.getContentUriAsync(uri);
-                await IntentLauncher.startActivityAsync('android.intent.action.INSTALL_PACKAGE', {
-                    data: contentUri,
-                    flags: 1,
-                    type: 'application/vnd.android.package-archive',
-                });
+                
+                // Add a small delay to ensure UI is ready
+                setTimeout(async () => {
+                    try {
+                        await IntentLauncher.startActivityAsync('android.intent.action.INSTALL_PACKAGE', {
+                            data: contentUri,
+                            flags: 1, // FLAG_GRANT_READ_URI_PERMISSION
+                            type: 'application/vnd.android.package-archive',
+                        });
+                        // Only hide if the activity started without error
+                        setVisible(false);
+                        setIsDownloading(false);
+                    } catch (e) {
+                        console.error('Intent Launch Error:', e);
+                        // If it fails, fallback to sharing
+                        await Sharing.shareAsync(uri);
+                    }
+                }, 500);
             } else {
-                // For iOS or sharing fallback
                 await Sharing.shareAsync(uri);
+                setVisible(false);
+                setIsDownloading(false);
             }
         } catch (error) {
             console.error('Installation failed:', error);
-        } finally {
+            alert("Installation failed. Please try again or download manually.");
             setIsDownloading(false);
         }
     };

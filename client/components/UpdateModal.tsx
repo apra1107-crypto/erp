@@ -50,7 +50,12 @@ const UpdateModal = () => {
     };
 
     const handleUpdate = async () => {
-        if (!updateInfo?.url) return;
+        if (!updateInfo?.url) {
+            alert("No URL found: " + JSON.stringify(updateInfo));
+            return;
+        }
+        // Temporary debug alert
+        // alert("Starting download from: " + updateInfo.url);
 
         setIsDownloading(true);
         const fileUri = FileSystem.cacheDirectory + 'klassin-update.apk';
@@ -69,10 +74,7 @@ const UpdateModal = () => {
 
             const result = await downloadResumable.downloadAsync();
             if (result && result.uri) {
-                // First, hide the progress UI
-                setIsDownloading(false);
-                setVisible(false);
-                // Then, trigger the system install
+                // Do NOT setVisible(false) here, let installApk handle it after launch
                 installApk(result.uri);
             }
         } catch (error) {
@@ -87,23 +89,31 @@ const UpdateModal = () => {
             if (Platform.OS === 'android') {
                 const contentUri = await FileSystem.getContentUriAsync(uri);
                 
-                // Add a small delay to ensure UI is ready
-                setTimeout(async () => {
-                    try {
-                        await IntentLauncher.startActivityAsync('android.intent.action.INSTALL_PACKAGE', {
-                            data: contentUri,
-                            flags: 1, // FLAG_GRANT_READ_URI_PERMISSION
-                            type: 'application/vnd.android.package-archive',
-                        });
-                        // Only hide if the activity started without error
+                // Use robust flags for modern Android
+                // 1 = FLAG_GRANT_READ_URI_PERMISSION
+                // 268435456 = FLAG_ACTIVITY_NEW_TASK
+                const flags = 1 | 268435456;
+
+                try {
+                    await IntentLauncher.startActivityAsync('android.intent.action.INSTALL_PACKAGE', {
+                        data: contentUri,
+                        flags: flags,
+                        type: 'application/vnd.android.package-archive',
+                    });
+                    
+                    // Small delay then hide to allow system transition
+                    setTimeout(() => {
                         setVisible(false);
                         setIsDownloading(false);
-                    } catch (e) {
-                        console.error('Intent Launch Error:', e);
-                        // If it fails, fallback to sharing
-                        await Sharing.shareAsync(uri);
-                    }
-                }, 500);
+                    }, 1000);
+
+                } catch (e) {
+                    console.error('Intent Launch Error:', e);
+                    // Fallback to sharing if direct install is blocked
+                    await Sharing.shareAsync(uri);
+                    setVisible(false);
+                    setIsDownloading(false);
+                }
             } else {
                 await Sharing.shareAsync(uri);
                 setVisible(false);

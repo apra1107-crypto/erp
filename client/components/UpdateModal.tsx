@@ -17,8 +17,6 @@ const UpdateModal = () => {
     const [isDownloading, setIsDownloading] = useState(false);
 
     useEffect(() => {
-        // This is a mandatory debug alert
-        alert("Current App Version: " + (Constants.expoConfig?.version || "Unknown"));
         checkVersion();
     }, []);
 

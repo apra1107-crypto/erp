@@ -87,9 +87,6 @@ const UpdateModal = () => {
             if (Platform.OS === 'android') {
                 const contentUri = await FileSystem.getContentUriAsync(uri);
                 
-                // Use robust flags for modern Android
-                // 1 = FLAG_GRANT_READ_URI_PERMISSION
-                // 268435456 = FLAG_ACTIVITY_NEW_TASK
                 const flags = 1 | 268435456;
 
                 try {

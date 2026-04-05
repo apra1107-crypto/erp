@@ -894,6 +894,15 @@ export default function StudentDashboard() {
                 message: `Marked by ${data.teacher_name || 'Principal'}`, 
                 type: 'attendance' 
             });
+            Toast.show({
+                type: 'success',
+                text1: `Attendance: ${status}`,
+                text2: `Marked by ${data.teacher_name || 'Principal'}`,
+                onPress: () => {
+                    router.push('/(student)/absent-note');
+                    Toast.hide();
+                }
+            });
         };
 
         const handleHomework = (data: any) => {
@@ -907,7 +916,10 @@ export default function StudentDashboard() {
                 type: 'success',
                 text1: isUpdate ? `Homework Updated: ${data.subject}` : `New Homework: ${data.subject}`,
                 text2: `By ${data.teacher_name}`,
-                onPress: () => router.push('/(student)/homework')
+                onPress: () => {
+                    router.push('/(student)/homework');
+                    Toast.hide();
+                }
             });
         };
 
@@ -939,7 +951,10 @@ export default function StudentDashboard() {
                 type: 'info',
                 text1: data.title || 'Fees Published',
                 text2: data.message || 'Check your dues in the Fees section',
-                onPress: () => router.push('/(student)/fees')
+                onPress: () => {
+                    router.push('/(student)/fees');
+                    Toast.hide();
+                }
             });
             fetchDashboardData();
         };
@@ -954,7 +969,10 @@ export default function StudentDashboard() {
                 type: 'info',
                 text1: data.title || 'New Fee',
                 text2: data.message || 'Check your dues in the Fees section',
-                onPress: () => router.push('/(student)/fees')
+                onPress: () => {
+                    router.push('/(student)/fees');
+                    Toast.hide();
+                }
             });
             fetchDashboardData();
         };
@@ -970,9 +988,20 @@ export default function StudentDashboard() {
                 message: data.message || 'Your fee payment has been confirmed.',
                 type: 'fees'
             });
+            Toast.show({
+                type: 'success',
+                text1: data.title || 'Payment Received',
+                text2: data.message || 'Check your updated balance in Fees',
+                onPress: () => {
+                    router.push('/(student)/fees');
+                    Toast.hide();
+                }
+            });
         });
 
-        socket.emit('join_room', `student-${studentData.id}`);
+        // 🟢 PRODUCTION FIX: Use unique_code for room so notifications work across sessions
+        const identifier = studentData.unique_code || studentData.id;
+        socket.emit('join_room', `student-${identifier}`);
         socket.emit('join_room', `students-${studentData.institute_id}`);
         socket.emit('join_room', `${studentData.institute_id}-${studentData.class}-${studentData.section}`);
 
@@ -985,6 +1014,13 @@ export default function StudentDashboard() {
             socket.off('fee_payment_received');
         };
     }, [socket, studentData, addNotif]);
+
+    // 🟢 ISOLATION FIX: Clear notifications when student ID changes (e.g., account switch)
+    useEffect(() => {
+        if (studentData?.id) {
+            setNotifications([]);
+        }
+    }, [studentData?.id]);
 
     const loadInitialData = async () => {
         // Only show full-screen loader if we don't have any data yet

@@ -96,16 +96,23 @@ const takeAttendance = async (req, res) => {
             stats: { total: totalStudents, present: presentCount, absent: absentCount } 
         });
 
-        // --- Post-response Background Tasks (Push, Socket and Stats) ---
-        (async () => {
-            try {
-                // 1. Instant Push Notifications (Background dispatch)
+        // 1. Instant Push Notifications (Background dispatch)
                 sendAttendanceNotifications(attendance, date, teacherName);
                 pool.query('UPDATE attendance_logs SET push_sent_at = NOW() WHERE id = $1', [logId]);
 
                 // 2. Socket.io updates
+                const studentDetails = await pool.query(
+                    "SELECT id, unique_code FROM students WHERE id = ANY($1)",
+                    [studentIds]
+                );
+                const codeMap = {};
+                studentDetails.rows.forEach(r => { codeMap[r.id] = r.unique_code; });
+
                 attendance.forEach(({ student_id, status }) => {
-                    emitToStudent(student_id, 'attendance_marked', { status, date, teacher_name: teacherName });
+                    const code = codeMap[student_id];
+                    if (code) {
+                        emitToStudent(code, 'attendance_marked', { status, date, teacher_name: teacherName });
+                    }
                 });
 
                 // 3. Update institute-wide stats

@@ -112,6 +112,67 @@ export const toastConfig = {
       </View>
     );
   },
+  success: (props: any) => (
+    <View style={{ width: '95%', backgroundColor: '#fff', borderRadius: 20, padding: 16, flexDirection: 'row', alignItems: 'center', borderLeftWidth: 6, borderLeftColor: '#10b981', elevation: 10, shadowColor: '#000', shadowOffset: { width: 0, height: 5 }, shadowOpacity: 0.1, shadowRadius: 10 }}>
+        <View style={{ width: 40, height: 40, borderRadius: 20, backgroundColor: '#10b98120', justifyContent: 'center', alignItems: 'center', marginRight: 12 }}>
+            <Ionicons name="checkmark-circle" size={24} color="#10b981" />
+        </View>
+        <View style={{ flex: 1 }}>
+            <Text style={{ fontSize: 16, fontWeight: '900', color: '#1e293b' }}>{props.text1}</Text>
+            {props.text2 && <Text style={{ fontSize: 13, color: '#64748b', marginTop: 2, fontWeight: '600' }}>{props.text2}</Text>}
+        </View>
+    </View>
+  ),
+  error: (props: any) => (
+    <View style={{ width: '95%', backgroundColor: '#fff', borderRadius: 20, padding: 16, flexDirection: 'row', alignItems: 'center', borderLeftWidth: 6, borderLeftColor: '#ef4444', elevation: 10, shadowColor: '#000', shadowOffset: { width: 0, height: 5 }, shadowOpacity: 0.1, shadowRadius: 10 }}>
+        <View style={{ width: 40, height: 40, borderRadius: 20, backgroundColor: '#ef444420', justifyContent: 'center', alignItems: 'center', marginRight: 12 }}>
+            <Ionicons name="alert-circle" size={24} color="#ef4444" />
+        </View>
+        <View style={{ flex: 1 }}>
+            <Text style={{ fontSize: 16, fontWeight: '900', color: '#1e293b' }}>{props.text1}</Text>
+            {props.text2 && <Text style={{ fontSize: 13, color: '#64748b', marginTop: 2, fontWeight: '600' }}>{props.text2}</Text>}
+        </View>
+    </View>
+  ),
+  info: (props: any) => (
+    <View style={{ width: '95%', backgroundColor: '#fff', borderRadius: 20, padding: 16, flexDirection: 'row', alignItems: 'center', borderLeftWidth: 6, borderLeftColor: '#3b82f6', elevation: 10, shadowColor: '#000', shadowOffset: { width: 0, height: 5 }, shadowOpacity: 0.1, shadowRadius: 10 }}>
+        <View style={{ width: 40, height: 40, borderRadius: 20, backgroundColor: '#3b82f620', justifyContent: 'center', alignItems: 'center', marginRight: 12 }}>
+            <Ionicons name="information-circle" size={24} color="#3b82f6" />
+        </View>
+        <View style={{ flex: 1 }}>
+            <Text style={{ fontSize: 16, fontWeight: '900', color: '#1e293b' }}>{props.text1}</Text>
+            {props.text2 && <Text style={{ fontSize: 13, color: '#64748b', marginTop: 2, fontWeight: '600' }}>{props.text2}</Text>}
+        </View>
+    </View>
+  ),
+  homework: (props: any) => (
+    <View style={{ width: '95%', backgroundColor: '#fff', borderRadius: 24, padding: 0, overflow: 'hidden', elevation: 12, shadowColor: '#f97316', shadowOffset: { width: 0, height: 8 }, shadowOpacity: 0.2, shadowRadius: 15 }}>
+        <LinearGradient colors={['#f97316', '#ea580c']} start={{ x: 0, y: 0 }} end={{ x: 1, y: 0 }} style={{ padding: 16, flexDirection: 'row', alignItems: 'center' }}>
+            <View style={{ width: 44, height: 44, borderRadius: 22, backgroundColor: 'rgba(255,255,255,0.2)', justifyContent: 'center', alignItems: 'center', marginRight: 12 }}>
+                <Ionicons name="book" size={24} color="#fff" />
+            </View>
+            <View style={{ flex: 1 }}>
+                <Text style={{ fontSize: 18, fontWeight: '900', color: '#fff' }}>{props.text1}</Text>
+                <Text style={{ fontSize: 13, color: 'rgba(255,255,255,0.9)', fontWeight: '700' }}>{props.text2}</Text>
+            </View>
+            <Ionicons name="chevron-forward" size={20} color="#fff" />
+        </LinearGradient>
+    </View>
+  ),
+  notice: (props: any) => (
+    <View style={{ width: '95%', backgroundColor: '#fff', borderRadius: 24, padding: 0, overflow: 'hidden', elevation: 12, shadowColor: '#6366f1', shadowOffset: { width: 0, height: 8 }, shadowOpacity: 0.2, shadowRadius: 15 }}>
+        <LinearGradient colors={['#6366f1', '#4f46e5']} start={{ x: 0, y: 0 }} end={{ x: 1, y: 0 }} style={{ padding: 16, flexDirection: 'row', alignItems: 'center' }}>
+            <View style={{ width: 44, height: 44, borderRadius: 22, backgroundColor: 'rgba(255,255,255,0.2)', justifyContent: 'center', alignItems: 'center', marginRight: 12 }}>
+                <Ionicons name="notifications" size={24} color="#fff" />
+            </View>
+            <View style={{ flex: 1 }}>
+                <Text style={{ fontSize: 18, fontWeight: '900', color: '#fff' }}>{props.text1}</Text>
+                <Text style={{ fontSize: 13, color: 'rgba(255,255,255,0.9)', fontWeight: '700' }}>{props.text2}</Text>
+            </View>
+            <Ionicons name="chevron-forward" size={20} color="#fff" />
+        </LinearGradient>
+    </View>
+  ),
   attendance: (props: any) => {
     const { status, teacher_name, date, student_name } = props.props;
     const isPresent = status === 'present';
@@ -192,8 +253,10 @@ function RootLayoutContent() {
       const { data } = (notification as any).request.content;
       
       // Show custom toast for all notifications
+      const toastType = data?.type || 'success';
+      
       Toast.show({
-        type: data?.type === 'attendance' ? 'attendance' : 'success',
+        type: toastType,
         text1: (notification as any).request.content.title || 'Notification',
         text2: (notification as any).request.content.body || '',
         visibilityTime: 6000,

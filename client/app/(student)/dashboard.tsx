@@ -490,6 +490,17 @@ export default function StudentDashboard() {
     const [notifications, setNotifications] = useState<any[]>([]);
     const [showNotifList, setShowNotifList] = useState(false);
 
+    // Load persisted notifications on mount
+    useEffect(() => {
+        const loadPersistedNotifs = async () => {
+            if (studentData?.unique_code) {
+                const saved = await AsyncStorage.getItem(`notifs_${studentData.unique_code}`);
+                if (saved) setNotifications(JSON.parse(saved));
+            }
+        };
+        loadPersistedNotifs();
+    }, [studentData?.unique_code]);
+
     const addNotif = useCallback((notif: any) => {
         // High-quality spring animation for adding
         if (Platform.OS === 'android' && UIManager.setLayoutAnimationEnabledExperimental) {
@@ -503,9 +514,13 @@ export default function StudentDashboard() {
                 time: new Date().toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit' }),
                 ...notif
             };
-            return [newNotif, ...prev];
+            const updated = [newNotif, ...prev].slice(0, 20); // Keep last 20
+            if (studentData?.unique_code) {
+                AsyncStorage.setItem(`notifs_${studentData.unique_code}`, JSON.stringify(updated));
+            }
+            return updated;
         });
-    }, []);
+    }, [studentData?.unique_code]);
 
     const clearAllNotifications = () => {
         // High-quality spring animation for clearing
@@ -517,6 +532,9 @@ export default function StudentDashboard() {
         });
         
         setNotifications([]);
+        if (studentData?.unique_code) {
+            AsyncStorage.removeItem(`notifs_${studentData.unique_code}`);
+        }
         
         // Keep modal open briefly so student sees the empty state animation
         setTimeout(() => {
@@ -1014,13 +1032,6 @@ export default function StudentDashboard() {
             socket.off('fee_payment_received');
         };
     }, [socket, studentData, addNotif]);
-
-    // 🟢 ISOLATION FIX: Clear notifications when student ID changes (e.g., account switch)
-    useEffect(() => {
-        if (studentData?.id) {
-            setNotifications([]);
-        }
-    }, [studentData?.id]);
 
     const loadInitialData = async () => {
         // Only show full-screen loader if we don't have any data yet

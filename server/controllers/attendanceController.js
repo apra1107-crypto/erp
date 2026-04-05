@@ -96,7 +96,10 @@ const takeAttendance = async (req, res) => {
             stats: { total: totalStudents, present: presentCount, absent: absentCount } 
         });
 
-        // 1. Instant Push Notifications (Background dispatch)
+        // --- Post-response Background Tasks (Push, Socket and Stats) ---
+        (async () => {
+            try {
+                // 1. Instant Push Notifications (Background dispatch)
                 sendAttendanceNotifications(attendance, date, teacherName);
                 pool.query('UPDATE attendance_logs SET push_sent_at = NOW() WHERE id = $1', [logId]);
 

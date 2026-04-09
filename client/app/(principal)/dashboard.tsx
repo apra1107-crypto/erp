@@ -77,7 +77,10 @@ export default function PrincipalDashboard() {
   const insets = useSafeAreaInsets();
   const [userData, setUserData] = useState<any>(null);
   const [loading, setLoading] = useState(true);
-  const { socket } = useSocket();
+  const socketData = useSocket();
+  const socket = socketData?.socket;
+  const isConnected = socketData?.isConnected;
+  const lastConnectedAt = socketData?.lastConnectedAt;
   const { isDark, theme, toggleTheme } = useTheme();
 
     useFocusEffect(
@@ -179,7 +182,7 @@ export default function PrincipalDashboard() {
       setTimeout(() => setIsSearchActive(false), 300);
     } else {
       setIsSearchActive(true);
-      searchBarWidth.value = withSpring(SCREEN_WIDTH - 40, { damping: 15 });
+      searchBarWidth.value = withSpring(SCREEN_WIDTH - 100, { damping: 15 });
       searchBarOpacity.value = withTiming(1, { duration: 300 });
     }
   };
@@ -188,18 +191,36 @@ export default function PrincipalDashboard() {
   const [showNotifList, setShowNotifList] = useState(false);
   const clearAllNotifications = () => { LayoutAnimation.configureNext(LayoutAnimation.Presets.spring); setNotifications([]); setShowNotifList(false); };
 
-  // Dedicated Socket Listener for Subscription & Room Joining
-  useEffect(() => {
-    if (!socket || !userData?.id) return;
+  const [routine, setRoutine] = useState<any>(null);
+  const [teachers, setTeachers] = useState<any[]>([]);
+  const studentScrollRef = useRef<ScrollView>(null);
 
-    // Join principal room
-    socket.emit('join_room', `principal-${userData.id}`);
-    console.log(`📡 Principal joined room: principal-${userData.id}`);
+  // CONSOLIDATED SOCKET LOGIC: Handles all real-time events and room management
+  useEffect(() => {
+    if (!socket || !isConnected || !userData?.id) return;
+
+    const instId = userData.id;
+
+    const joinRooms = () => {
+        socket.emit('join_room', `principal-${instId}`);
+        socket.emit('join_room', `sub-sync-${instId}`);
+        checkSubscription(instId);
+    };
+
+    const addNotif = (notif: any) => {
+        LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
+        setNotifications(prev => {
+            if (notif.id && prev.some(n => n.id === notif.id)) return prev;
+            const uniqueId = notif.id || Math.random().toString(36).substr(2, 9);
+            return [{ id: uniqueId, time: new Date().toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit' }), ...notif }, ...prev];
+        });
+    };
 
     const handleSubUpdate = (data: any) => {
-        console.log('Principal Real-time sub update:', data);
         LayoutAnimation.configureNext(LayoutAnimation.Presets.spring);
-        if (data.status) setSubStatus(data.status);
+        if (data.status) {
+            setSubStatus(data.status);
+        }
         if (data.settings) setSubData(data.settings);
         
         if (data.status === 'disabled') {
@@ -209,25 +230,6 @@ export default function PrincipalDashboard() {
         } else if (data.status === 'expired') {
             Toast.show({ type: 'error', text1: 'Expired', text2: 'Subscription expired. Please renew.', position: 'bottom', bottomOffset: 40 });
         }
-    };
-
-    socket.on('subscription_update', handleSubUpdate);
-
-    return () => {
-        socket.off('subscription_update', handleSubUpdate);
-    };
-  }, [socket, socket?.id, userData?.id]);
-
-  useEffect(() => {
-    if (!socket || !userData?.id) return;
-    
-    const addNotif = (notif: any) => {
-        LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
-        setNotifications(prev => {
-            if (notif.id && prev.some(n => n.id === notif.id)) return prev;
-            const uniqueId = notif.id || Math.random().toString(36).substr(2, 9);
-            return [{ id: uniqueId, time: new Date().toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit' }), ...notif }, ...prev];
-        });
     };
 
     const handleAbsentReq = (data: any) => addNotif({ id: `absent_${data.id || Math.random()}`, title: 'Absent Request', message: `New request from Roll ${data.roll_no}`, type: 'request' });
@@ -240,18 +242,23 @@ export default function PrincipalDashboard() {
         type: 'fees' 
     });
 
+    joinRooms();
+    socket.on('connect', joinRooms);
+    socket.on('subscription_update', handleSubUpdate);
     socket.on('absent_request', handleAbsentReq);
     socket.on('teacher_attendance', handleTeacherAtt);
     socket.on('new_notice', handleNewNotice);
     socket.on('fee_payment_received', handleFeePayment);
 
-    return () => { 
-        socket.off('absent_request', handleAbsentReq); 
-        socket.off('teacher_attendance', handleTeacherAtt); 
-        socket.off('new_notice', handleNewNotice); 
+    return () => {
+        socket.off('connect', joinRooms);
+        socket.off('subscription_update', handleSubUpdate);
+        socket.off('absent_request', handleAbsentReq);
+        socket.off('teacher_attendance', handleTeacherAtt);
+        socket.off('new_notice', handleNewNotice);
         socket.off('fee_payment_received', handleFeePayment);
     };
-  }, [socket, userData?.id]);
+  }, [socket, isConnected, lastConnectedAt, userData?.id]);
 
   const [refreshing, setRefreshing] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
@@ -470,7 +477,7 @@ export default function PrincipalDashboard() {
                 else if (item.type === 'event') router.push('/(principal)/academic-calendar'); 
                 else if (item.type === 'revenue') router.push({ pathname: '/(principal)/stats', params: { initialTab: 'revenue' } });
             }} 
-            style={[styles.flashcard, isLocked && item.type !== 'greeting' && { opacity: 0.6 }]} 
+            style={[styles.flashcard]} 
             onPressIn={() => { isInteracting.current = true; }} 
             onPressOut={() => { isInteracting.current = false; }}
         >
@@ -481,11 +488,7 @@ export default function PrincipalDashboard() {
                         <Text style={styles.cardSub}>{item.type === 'revenue' ? "Today's Collection" : subTitle}</Text>
                     </View>
                     <View style={styles.cardIconBg}>
-                        {isLocked && item.type !== 'greeting' ? (
-                            <Ionicons name="lock-closed" size={22} color="#fff" />
-                        ) : (
-                            <Ionicons name={iconName} size={22} color="#fff" />
-                        )}
+                        <Ionicons name={iconName} size={22} color="#fff" />
                     </View>
                 </View>
                 <View style={{ position: 'relative' }}>
@@ -523,7 +526,10 @@ export default function PrincipalDashboard() {
       const token = await AsyncStorage.getItem('principalToken') || await AsyncStorage.getItem('token');
       const res = await axios.get(`${API_ENDPOINTS.SUBSCRIPTION}/${id}/status`, { headers: { Authorization: `Bearer ${token}` } });
       setSubStatus(res.data.status); setSubData(res.data);
-    } catch (e) {}
+    } catch (e) {
+      // FAIL-SAFE: If network fails, lock the dashboard for security
+      setSubStatus('expired');
+    }
   };
 
   const fetchDashboardData = async (forcedId?: number) => {
@@ -614,6 +620,12 @@ export default function PrincipalDashboard() {
         const accountsStr = await AsyncStorage.getItem('savedPrincipalAccounts');
         if (accountsStr) {
             setSavedAccounts(JSON.parse(accountsStr));
+        }
+
+        // RE-ESTABLISH SOCKET LINK ON REFRESH
+        if (socket && profile.id) {
+            socket.emit('join_room', `principal-${profile.id}`);
+            socket.emit('join_room', `sub-sync-${profile.id}`);
         }
         
         await Promise.all([
@@ -756,9 +768,9 @@ export default function PrincipalDashboard() {
     notifText: { fontSize: 13, fontWeight: '600', color: theme.text, marginTop: 1 },
     notifBadgeRed: { position: 'absolute', top: -2, right: -2, width: 10, height: 10, borderRadius: 5, backgroundColor: '#ef4444', borderWidth: 2, borderColor: '#fff' },
     gradientIconBtn: { width: 48, height: 48, borderRadius: 24, justifyContent: 'center', alignItems: 'center', elevation: 6 },
-    animatedSearchBar: { position: 'absolute', top: insets.top + 70, right: 20, height: 52, backgroundColor: theme.card, borderRadius: 25, flexDirection: 'row', alignItems: 'center', paddingHorizontal: 15, zIndex: 100, borderWidth: 1, borderColor: theme.border, elevation: 10 },
+    animatedSearchBar: {position: 'absolute', top: insets.top + 70, right: 20, height: 52, backgroundColor: theme.card, borderRadius: 25, flexDirection: 'row', alignItems: 'center', paddingHorizontal: 15,zIndex: 1000, borderWidth: 1, borderColor: theme.border, elevation: 10 },
     searchInput: { flex: 1, fontSize: 15, color: theme.text, marginLeft: 10 },
-    resultsContainer: { position: 'absolute', top: insets.top + 70, left: 20, right: 20, backgroundColor: theme.card, borderRadius: 15, maxHeight: 350, zIndex: 1000, borderWidth: 1, borderColor: theme.border, elevation: 10 },
+    resultsContainer: { position: 'absolute', top: 65, left: 20, right: 20, backgroundColor: theme.card, borderRadius: 15, maxHeight: 350, zIndex: 1000, borderWidth: 1, borderColor: theme.border, elevation: 10 },
     resultItem: { flexDirection: 'row', alignItems: 'center', padding: 15, borderBottomWidth: 1, borderBottomColor: theme.border },
     resultAvatar: { width: 44, height: 44, borderRadius: 22, backgroundColor: theme.background, marginRight: 15, justifyContent: 'center', alignItems: 'center' },
     avatarImg: { width: 44, height: 44, borderRadius: 22 },
@@ -819,28 +831,7 @@ export default function PrincipalDashboard() {
         <View style={{ position: 'absolute', left: 0, right: 0, top: insets.top + 10, bottom: 10, alignItems: 'center', justifyContent: 'center', zIndex: 100, pointerEvents: 'box-none' }}>
             <TouchableOpacity 
                 onPress={() => {
-                    const expiryFull = subData?.subscription_end_date 
-                        ? new Date(subData.subscription_end_date).toLocaleString('en-IN', { day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit', hour12: true })
-                        : 'Unlimited';
-                    
-                    const takenOnFull = (subData?.subscription_start_date || subData?.created_at)
-                        ? new Date(subData?.subscription_start_date || subData?.created_at).toLocaleString('en-IN', { day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit', hour12: true })
-                        : 'N/A';
-                    
-                    Toast.show({ 
-                        type: 'subscription', 
-                        position: 'bottom',
-                        bottomOffset: insets.bottom + 90,
-                        visibilityTime: 6000,
-                        props: { 
-                            label: visuals.label, 
-                            timeLeft: visuals.timeLeft,
-                            expiryDate: expiryFull,
-                            takenOn: takenOnFull,
-                            color: visuals.color,
-                            monthlyPrice: subData?.monthly_price || 0,
-                        } 
-                    });
+                    router.push('/(principal)/subscription');
                 }} 
                 style={styles.subIndicatorContainer}
             >
@@ -849,153 +840,155 @@ export default function PrincipalDashboard() {
         </View>
 
         <TouchableOpacity 
-            onPress={() => !isLocked && setShowProfileMenu(!showProfileMenu)} 
-            style={[{ marginRight: 5 }, isLocked && { opacity: 0.7 }]}
-            activeOpacity={isLocked ? 1 : 0.7}
+            onPress={() => setShowProfileMenu(!showProfileMenu)} 
+            style={[{ marginRight: 5 }]}
+            activeOpacity={0.7}
         >
             <View style={{ position: 'relative' }}>
                 {profileData?.principal_photo_url ? <Image source={{ uri: getFullImageUrl(profileData.principal_photo_url) || undefined }} style={styles.headerAvatar} /> : <View style={styles.placeholderAvatar}><Text style={styles.avatarText}>{userData?.principal_name?.charAt(0) || 'P'}</Text></View>}
-                {isLocked && (
-                    <View style={{ position: 'absolute', bottom: 0, right: 0, backgroundColor: theme.danger, width: 18, height: 18, borderRadius: 9, justifyContent: 'center', alignItems: 'center', borderWidth: 2, borderColor: theme.background }}>
-                        <Ionicons name="lock-closed" size={10} color="#fff" />
-                    </View>
-                )}
             </View>
         </TouchableOpacity>
       </View>
 
-      {isSearchActive && <Animated.View style={[styles.animatedSearchBar, animatedSearchStyle]}><Ionicons name="search" size={20} color={theme.textLight} /><TextInput style={styles.searchInput} placeholder="Search Student or Teacher..." placeholderTextColor={theme.textLight} value={searchQuery} onChangeText={handleSearch} autoFocus /><TouchableOpacity onPress={toggleSearch}><Ionicons name="close-circle" size={20} color={theme.textLight} /></TouchableOpacity></Animated.View>}
-
-      <View style={{ position: 'relative', marginTop: 10, marginHorizontal: 20, zIndex: 90, flexDirection: 'row', alignItems: 'center', opacity: isSearchActive ? 0 : 1 }}>
-        <TouchableOpacity 
-            style={[styles.notificationBar]} 
-            onPress={() => !isLocked && notifications.length > 0 && setShowNotifList(true)}
-            activeOpacity={isLocked ? 1 : 0.7}
-        >
-            <View style={styles.notifIconCircle}><Ionicons name="notifications" size={18} color="#fff" />{notifications.length > 0 && <View style={styles.notifBadgeRed} />}</View>
-            <View style={{ flex: 1, marginLeft: 12 }}><Text style={styles.notifTitle}>{notifications.length > 0 ? `${notifications.length} New Updates` : 'No updates'}</Text><Text style={styles.notifText} numberOfLines={1}>{notifications.length > 0 ? notifications[0].message : 'Everything caught up'}</Text></View>
-            <Ionicons name="chevron-down" size={16} color={theme.textLight} />
-        </TouchableOpacity>
-        <TouchableOpacity 
-            onPress={() => {
-                if (isLocked) {
-                    Toast.show({ type: 'error', text1: 'Locked', text2: 'Subscription expired', position: 'bottom', bottomOffset: 40 });
-                    return;
-                }
-                toggleSearch();
-            }}
-            activeOpacity={isLocked ? 1 : 0.7}
-        >
-            <LinearGradient colors={['#3b82f6', '#8b5cf6', '#ec4899']} style={[styles.gradientIconBtn]}><Ionicons name="search" size={22} color="#fff" /></LinearGradient>
-        </TouchableOpacity>
-
-        {isLocked && (
-            <View style={{ ...StyleSheet.absoluteFillObject, backgroundColor: isDark ? 'rgba(0,0,0,0.6)' : 'rgba(255,255,255,0.6)', borderRadius: 16, zIndex: 100, justifyContent: 'center', alignItems: 'center' }}>
-                <Ionicons name="lock-closed" size={16} color={theme.danger} />
-            </View>
-        )}
-      </View>
-
-      {showResults && <View style={styles.resultsContainer}>{searchResults.length === 0 ? <Text style={styles.noResults}>No results found</Text> : <FlatList data={searchResults} keyExtractor={(item, index) => item.id.toString() + index} renderItem={({ item }) => <TouchableOpacity style={styles.resultItem} onPress={() => handleCreateResult(item)}><View style={styles.resultAvatar}>{item.photo_url ? <Image source={{ uri: getFullImageUrl(item.photo_url) || undefined }} style={styles.avatarImg} /> : <Ionicons name="person" size={20} color={theme.textLight} />}</View><View><Text style={styles.resultName}>{item.name}</Text><Text style={styles.resultInfo}>{item.type === 'student' ? `Class: ${item.class}-${item.section}` : `Subject: ${item.subject}`}</Text></View><Text style={[styles.typeBadge, { backgroundColor: item.type === 'student' ? theme.primary : theme.secondary }]}>{item.type}</Text></TouchableOpacity>} />}</View>}
-
-      <ScrollView style={styles.content} showsVerticalScrollIndicator={false} refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} colors={[theme.primary]} />} contentContainerStyle={{ paddingBottom: insets.bottom + 40, paddingTop: 10 }}>
-        {/* Flashcards Carousel */}
-        {flashcards && (
-            <View style={{ position: 'relative', marginTop: 5, marginBottom: 15 }}>
-                <Animated.FlatList ref={flatListRef as any} data={flashcardData} renderItem={renderFlashcardItem} horizontal pagingEnabled showsHorizontalScrollIndicator={false} onMomentumScrollEnd={onMomentumScrollEnd} onScroll={scrollHandler} scrollEventThrottle={16} keyExtractor={(item, index) => item.type + index} snapToInterval={SCREEN_WIDTH} decelerationRate="fast" style={{ width: SCREEN_WIDTH }} />
-                <View style={styles.paginationDots}>{flashcardData.map((_, i) => (<AnimatedDot key={i} index={i} />))}</View>
-                
-                {isLocked && (
-                    <View style={{
-                        ...StyleSheet.absoluteFillObject,
-                        backgroundColor: theme.background,
-                        zIndex: 1000,
-                        justifyContent: 'center',
-                        alignItems: 'center',
-                        borderWidth: 1,
-                        borderColor: theme.border,
-                        top: -10,
-                        bottom: -20,
-                        left: -5,
-                        right: -5
-                    }}>
-                        <View style={{ width: 64, height: 64, borderRadius: 32, backgroundColor: theme.danger + '10', justifyContent: 'center', alignItems: 'center' }}>
-                            <Ionicons name="lock-closed" size={36} color={theme.danger} />
-                        </View>
-                        <Text style={{ color: theme.text, fontWeight: '900', marginTop: 15, fontSize: 18 }}>Data Insights Locked</Text>
-                        <Text style={{ color: theme.textLight, fontSize: 13, marginTop: 5, fontWeight: '600' }}>Renew Subscription to View Statistics</Text>
-                    </View>
-                )}
-            </View>
-        )}
-
-        {/* Action Grid */}
-        <View style={styles.actionsContainer}>
-          <View style={styles.actionsBox}>
-            <View style={styles.row}>
-              {(isActionsExpanded ? actions : actions.slice(0, 12)).map((action, index) => {
-                return (
-                  <TouchableOpacity 
-                    key={index} 
-                    style={styles.actionCard} 
-                    onPress={() => router.push(action.path as any)}
-                  >
-                    <View style={[styles.actionIconCircle, { backgroundColor: isDark ? action.bgDark : action.bgLight }]}>
-                      {(action as any).iconType === 'material' ? (
-                        <MaterialCommunityIcons name={action.icon as any} size={24} color={action.color} />
-                      ) : (
-                        <Ionicons name={action.icon as any} size={24} color={action.color} />
-                      )}
-                    </View>
-                    <Text style={styles.actionText}>{action.title}</Text>
-                  </TouchableOpacity>
-                );
-              })}
-            </View>
-            <TouchableOpacity 
-                hitSlop={{ top: 15, bottom: 15, left: 15, right: 15 }}
-                style={styles.expandButton} 
-                onPress={() => { LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut); setIsActionsExpanded(!isActionsExpanded); }}
-            >
-                <Ionicons name={isActionsExpanded ? "chevron-up" : "chevron-down"} size={22} color={theme.textLight} />
-            </TouchableOpacity>
-            
-            {/* LARGE LOCK OVERLAY */}
-            {isLocked && (
-                <View style={{
-                    ...StyleSheet.absoluteFillObject,
-                    backgroundColor: isDark ? 'rgba(0,0,0,0.85)' : 'rgba(255,255,255,0.9)',
-                    borderRadius: 22,
-                    justifyContent: 'center',
-                    alignItems: 'center',
-                    zIndex: 1000,
-                    borderWidth: 1,
-                    borderColor: theme.danger + '40'
-                }}>
-                    <View style={{
-                        width: 60,
-                        height: 60,
-                        borderRadius: 30,
-                        backgroundColor: theme.danger + '15',
-                        justifyContent: 'center',
-                        alignItems: 'center',
-                        marginBottom: 12
-                    }}>
-                        <Ionicons name="lock-closed" size={32} color={theme.danger} />
-                    </View>
-                    <Text style={{ color: theme.text, fontWeight: '900', fontSize: 16 }}>Actions Locked</Text>
-                    <Text style={{ color: theme.textLight, fontSize: 12, marginTop: 4, fontWeight: '600' }}>Renew Subscription to Access</Text>
-                    <TouchableOpacity 
-                        onPress={() => Toast.show({ type: 'error', text1: 'Renewal Required', text2: 'Please renew from the web dashboard', position: 'bottom', bottomOffset: 40 })}
-                        style={{ marginTop: 15, paddingHorizontal: 20, paddingVertical: 8, borderRadius: 12, backgroundColor: theme.danger }}
-                    >
-                        <Text style={{ color: '#fff', fontWeight: '800', fontSize: 13 }}>GET ACCESS</Text>
+      <View style={{ flex: 1, position: 'relative' }}>
+        <View style={{ position: 'relative', marginTop: 10, marginHorizontal: 20, zIndex: 90, flexDirection: 'row', alignItems: 'center' }}>
+            {isSearchActive ? (
+                <Animated.View style={[styles.animatedSearchBar, animatedSearchStyle, { marginRight: 10 }]}>
+                    <Ionicons name="search" size={20} color={theme.textLight} />
+                    <TextInput style={styles.searchInput} placeholder="Search Student or Teacher..." placeholderTextColor={theme.textLight} value={searchQuery} onChangeText={handleSearch} autoFocus />
+                    <TouchableOpacity onPress={toggleSearch}>
+                        <Ionicons name="close-circle" size={20} color={theme.textLight} />
                     </TouchableOpacity>
+                </Animated.View>) : (
+                <TouchableOpacity 
+                    style={[styles.notificationBar]} 
+                    onPress={() => notifications.length > 0 && setShowNotifList(true)}
+                    activeOpacity={0.7}
+                >
+                    <View style={styles.notifIconCircle}><Ionicons name="notifications" size={18} color="#fff" />{notifications.length > 0 && <View style={styles.notifBadgeRed} />}</View>
+                    <View style={{ flex: 1, marginLeft: 12 }}><Text style={styles.notifTitle}>{notifications.length > 0 ? `${notifications.length} New Updates` : 'No updates'}</Text><Text style={styles.notifText} numberOfLines={1}>{notifications.length > 0 ? notifications[0].message : 'Everything caught up'}</Text></View>
+                    <Ionicons name="chevron-down" size={16} color={theme.textLight} />
+                </TouchableOpacity>
+            )}
+            
+            <TouchableOpacity 
+                onPress={() => {
+                    if (isLocked) {
+                        Toast.show({ type: 'error', text1: 'Locked', text2: 'Subscription expired', position: 'bottom', bottomOffset: 40 });
+                        return;
+                    }
+                    toggleSearch();
+                }}
+                activeOpacity={isLocked ? 1 : 0.7}
+            >
+                <LinearGradient colors={['#3b82f6', '#8b5cf6', '#ec4899']} style={[styles.gradientIconBtn]}>
+                    <Ionicons name={isSearchActive ? "close" : "search"} size={22} color="#fff" />
+                </LinearGradient>
+            </TouchableOpacity>
+        </View>
+
+        {showResults && <View style={styles.resultsContainer}>{searchResults.length === 0 ? <Text style={styles.noResults}>No results found</Text> : <FlatList data={searchResults} keyExtractor={(item, index) => item.id.toString() + index} renderItem={({ item }) => <TouchableOpacity style={styles.resultItem} onPress={() => handleCreateResult(item)}><View style={styles.resultAvatar}>{item.photo_url ? <Image source={{ uri: getFullImageUrl(item.photo_url) || undefined }} style={styles.avatarImg} /> : <Ionicons name="person" size={20} color={theme.textLight} />}</View><View><Text style={styles.resultName}>{item.name}</Text><Text style={styles.resultInfo}>{item.type === 'student' ? `Class: ${item.class}-${item.section}` : `Subject: ${item.subject}`}</Text></View><Text style={[styles.typeBadge, { backgroundColor: item.type === 'student' ? theme.primary : theme.secondary }]}>{item.type}</Text></TouchableOpacity>} />}</View>}
+
+        <ScrollView style={styles.content} showsVerticalScrollIndicator={false} refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} colors={[theme.primary]} />} contentContainerStyle={{ paddingBottom: insets.bottom + 40, paddingTop: 10 }}>
+            {/* Flashcards Carousel */}
+            {flashcards && (
+                <View style={{ position: 'relative', marginTop: 5, marginBottom: 15 }}>
+                    <Animated.FlatList 
+                        ref={flatListRef as any} 
+                        data={flashcardData} 
+                        renderItem={renderFlashcardItem} 
+                        horizontal 
+                        pagingEnabled 
+                        showsHorizontalScrollIndicator={false} 
+                        onMomentumScrollEnd={onMomentumScrollEnd} 
+                        onScroll={scrollHandler} 
+                        scrollEventThrottle={16} 
+                        keyExtractor={(item, index) => item.type + index} 
+                        snapToInterval={SCREEN_WIDTH} 
+                        decelerationRate="fast" 
+                        style={{ width: SCREEN_WIDTH }} 
+                        extraData={isLocked}
+                    />
+                    <View style={styles.paginationDots}>{flashcardData.map((_, i) => (<AnimatedDot key={i} index={i} />))}</View>
                 </View>
             )}
-          </View>
-        </View>
-      </ScrollView>
+
+            {/* Action Grid */}
+            <View style={styles.actionsContainer}>
+                <View style={styles.actionsBox}>
+                    <View style={styles.row}>
+                        {(isActionsExpanded ? actions : actions.slice(0, 12)).map((action, index) => {
+                            return (
+                                <TouchableOpacity 
+                                    key={index} 
+                                    style={styles.actionCard} 
+                                    onPress={() => router.push(action.path as any)}
+                                >
+                                    <View style={[styles.actionIconCircle, { backgroundColor: isDark ? action.bgDark : action.bgLight }]}>
+                                        {(action as any).iconType === 'material' ? (
+                                            <MaterialCommunityIcons name={action.icon as any} size={24} color={action.color} />
+                                        ) : (
+                                            <Ionicons name={action.icon as any} size={24} color={action.color} />
+                                        )}
+                                    </View>
+                                    <Text style={styles.actionText}>{action.title}</Text>
+                                </TouchableOpacity>
+                            );
+                        })}
+                    </View>
+                    <TouchableOpacity 
+                        hitSlop={{ top: 15, bottom: 15, left: 15, right: 15 }}
+                        style={styles.expandButton} 
+                        onPress={() => { LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut); setIsActionsExpanded(!isActionsExpanded); }}
+                    >
+                        <Ionicons name={isActionsExpanded ? "chevron-up" : "chevron-down"} size={22} color={theme.textLight} />
+                    </TouchableOpacity>
+                </View>
+            </View>
+        </ScrollView>
+
+        {isLocked && (
+            <View style={{
+                ...StyleSheet.absoluteFillObject,
+                backgroundColor: '#000',
+                zIndex: 1000,
+                justifyContent: 'center',
+                alignItems: 'center',
+                top: 0
+            }}>
+                <View style={{ 
+                    width: 80, 
+                    height: 80, 
+                    borderRadius: 40, 
+                    backgroundColor: '#1a1a1a', 
+                    justifyContent: 'center', 
+                    alignItems: 'center',
+                    borderWidth: 1,
+                    borderColor: '#333',
+                    marginBottom: 20
+                }}>
+                    <Ionicons name="lock-closed" size={40} color={theme.danger} />
+                </View>
+                <Text style={{ color: '#fff', fontSize: 20, fontWeight: '900', letterSpacing: 1 }}>DASHBOARD LOCKED</Text>
+                <Text style={{ color: '#666', fontSize: 13, marginTop: 8, fontWeight: '600' }}>Subscription Expired</Text>
+                
+                <TouchableOpacity 
+                    onPress={() => router.push('/(principal)/subscription')}
+                    style={{ 
+                        marginTop: 30, 
+                        paddingHorizontal: 25, 
+                        paddingVertical: 12, 
+                        borderRadius: 15, 
+                        backgroundColor: theme.danger + '20',
+                        borderWidth: 1,
+                        borderColor: theme.danger + '40'
+                    }}
+                >
+                    <Text style={{ color: theme.danger, fontWeight: '800', fontSize: 14 }}>RENEW SUBSCRIPTION</Text>
+                </TouchableOpacity>
+            </View>
+        )}
+      </View>
 
       {/* Profile Menu with Session Management Restore */}
       <Modal visible={showProfileMenu} transparent animationType="fade" onRequestClose={() => setShowProfileMenu(false)}>

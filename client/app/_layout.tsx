@@ -302,6 +302,19 @@ export const toastConfig = {
         </View>
     </View>
   ),
+  one_time_fee: (props: any) => (
+    <View style={{ width: '95%', backgroundColor: '#fff', borderRadius: 20, padding: 16, flexDirection: 'row', alignItems: 'center', borderLeftWidth: 6, borderLeftColor: '#f59e0b', elevation: 10, shadowColor: '#000', shadowOffset: { width: 0, height: 5 }, shadowOpacity: 0.1, shadowRadius: 10 }}>
+        <TouchableOpacity style={{ flexDirection: 'row', alignItems: 'center', flex: 1 }} activeOpacity={0.9} onPress={() => props.onPress ? props.onPress() : (props.props?.onPress ? props.props.onPress() : null)}>
+            <View style={{ width: 40, height: 40, borderRadius: 20, backgroundColor: '#f59e0b20', justifyContent: 'center', alignItems: 'center', marginRight: 12 }}>
+                <Ionicons name="flash" size={22} color="#f59e0b" />
+            </View>
+            <View style={{ flex: 1 }}>
+                <Text style={{ fontSize: 16, fontWeight: '900', color: '#1e293b' }}>{props.text1}</Text>
+                {props.text2 && <Text style={{ fontSize: 13, color: '#64748b', marginTop: 2, fontWeight: '600' }}>{props.text2}</Text>}
+            </View>
+        </TouchableOpacity>
+    </View>
+  ),
 };
 
 function RootLayoutContent() {
@@ -326,7 +339,7 @@ function RootLayoutContent() {
       const toastType = data?.type || 'success';
       
       // PERSISTENCE FIX: Save important notifications to history box immediately
-      if (['attendance', 'homework', 'notice', 'admit-card', 'RESULT_PUBLISHED', 'fee_payment', 'monthly_fee'].includes(toastType)) {
+      if (['attendance', 'homework', 'notice', 'admit-card', 'RESULT_PUBLISHED', 'fee_payment', 'monthly_fee', 'one_time_fee'].includes(toastType)) {
         (async () => {
           try {
             const studentStr = await AsyncStorage.getItem('studentData');

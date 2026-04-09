@@ -25,6 +25,7 @@ import * as Sharing from 'expo-sharing';
 import * as FileSystem from 'expo-file-system/legacy';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { API_ENDPOINTS, BASE_URL } from '../../constants/Config';
+import { getFullImageUrl } from '../../utils/imageHelper';
 import { useNavigation } from 'expo-router';
 import Toast from 'react-native-toast-message';
 import { useTheme } from '../../context/ThemeContext';
@@ -552,12 +553,6 @@ const AdmitCardScreen = () => {
         const m = (date.getMonth() + 1).toString().padStart(2, '0');
         const y = date.getFullYear();
         return `${d}-${m}-${y}`;
-    };
-
-    const getFullImageUrl = (url: string | null | undefined): string | null => {
-        if (!url) return null;
-        if (url.startsWith('http')) return url;
-        return `${BASE_URL}${url.startsWith('/') ? '' : '/'}${url}`;
     };
 
     const toBase64 = async (url: string | null | undefined) => {

@@ -13,8 +13,14 @@ import DateTimePicker from '@react-native-community/datetimepicker';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useTheme } from '../../context/ThemeContext';
 import { API_ENDPOINTS } from '../../constants/Config';
+import { getFullImageUrl } from '../../utils/imageHelper';
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
+
+const months = [
+    "January", "February", "March", "April", "May", "June",
+    "July", "August", "September", "October", "November", "December"
+];
 
 type TabType = 'students' | 'teachers' | 'revenue';
 
@@ -43,6 +49,7 @@ export default function PrincipalStats() {
     const [showRevenueDatePicker, setShowRevenueDatePicker] = useState(false);
     const [revenueSelectedDate, setRevenueSelectedDate] = useState(new Date());
     const [revenueStudents, setRevenueStudents] = useState<any[]>([]);
+    const [advancePayments, setAdvancePayments] = useState<any[]>([]);
     const [revenueSummary, setRevenueSummary] = useState({ monthlyTotal: 0, monthName: '' });
     const [loadingRevenueStudents, setLoadingRevenueStudents] = useState(false);
     const [revenueType, setRevenueType] = useState<'monthly' | 'onetime'>('monthly');
@@ -114,8 +121,11 @@ export default function PrincipalStats() {
             const activeSessionId = storedSessionId || userData?.current_session_id;
 
             const dateStr = revenueSelectedDate.toISOString().split('T')[0];
+            const targetMonth = selectedDate.getMonth() + 1;
+            const targetYear = selectedDate.getFullYear();
+
             const response = await axios.get(
-                `${API_ENDPOINTS.PRINCIPAL}/daily-revenue-details?date=${dateStr}&type=${revenueType}`,
+                `${API_ENDPOINTS.PRINCIPAL}/daily-revenue-details?date=${dateStr}&type=${revenueType}&month=${targetMonth}&year=${targetYear}`,
                 { 
                     headers: { 
                         Authorization: `Bearer ${token}`,
@@ -126,12 +136,14 @@ export default function PrincipalStats() {
             
             if (response.data.payments) {
                 setRevenueStudents(response.data.payments);
+                setAdvancePayments(response.data.advancePayments || []);
                 setRevenueSummary({
                     monthlyTotal: response.data.monthlyTotal,
                     monthName: response.data.monthName
                 });
             } else {
                 setRevenueStudents(response.data);
+                setAdvancePayments([]);
             }
         } catch (error) {
             console.error('Error fetching daily revenue:', error);
@@ -590,8 +602,6 @@ export default function PrincipalStats() {
         const totalCollected = (rev.monthly?.collected || 0) + (rev.oneTime?.collected || 0);
         const totalRemaining = totalExpected - totalCollected;
 
-        const months = ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"];
-
         return (
             <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={{ paddingBottom: insets.bottom + 60 }}>
                 <View style={{ paddingHorizontal: 20, paddingTop: 20 }}>
@@ -603,7 +613,19 @@ export default function PrincipalStats() {
                     activeOpacity={0.9} 
                     onPress={() => {
                         setRevenueType('monthly');
-                        setRevenueSelectedDate(new Date());
+                        
+                        const now = new Date();
+                        const isCurrentMonth = 
+                            selectedDate.getMonth() === now.getMonth() && 
+                            selectedDate.getFullYear() === now.getFullYear();
+                        
+                        // Default to today if viewing current month, otherwise 1st of the month
+                        if (isCurrentMonth) {
+                            setRevenueSelectedDate(now);
+                        } else {
+                            setRevenueSelectedDate(new Date(selectedDate.getFullYear(), selectedDate.getMonth(), 1));
+                        }
+                        
                         setRevenueModalVisible(true);
                     }}
                 >
@@ -717,20 +739,20 @@ export default function PrincipalStats() {
                         <View>
                             <View style={styles.revenueRow}>
                                 <Text style={{ color: theme.text, fontWeight: '700', fontSize: 14 }}>Monthly Tuition Progress</Text>
-                                <Text style={{ color: theme.primary, fontWeight: '800' }}>{Math.round((rev.monthly.collected / rev.monthly.expected) * 100) || 0}%</Text>
+                                <Text style={{ color: theme.primary, fontWeight: '800' }}>{rev.monthly.expected > 0 ? Math.round((rev.monthly.collected / rev.monthly.expected) * 100) : 0}%</Text>
                             </View>
                             <View style={styles.progressBar}>
-                                <View style={[styles.progressFill, { width: `${(rev.monthly.collected / rev.monthly.expected) * 100}%`, backgroundColor: '#3b82f6' }]} />
+                                <View style={[styles.progressFill, { width: `${rev.monthly.expected > 0 ? (rev.monthly.collected / rev.monthly.expected) * 100 : 0}%`, backgroundColor: '#3b82f6' }]} />
                             </View>
                         </View>
 
                         <View>
                             <View style={styles.revenueRow}>
                                 <Text style={{ color: theme.text, fontWeight: '700', fontSize: 14 }}>One-Time Campaign Progress</Text>
-                                <Text style={{ color: '#ec4899', fontWeight: '800' }}>{Math.round((rev.oneTime.collected / rev.oneTime.expected) * 100) || 0}%</Text>
+                                <Text style={{ color: '#ec4899', fontWeight: '800' }}>{rev.oneTime.expected > 0 ? Math.round((rev.oneTime.collected / rev.oneTime.expected) * 100) : 0}%</Text>
                             </View>
                             <View style={styles.progressBar}>
-                                <View style={[styles.progressFill, { width: `${(rev.oneTime.collected / rev.oneTime.expected) * 100}%`, backgroundColor: '#ec4899' }]} />
+                                <View style={[styles.progressFill, { width: `${rev.oneTime.expected > 0 ? (rev.oneTime.collected / rev.oneTime.expected) * 100 : 0}%`, backgroundColor: '#ec4899' }]} />
                             </View>
                         </View>
                     </View>
@@ -800,7 +822,7 @@ export default function PrincipalStats() {
                                 teacherList.map((teacher: any) => (
                                     <View key={teacher.id} style={styles.studentItem}>
                                         {teacher.photo_url ? (
-                                            <Image source={{ uri: teacher.photo_url }} style={{ width: 40, height: 40, borderRadius: 20, marginRight: 12 }} />
+                                            <Image source={{ uri: getFullImageUrl(teacher.photo_url) ?? undefined }} style={{ width: 40, height: 40, borderRadius: 20, marginRight: 12 }} />
                                         ) : (
                                             <View style={{ width: 40, height: 40, borderRadius: 20, backgroundColor: theme.background, justifyContent: 'center', alignItems: 'center', marginRight: 12, borderWidth: 1, borderColor: theme.border }}>
                                                 <Ionicons name="person" size={20} color={theme.textLight} />
@@ -953,7 +975,7 @@ export default function PrincipalStats() {
                                             <Text style={styles.rollText}>{item.roll_no}</Text>
                                         </View>
                                         {item.photo_url ? (
-                                            <Image source={{ uri: item.photo_url }} style={{ width: 40, height: 40, borderRadius: 20, marginRight: 12 }} />
+                                            <Image source={{ uri: getFullImageUrl(item.photo_url) ?? undefined }} style={{ width: 40, height: 40, borderRadius: 20, marginRight: 12 }} />
                                         ) : (
                                             <View style={{ width: 40, height: 40, borderRadius: 20, backgroundColor: theme.background, justifyContent: 'center', alignItems: 'center', marginRight: 12, borderWidth: 1, borderColor: theme.border }}>
                                                 <Ionicons name="person" size={20} color={theme.textLight} />
@@ -995,21 +1017,66 @@ export default function PrincipalStats() {
                             </TouchableOpacity>
                         </View>
 
-                        {/* Date Switcher Replacement: Single Clickable Calendar Picker */}
+                        {/* 1. ADVANCE COLLECTIONS SECTION (Independent of Date Picker) */}
+                        {!loadingRevenueStudents && advancePayments.length > 0 && (
+                            <View style={{ marginBottom: 15 }}>
+                                <View style={{ paddingHorizontal: 20, marginBottom: 10, flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+                                    <View style={{ paddingHorizontal: 8, paddingVertical: 2, borderRadius: 6, backgroundColor: '#E91E63' }}>
+                                        <Text style={{ fontSize: 9, fontWeight: '900', color: '#fff' }}>ADVANCE</Text>
+                                    </View>
+                                    <Text style={{ fontSize: 14, fontWeight: '800', color: theme.text }}>Received before {months[selectedDate.getMonth()]}</Text>
+                                </View>
+                                <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ paddingLeft: 20, paddingRight: 10 }}>
+                                    {advancePayments.map((item, idx) => (
+                                        <View key={idx} style={{ 
+                                            backgroundColor: theme.card, 
+                                            borderWidth: 1, 
+                                            borderColor: theme.border, 
+                                            padding: 12, 
+                                            borderRadius: 18, 
+                                            marginRight: 10,
+                                            width: 180,
+                                            flexDirection: 'row',
+                                            alignItems: 'center',
+                                            gap: 10
+                                        }}>
+                                            <View style={{ width: 34, height: 34, borderRadius: 17, backgroundColor: theme.primary + '15', justifyContent: 'center', alignItems: 'center', overflow: 'hidden' }}>
+                                                {item.photo_url ? (
+                                                    <Image source={{ uri: getFullImageUrl(item.photo_url) ?? undefined }} style={{ width: '100%', height: '100%' }} />
+                                                ) : (
+                                                    <Ionicons name="person" size={16} color={theme.primary} />
+                                                )}
+                                            </View>
+                                            <View style={{ flex: 1 }}>
+                                                <Text style={{ fontSize: 13, fontWeight: '700', color: theme.text }} numberOfLines={1}>{item.name}</Text>
+                                                <Text style={{ fontSize: 10, color: theme.success, fontWeight: '800' }}>₹{parseFloat(item.amount).toLocaleString()}</Text>
+                                                <Text style={{ fontSize: 8, color: theme.textLight }}>Paid on {new Date(item.paid_at).toLocaleDateString('en-IN', { day: '2-digit', month: 'short' })}</Text>
+                                            </View>
+                                        </View>
+                                    ))}
+                                </ScrollView>
+                                <View style={{ height: 1, backgroundColor: theme.border, marginTop: 20, marginHorizontal: 20 }} />
+                            </View>
+                        )}
+
+                        {/* 2. DATE SWITCHER (NOW BELOW ADVANCE) */}
                         <TouchableOpacity 
                             style={[styles.monthSelector, { marginVertical: 10, justifyContent: 'center' }]}
                             onPress={() => setShowRevenueDatePicker(true)}
                         >
                             <Ionicons name="calendar-outline" size={20} color={theme.primary} />
-                            <Text style={[styles.monthText, { marginHorizontal: 12 }]}>
-                                {revenueSelectedDate.toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' })}
-                            </Text>
+                            <View style={{ marginHorizontal: 12, alignItems: 'center' }}>
+                                <Text style={{ fontSize: 10, fontWeight: '800', color: theme.textLight, textTransform: 'uppercase' }}>Daily View</Text>
+                                <Text style={styles.monthText}>
+                                    {revenueSelectedDate.toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' })}
+                                </Text>
+                            </View>
                             <Ionicons name="chevron-down" size={16} color={theme.textLight} />
                         </TouchableOpacity>
 
-                        {/* COLLECTION SUMMARY: Daily vs Monthly */}
+                        {/* COLLECTION SUMMARY: Daily vs Advance vs Monthly */}
                         {!loadingRevenueStudents && (
-                            <View style={{ paddingHorizontal: 20, marginBottom: 20, gap: 10 }}>
+                            <View style={{ paddingHorizontal: 20, marginBottom: 20 }}>
                                 <View style={{ 
                                     backgroundColor: theme.primary + '10', 
                                     padding: 15, 
@@ -1020,18 +1087,29 @@ export default function PrincipalStats() {
                                     borderWidth: 1,
                                     borderColor: theme.primary + '30'
                                 }}>
-                                    <View>
-                                        <Text style={{ fontSize: 10, fontWeight: '900', color: theme.primary, textTransform: 'uppercase', letterSpacing: 0.5 }}>Daily Collection</Text>
-                                        <Text style={{ fontSize: 18, fontWeight: '900', color: theme.text, marginTop: 2 }}>
+                                    <View style={{ flex: 1 }}>
+                                        <Text style={{ fontSize: 9, fontWeight: '900', color: theme.primary, textTransform: 'uppercase', letterSpacing: 0.5 }}>On this day</Text>
+                                        <Text style={{ fontSize: 16, fontWeight: '900', color: theme.text, marginTop: 2 }}>
                                             ₹{revenueStudents.reduce((sum, s) => sum + parseFloat(s.amount || 0), 0).toLocaleString()}
                                         </Text>
                                     </View>
-                                    <View style={{ height: 30, width: 1, backgroundColor: theme.primary + '20' }} />
-                                    <View style={{ alignItems: 'flex-end' }}>
-                                        <Text style={{ fontSize: 10, fontWeight: '900', color: theme.primary, textTransform: 'uppercase', letterSpacing: 0.5 }}>
-                                            Total for {revenueSummary.monthName || 'Month'}
+                                    
+                                    <View style={{ height: 30, width: 1, backgroundColor: theme.primary + '20', marginHorizontal: 10 }} />
+                                    
+                                    <View style={{ flex: 1, alignItems: 'center' }}>
+                                        <Text style={{ fontSize: 9, fontWeight: '900', color: '#E91E63', textTransform: 'uppercase', letterSpacing: 0.5 }}>Advance</Text>
+                                        <Text style={{ fontSize: 16, fontWeight: '900', color: theme.text, marginTop: 2 }}>
+                                            ₹{advancePayments.reduce((sum, s) => sum + parseFloat(s.amount || 0), 0).toLocaleString()}
                                         </Text>
-                                        <Text style={{ fontSize: 18, fontWeight: '900', color: theme.text, marginTop: 2 }}>
+                                    </View>
+
+                                    <View style={{ height: 30, width: 1, backgroundColor: theme.primary + '20', marginHorizontal: 10 }} />
+
+                                    <View style={{ flex: 1, alignItems: 'flex-end' }}>
+                                        <Text style={{ fontSize: 9, fontWeight: '900', color: theme.primary, textTransform: 'uppercase', letterSpacing: 0.5 }}>
+                                            {months[selectedDate.getMonth()]} Total
+                                        </Text>
+                                        <Text style={{ fontSize: 16, fontWeight: '900', color: theme.text, marginTop: 2 }}>
                                             ₹{(revenueSummary.monthlyTotal || 0).toLocaleString()}
                                         </Text>
                                     </View>
@@ -1039,6 +1117,7 @@ export default function PrincipalStats() {
                             </View>
                         )}
 
+                        {/* 3. DAILY LIST SECTION */}
                         {loadingRevenueStudents ? (
                             <ActivityIndicator size="large" color={theme.primary} style={{ marginTop: 50 }} />
                         ) : (
@@ -1052,7 +1131,7 @@ export default function PrincipalStats() {
                                             <Text style={styles.rollText}>{item.roll_no}</Text>
                                         </View>
                                         {item.photo_url ? (
-                                            <Image source={{ uri: item.photo_url }} style={{ width: 40, height: 40, borderRadius: 20, marginRight: 12 }} />
+                                            <Image source={{ uri: getFullImageUrl(item.photo_url) ?? undefined }} style={{ width: 40, height: 40, borderRadius: 20, marginRight: 12 }} />
                                         ) : (
                                             <View style={{ width: 40, height: 40, borderRadius: 20, backgroundColor: theme.background, justifyContent: 'center', alignItems: 'center', marginRight: 12, borderWidth: 1, borderColor: theme.border }}>
                                                 <Ionicons name="person" size={20} color={theme.textLight} />
@@ -1061,7 +1140,7 @@ export default function PrincipalStats() {
                                         <View style={{ flex: 1 }}>
                                             <Text style={styles.studentName}>{item.name}</Text>
                                             <Text style={{ fontSize: 12, color: theme.textLight }}>
-                                                Class {item.class}-{item.section} • {item.fee_type}
+                                                Class {item.class}-{item.section} • {item.fee_type === 'Monthly' && item.month ? `${months[item.month - 1]} ${item.year}` : item.fee_type}
                                             </Text>
                                         </View>
                                         <View style={{ alignItems: 'flex-end' }}>
@@ -1077,7 +1156,7 @@ export default function PrincipalStats() {
                                 ListEmptyComponent={() => (
                                     <View style={{ padding: 40, alignItems: 'center' }}>
                                         <Ionicons name="receipt-outline" size={64} color={theme.border} />
-                                        <Text style={{ color: theme.textLight, marginTop: 15, fontSize: 16 }}>No collections on this date</Text>
+                                        <Text style={{ color: theme.textLight, marginTop: 15, fontSize: 16 }}>No payments on this specific date</Text>
                                     </View>
                                 )}
                             />
@@ -1088,7 +1167,8 @@ export default function PrincipalStats() {
                                 value={revenueSelectedDate}
                                 mode="date"
                                 display="default"
-                                maximumDate={new Date()}
+                                minimumDate={new Date(selectedDate.getFullYear(), selectedDate.getMonth(), 1)}
+                                maximumDate={new Date(selectedDate.getFullYear(), selectedDate.getMonth() + 1, 0)}
                                 onChange={(event, date) => {
                                     setShowRevenueDatePicker(false);
                                     if (date) {

@@ -10,6 +10,7 @@ import DateTimePicker from '@react-native-community/datetimepicker';
 import { Ionicons } from '@expo/vector-icons';
 import { useTheme } from '../../../../context/ThemeContext';
 import { API_ENDPOINTS } from '../../../../constants/Config';
+import { getFullImageUrl } from '../../../../utils/imageHelper';
 import SalaryHistoryBottomSheet from '../../../../components/SalaryHistoryBottomSheet';
 import TeacherAttendanceBottomSheet from '../../../../components/TeacherAttendanceBottomSheet';
 
@@ -336,7 +337,7 @@ export default function TeacherDetails() {
                     <View style={styles.profileCard}>
                         <TouchableOpacity style={styles.avatarWrapper} onPress={isEditing ? pickImage : undefined} activeOpacity={isEditing ? 0.7 : 1}>
                             {(photo || originalData?.photo_url) ? (
-                                <Image source={{ uri: photo ? photo.uri : originalData.photo_url }} style={styles.avatarImg} />
+                                <Image source={{ uri: photo ? photo.uri : (getFullImageUrl(originalData.photo_url) || undefined) }} style={styles.avatarImg} />
                             ) : (
                                 <Ionicons name="person" size={50} color={theme.border} />
                             )}

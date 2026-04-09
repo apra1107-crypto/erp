@@ -1,12 +1,11 @@
 import * as FileSystem from 'expo-file-system/legacy';
 import * as Sharing from 'expo-sharing';
 import { useState, useEffect, useMemo, useCallback, useRef } from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, ActivityIndicator, Image, ScrollView, Modal, TextInput, Dimensions, KeyboardAvoidingView, Platform, StatusBar, LayoutAnimation, RefreshControl, UIManager, FlatList, Pressable, Alert, BackHandler } from 'react-native';
+import { View, Text, StyleSheet, TouchableOpacity, ActivityIndicator, Image, ScrollView, Modal, TextInput, Dimensions, KeyboardAvoidingView, Platform, StatusBar, LayoutAnimation, RefreshControl, UIManager, FlatList, Pressable, Alert, BackHandler, DeviceEventEmitter } from 'react-native';
 
 if (Platform.OS === 'android' && UIManager.setLayoutAnimationEnabledExperimental) {
     UIManager.setLayoutAnimationEnabledExperimental(true);
 }
-
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useRouter, useFocusEffect } from 'expo-router';
 import axios from 'axios';
@@ -20,6 +19,7 @@ import { useTheme } from '../../context/ThemeContext';
 import { useSocket } from '../../context/SocketContext';
 import { API_ENDPOINTS, BASE_URL } from '../../constants/Config';
 import { toastConfig } from '../_layout';
+import { getFullImageUrl } from '../../utils/imageHelper';
 
 const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get('window');
 const API_URL = API_ENDPOINTS.AUTH.STUDENT;
@@ -380,20 +380,32 @@ export default function StudentDashboard() {
             const details = item.data.details;
             const extraCharges = item.data.extra_charges || [];
             const extraTotal = extraCharges.reduce((sum: number, ec: any) => sum + parseFloat(ec.amount || 0), 0);
-            const total = (parseFloat(details?.monthly_fees || 0) + (details?.transport_facility ? parseFloat(details?.transport_fees || 0) : 0) + extraTotal);
+            
+            // Use snapshot if available
+            const isPaid = details?.payment_status === 'paid';
+            const total = isPaid 
+                ? parseFloat(details?.amount_paid || 0) 
+                : (details?.amount_due 
+                    ? parseFloat(details?.amount_due) 
+                    : (parseFloat(details?.monthly_fees || 0) + (details?.transport_facility ? parseFloat(details?.transport_fees || 0) : 0) + extraTotal));
             
             title = "Monthly Fees";
             subTitle = `${monthName} ${item.data.year}`;
             mainText = `₹${total.toLocaleString()}`;
             
             // Build a descriptive breakdown
-            const items = ['Tuition'];
-            if (details?.transport_facility) items.push('Transport');
-            extraCharges.forEach((ec: any) => items.push(ec.reason));
+            const items = [];
+            if (isPaid) {
+                items.push('Confirmed');
+            } else {
+                items.push('Tuition');
+                if (details?.transport_facility) items.push('Transport');
+                extraCharges.forEach((ec: any) => items.push(ec.reason));
+            }
             
-            bottomText = `${details?.payment_status === 'paid' ? 'PAID' : 'PENDING'}: ${items.join(' + ')}`;
+            bottomText = `${isPaid ? 'PAID' : 'PENDING'}: ${items.join(' + ')}`;
             
-            gradientColors = details?.payment_status === 'paid' ? GRADIENTS.homeworkDone : GRADIENTS.fees;
+            gradientColors = isPaid ? GRADIENTS.homeworkDone : GRADIENTS.fees;
             iconName = 'wallet-outline';
         } else if (item.type === 'transport') {
             title = "My Transport";
@@ -490,34 +502,58 @@ export default function StudentDashboard() {
     const [notifications, setNotifications] = useState<any[]>([]);
     const [showNotifList, setShowNotifList] = useState(false);
 
-    // Load persisted notifications on mount
-    useEffect(() => {
-        const loadPersistedNotifs = async () => {
+    // Load persisted notifications
+    const loadPersistedNotifs = useCallback(async () => {
+        try {
             if (studentData?.unique_code) {
                 const saved = await AsyncStorage.getItem(`notifs_${studentData.unique_code}`);
                 if (saved) setNotifications(JSON.parse(saved));
             }
-        };
-        loadPersistedNotifs();
+        } catch (e) {
+            console.error('Error loading notifs:', e);
+        }
     }, [studentData?.unique_code]);
+
+    useEffect(() => {
+        loadPersistedNotifs();
+        
+        // Listen for global notification events (from Push handler in _layout)
+        const sub = DeviceEventEmitter.addListener('notificationReceived', () => {
+            loadPersistedNotifs();
+        });
+        
+        return () => sub.remove();
+    }, [studentData?.unique_code, loadPersistedNotifs]);
+
+    // Stable ref for addNotif to prevent socket listener re-registration
+    const addNotifRef = useRef(addNotif);
+    useEffect(() => {
+        addNotifRef.current = addNotif;
+    }, [addNotif]);
 
     const addNotif = useCallback((notif: any) => {
         // High-quality spring animation for adding
         if (Platform.OS === 'android' && UIManager.setLayoutAnimationEnabledExperimental) {
             UIManager.setLayoutAnimationEnabledExperimental(true);
         }
+        
+        const newNotif = {
+            id: Math.random().toString(36).substr(2, 9),
+            time: new Date().toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit' }),
+            ...notif
+        };
+
         LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
         
         setNotifications(prev => {
-            const newNotif = {
-                id: Math.random().toString(36).substr(2, 9),
-                time: new Date().toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit' }),
-                ...notif
-            };
             const updated = [newNotif, ...prev].slice(0, 20); // Keep last 20
+            
+            // Persist immediately in background
             if (studentData?.unique_code) {
-                AsyncStorage.setItem(`notifs_${studentData.unique_code}`, JSON.stringify(updated));
+                AsyncStorage.setItem(`notifs_${studentData.unique_code}`, JSON.stringify(updated))
+                    .catch(err => console.error('Failed to persist notif:', err));
             }
+            
             return updated;
         });
     }, [studentData?.unique_code]);
@@ -815,11 +851,12 @@ export default function StudentDashboard() {
 
     useFocusEffect(
         useCallback(() => {
+            loadPersistedNotifs();
             if (!studentData) {
                 loadInitialData();
             }
             fetchSessions();
-        }, [studentData])
+        }, [studentData, loadPersistedNotifs])
     );
 
     useEffect(() => {
@@ -907,7 +944,7 @@ export default function StudentDashboard() {
 
         const handleAttendance = (data: any) => {
             const status = data.status === 'present' ? 'PRESENT' : 'ABSENT';
-            addNotif({ 
+            addNotifRef.current({ 
                 title: `Attendance: ${status}`, 
                 message: `Marked by ${data.teacher_name || 'Principal'}`, 
                 type: 'attendance' 
@@ -916,6 +953,7 @@ export default function StudentDashboard() {
                 type: 'success',
                 text1: `Attendance: ${status}`,
                 text2: `Marked by ${data.teacher_name || 'Principal'}`,
+                visibilityTime: 6000,
                 onPress: () => {
                     router.push('/(student)/absent-note');
                     Toast.hide();
@@ -925,15 +963,16 @@ export default function StudentDashboard() {
 
         const handleHomework = (data: any) => {
             const isUpdate = data.isUpdate;
-            addNotif({
+            addNotifRef.current({
                 title: isUpdate ? `HW Updated: ${data.subject}` : `New HW: ${data.subject}`,
                 message: isUpdate ? `${data.teacher_name} updated today's homework` : `${data.teacher_name} added homework for today`,
                 type: 'homework'
             });
             Toast.show({
-                type: 'success',
+                type: 'homework',
                 text1: isUpdate ? `Homework Updated: ${data.subject}` : `New Homework: ${data.subject}`,
                 text2: `By ${data.teacher_name}`,
+                visibilityTime: 6000,
                 onPress: () => {
                     router.push('/(student)/homework');
                     Toast.hide();
@@ -943,15 +982,16 @@ export default function StudentDashboard() {
 
         const handleNotice = (data: any) => {
             const isUpdate = data.isUpdate;
-            addNotif({
+            addNotifRef.current({
                 title: isUpdate ? `Notice Updated: ${data.topic}` : `Notice: ${data.topic}`,
                 message: isUpdate ? `${data.creator_name} updated the notice` : `Posted by ${data.creator_name}`,
                 type: 'notice'
             });
             Toast.show({
-                type: 'info',
+                type: 'notice',
                 text1: isUpdate ? `Notice Updated: ${data.topic}` : `New Notice: ${data.topic}`,
                 text2: isUpdate ? `By ${data.creator_name}` : `By ${data.creator_name}`,
+                visibilityTime: 6000,
                 onPress: () => {
                     router.push('/(student)/notice');
                     Toast.hide();
@@ -960,7 +1000,7 @@ export default function StudentDashboard() {
         };
 
         const handleFeesActivated = (data: any) => {
-            addNotif({
+            addNotifRef.current({
                 title: data.title || 'Fees Published',
                 message: data.message || 'New monthly fees have been published.',
                 type: 'fees'
@@ -978,7 +1018,7 @@ export default function StudentDashboard() {
         };
 
         const handleOneTimeFee = (data: any) => {
-            addNotif({
+            addNotifRef.current({
                 title: data.title || 'New Fee',
                 message: data.message || `A new one-time fee has been published.`,
                 type: 'fees'
@@ -995,13 +1035,72 @@ export default function StudentDashboard() {
             fetchDashboardData();
         };
 
+        const handleAdmitCard = (data: any) => {
+            addNotifRef.current({
+                title: 'Admit Card Published! 🪪',
+                message: `Your admit card for ${data.exam_name} is now available.`,
+                type: 'admit-card'
+            });
+            Toast.show({
+                type: 'admit-card',
+                text1: 'Admit Card Published! 🪪',
+                text2: `Download it from the Admit Card section`,
+                visibilityTime: 6000,
+                onPress: () => {
+                    router.push('/(student)/admit-card');
+                    Toast.hide();
+                }
+            });
+            fetchDashboardData();
+        };
+
+        const handleResultPublished = (data: any) => {
+            addNotifRef.current({
+                title: 'Result Published! 📊',
+                message: `The results for ${data.exam_name} have been published.`,
+                type: 'result'
+            });
+            Toast.show({
+                type: 'result',
+                text1: 'Result Published! 📊',
+                text2: `Check your marksheet in the Results section`,
+                visibilityTime: 6000,
+                onPress: () => {
+                    router.push('/(student)/results');
+                    Toast.hide();
+                }
+            });
+            fetchDashboardData();
+        };
+
+        const handlePayNowEnabled = (data: any) => {
+            addNotifRef.current({
+                title: data.title || 'Online Payment Enabled',
+                message: data.message || `You can now pay your ${data.monthName} fees online.`,
+                type: 'fees'
+            });
+            Toast.show({
+                type: 'info',
+                text1: data.title || 'Online Payment Enabled',
+                text2: data.message || `Pay your ${data.monthName} fees using "Pay Now"`,
+                onPress: () => {
+                    router.push('/(student)/fees');
+                    Toast.hide();
+                }
+            });
+            fetchDashboardData();
+        };
+
         socket.on('attendance_marked', handleAttendance);
         socket.on('new_homework', handleHomework);
         socket.on('new_notice', handleNotice);
         socket.on('monthly_fees_activated', handleFeesActivated);
         socket.on('one_time_fee_published', handleOneTimeFee);
+        socket.on('admit_card_published', handleAdmitCard);
+        socket.on('result_published', handleResultPublished);
+        socket.on('pay_now_enabled', handlePayNowEnabled);
         socket.on('fee_payment_received', (data) => {
-            addNotif({
+            addNotifRef.current({
                 title: data.title || 'Payment Received',
                 message: data.message || 'Your fee payment has been confirmed.',
                 type: 'fees'
@@ -1018,8 +1117,12 @@ export default function StudentDashboard() {
         });
 
         // 🟢 PRODUCTION FIX: Use unique_code for room so notifications work across sessions
-        const identifier = studentData.unique_code || studentData.id;
-        socket.emit('join_room', `student-${identifier}`);
+        const studentIdentifier = studentData.unique_code || studentData.id;
+        if (studentIdentifier) {
+            console.log(`🔌 Joining individual room: student-${studentIdentifier}`);
+            socket.emit('join_room', `student-${studentIdentifier}`);
+        }
+        
         socket.emit('join_room', `students-${studentData.institute_id}`);
         socket.emit('join_room', `${studentData.institute_id}-${studentData.class}-${studentData.section}`);
 
@@ -1029,9 +1132,12 @@ export default function StudentDashboard() {
             socket.off('new_notice', handleNotice);
             socket.off('monthly_fees_activated', handleFeesActivated);
             socket.off('one_time_fee_published', handleOneTimeFee);
+            socket.off('admit_card_published', handleAdmitCard);
+            socket.off('result_published', handleResultPublished);
+            socket.off('pay_now_enabled', handlePayNowEnabled);
             socket.off('fee_payment_received');
         };
-    }, [socket, studentData, addNotif]);
+    }, [socket, studentData?.unique_code, studentData?.id]);
 
     const loadInitialData = async () => {
         // Only show full-screen loader if we don't have any data yet
@@ -1262,7 +1368,7 @@ export default function StudentDashboard() {
             flexDirection: 'row',
             alignItems: 'center',
             justifyContent: 'space-between',
-            paddingLeft: 5,
+            paddingLeft: 0,
             paddingRight: 12,
             paddingTop: insets.top,
             paddingBottom: 10,
@@ -1271,6 +1377,7 @@ export default function StudentDashboard() {
         headerTouchArea: {
             flexDirection: 'row',
             alignItems: 'center',
+            marginLeft: -5,
         },
         headerLogo: { width: 100, height: 45 },
         headerLogoDark: {
@@ -1647,7 +1754,7 @@ export default function StudentDashboard() {
         noRoutineText: { color: theme.textLight, fontSize: 14, fontWeight: '600' },
 
         // Weekly Modal Styles
-        routineModalContent: { backgroundColor: theme.card, borderTopLeftRadius: 35, borderTopRightRadius: 35, height: '90%', padding: 20 },
+        routineModalContent: { backgroundColor: theme.card, borderTopLeftRadius: 35, borderTopRightRadius: 35, height: '90%', padding: 20, position: 'relative' },
         gridScroll: { marginTop: 20 },
         routineGrid: { flexDirection: 'row' },
         gridColumn: { width: 150, marginRight: 15 },
@@ -1655,7 +1762,9 @@ export default function StudentDashboard() {
         gridSlot: { backgroundColor: theme.background, borderRadius: 16, padding: 12, marginBottom: 12, borderWidth: 1, borderColor: theme.border, minHeight: 80, justifyContent: 'center' },
         gridSlotTime: { fontSize: 9, color: theme.textLight, marginBottom: 4, fontWeight: 'bold' },
         gridSlotSubject: { fontSize: 13, fontWeight: '800', color: theme.text },
-        gridSlotTeacher: { fontSize: 10, color: theme.textLight, marginTop: 4 }
+        gridSlotTeacher: { fontSize: 10, color: theme.textLight, marginTop: 4 },
+        routineModalHeader: { marginBottom: 20 },
+        closeModalBtn: { position: 'absolute', top: 15, right: 15, zIndex: 100 },
     }), [theme, isDark, insets]);
 
     if (loading) {
@@ -1679,7 +1788,7 @@ export default function StudentDashboard() {
                     style={styles.headerTouchArea}
                 >
                     {studentData?.institute_logo ? (
-                        <Image source={{ uri: studentData.institute_logo }} style={[styles.headerLogo, isDark && styles.headerLogoDark]} resizeMode="contain" />
+                        <Image source={{ uri: getFullImageUrl(studentData.institute_logo) ?? undefined }} style={[styles.headerLogo, isDark && styles.headerLogoDark]} resizeMode="contain" />
                     ) : (
                         <Image source={require('../../assets/images/react-logo.png')} style={[styles.headerLogo, isDark && styles.headerLogoDark]} resizeMode="contain" />
                     )}
@@ -1730,7 +1839,7 @@ export default function StudentDashboard() {
                 <View style={styles.headerRight}>
                     <TouchableOpacity onPress={() => setShowProfileMenu(true)} style={styles.avatarWrapper}>
                         {studentData?.photo_url ? (
-                            <Image source={{ uri: studentData.photo_url }} style={styles.headerAvatar} />
+                            <Image source={{ uri: getFullImageUrl(studentData.photo_url) ?? undefined }} style={styles.headerAvatar} />
                         ) : (
                             <View style={[styles.placeholderAvatar, { backgroundColor: theme.primary }]}>
                                 <Text style={styles.avatarText}>{studentData?.name?.charAt(0) || 'S'}</Text>
@@ -1896,7 +2005,7 @@ export default function StudentDashboard() {
                                                     <View style={{ flexDirection: 'row', alignItems: 'center', zIndex: 1 }}>
                                                         <View style={{ width: 28, height: 28, borderRadius: 10, backgroundColor: 'rgba(255,255,255,0.3)', justifyContent: 'center', alignItems: 'center', marginRight: 10, overflow: 'hidden' }}>
                                                             {teacherObj?.photo_url ? (
-                                                                <Image source={{ uri: teacherObj.photo_url }} style={{ width: '100%', height: '100%' }} />
+                                                                <Image source={{ uri: getFullImageUrl(teacherObj.photo_url) ?? undefined }} style={{ width: '100%', height: '100%' }} />
                                                             ) : (
                                                                 <Text style={{ color: '#fff', fontSize: 12, fontWeight: '900' }}>
                                                                     {teacherName?.charAt(0) || '?'}
@@ -2072,7 +2181,7 @@ export default function StudentDashboard() {
                     <View style={styles.profileMenu}>
                         <View style={styles.profileHeader}>
                             {studentData?.photo_url ? (
-                                <Image source={{ uri: studentData.photo_url }} style={styles.headerAvatar} />
+                                <Image source={{ uri: getFullImageUrl(studentData.photo_url) ?? undefined }} style={styles.headerAvatar} />
                             ) : (
                                 <View style={[styles.placeholderAvatar, { backgroundColor: theme.primary }]}>
                                     <Text style={styles.avatarText}>{studentData?.name?.charAt(0) || 'S'}</Text>
@@ -2225,7 +2334,7 @@ export default function StudentDashboard() {
                                                     >
                                                         <View style={styles.accAvatarWrapper}>
                                                             {acc.photo_url ? (
-                                                                <Image source={{ uri: acc.photo_url }} style={styles.accAvatar} />
+                                                                <Image source={{ uri: getFullImageUrl(acc.photo_url) ?? undefined }} style={styles.accAvatar} />
                                                             ) : (
                                                                 <View style={[styles.accAvatar, { backgroundColor: theme.primary + '15' }]}>
                                                                     <Text style={[styles.accAvatarInitial, { color: theme.primary }]}>{acc.name[0]}</Text>
@@ -2304,7 +2413,7 @@ export default function StudentDashboard() {
                                                 style={[styles.accItem, { paddingVertical: 15 }]}
                                                 onPress={() => handleSelectInstitute(inst)}
                                             >
-                                                <Image source={{ uri: inst.logo_url }} style={{ width: 40, height: 40, borderRadius: 10 }} resizeMode="contain" />
+                                                <Image source={{ uri: getFullImageUrl(inst.logo_url) || undefined }} style={{ width: 40, height: 40, borderRadius: 10 }} resizeMode="contain" />
                                                 <View style={{ marginLeft: 15, flex: 1 }}>
                                                     <Text style={[styles.accName, { fontSize: 16 }]}>{inst.institute_name}</Text>
                                                     <Text style={styles.accSchool} numberOfLines={1}>{inst.address}</Text>
@@ -2430,17 +2539,23 @@ export default function StudentDashboard() {
                 </KeyboardAvoidingView>
             </Modal>
             {/* WEEKLY ROUTINE MODAL */}
-            <Modal visible={isRoutineModalOpen} animationType="slide" transparent={true}>
+            <Modal 
+                visible={isRoutineModalOpen} 
+                animationType="slide" 
+                transparent={true}
+                onRequestClose={() => setIsRoutineModalOpen(false)}
+            >
                 <View style={styles.modalOverlay}>
                     <View style={styles.routineModalContent}>
-                        <View style={styles.modalHeader}>
+                        <TouchableOpacity onPress={() => setIsRoutineModalOpen(false)} style={styles.closeModalBtn}>
+                            <Ionicons name="close-circle" size={32} color={theme.textLight} />
+                        </TouchableOpacity>
+
+                        <View style={styles.routineModalHeader}>
                             <View>
                                 <Text style={styles.modalTitle}>Weekly Flow</Text>
                                 <Text style={{ color: theme.textLight }}>Class {studentData?.class}-{studentData?.section}</Text>
                             </View>
-                            <TouchableOpacity onPress={() => setIsRoutineModalOpen(false)}>
-                                <Ionicons name="close-circle" size={32} color={theme.textLight} />
-                            </TouchableOpacity>
                         </View>
 
                         <ScrollView showsVerticalScrollIndicator={false} style={{ flex: 1 }}>
@@ -2528,14 +2643,33 @@ export default function StudentDashboard() {
                                 </View>
                             }
                             renderItem={({ item }) => (
-                                <View style={styles.notifItem}>
-                                    <View style={[styles.notifItemDot, { backgroundColor: item.type === 'attendance' ? theme.primary : item.type === 'fees' ? theme.success : '#f59e0b' }]} />
+                                <TouchableOpacity 
+                                    style={styles.notifItem}
+                                    onPress={() => {
+                                        setShowNotifList(false);
+                                        if (item.type === 'result') router.push('/(student)/results');
+                                        else if (item.type === 'admit-card') router.push('/(student)/admit-card');
+                                        else if (item.type === 'homework') router.push('/(student)/homework');
+                                        else if (item.type === 'attendance') router.push('/(student)/absent-note');
+                                        else if (item.type === 'notice') router.push('/(student)/notice');
+                                        else if (item.type === 'fees') router.push('/(student)/fees');
+                                    }}
+                                >
+                                    <View style={[styles.notifItemDot, { 
+                                        backgroundColor: 
+                                            item.type === 'attendance' ? theme.primary : 
+                                            item.type === 'fees' ? theme.success : 
+                                            item.type === 'result' ? '#E91E63' : 
+                                            item.type === 'admit-card' ? '#af52de' : 
+                                            item.type === 'homework' ? '#f97316' : 
+                                            item.type === 'notice' ? '#6366f1' : '#f59e0b' 
+                                    }]} />
                                     <View style={{ flex: 1 }}>
                                         <Text style={styles.notifItemTitle}>{item.title}</Text>
                                         <Text style={styles.notifItemMsg}>{item.message}</Text>
                                     </View>
                                     <Text style={styles.notifItemTime}>{item.time}</Text>
-                                </View>
+                                </TouchableOpacity>
                             )}
                         />
                     </View>

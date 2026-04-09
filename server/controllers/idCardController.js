@@ -53,14 +53,16 @@ const generateIDCardPDFLogic = async (studentIds, instituteId, res) => {
             );
             const students = studentsDataRes.rows;
 
-            const logoBase64 = await getBase64Image(inst.institute_logo?.startsWith('http') ? inst.institute_logo : (inst.institute_logo ? `${process.env.S3_BUCKET_URL}/${inst.institute_logo}` : null));
+            const cleanBucketUrl = process.env.EOS_BUCKET_URL?.endsWith('/') ? process.env.EOS_BUCKET_URL.slice(0, -1) : process.env.EOS_BUCKET_URL;
+            const logoFullUrl = inst.institute_logo?.startsWith('http') ? inst.institute_logo : (inst.institute_logo ? `${cleanBucketUrl}/${inst.institute_logo}` : null);
+            const logoBase64 = await getBase64Image(logoFullUrl);
 
             const optimizedStudents = [];
             for (let i = 0; i < students.length; i += 5) {
                 const chunk = students.slice(i, i + 5);
                 const results = await Promise.all(chunk.map(async (s) => {
                     const rawPhoto = s.photo_url || s.profile_image;
-                    const photoFullUrl = rawPhoto?.startsWith('http') ? rawPhoto : (rawPhoto ? `${process.env.S3_BUCKET_URL}/${rawPhoto}` : null);
+                    const photoFullUrl = rawPhoto?.startsWith('http') ? rawPhoto : (rawPhoto ? `${cleanBucketUrl}/${rawPhoto}` : null);
                     const photoBase64 = photoFullUrl ? await getBase64Image(photoFullUrl) : null;
                     return { ...s, photoBase64 };
                 }));
@@ -174,9 +176,11 @@ const generateIDCardJPGLogic = async (studentIds, instituteId, res) => {
                 if (studentRes.rows.length === 0) throw new Error('Student not found');
                 const s = studentRes.rows[0];
                 
-                const logoBase64 = await getBase64Image(inst.institute_logo?.startsWith('http') ? inst.institute_logo : (inst.institute_logo ? `${process.env.S3_BUCKET_URL}/${inst.institute_logo}` : null));
+                const cleanBucketUrl = process.env.EOS_BUCKET_URL?.endsWith('/') ? process.env.EOS_BUCKET_URL.slice(0, -1) : process.env.EOS_BUCKET_URL;
+                const logoFullUrl = inst.institute_logo?.startsWith('http') ? inst.institute_logo : (inst.institute_logo ? `${cleanBucketUrl}/${inst.institute_logo}` : null);
+                const logoBase64 = await getBase64Image(logoFullUrl);
                 const rawPhoto = s.photo_url || s.profile_image;
-                const photoFullUrl = rawPhoto?.startsWith('http') ? rawPhoto : (rawPhoto ? `${process.env.S3_BUCKET_URL}/${rawPhoto}` : null);
+                const photoFullUrl = rawPhoto?.startsWith('http') ? rawPhoto : (rawPhoto ? `${cleanBucketUrl}/${rawPhoto}` : null);
                 const photoBase64 = photoFullUrl ? await getBase64Image(photoFullUrl) : null;
                 return { s, inst, logoBase64, photoBase64 };
             });
@@ -276,14 +280,15 @@ const generateIDCardJPGLogic = async (studentIds, instituteId, res) => {
             );
             const students = studentsDataRes.rows;
 
-            const logoBase64 = await getBase64Image(inst.institute_logo?.startsWith('http') ? inst.institute_logo : (inst.institute_logo ? `${process.env.S3_BUCKET_URL}/${inst.institute_logo}` : null));
+            const cleanBucketUrl = process.env.EOS_BUCKET_URL?.endsWith('/') ? process.env.EOS_BUCKET_URL.slice(0, -1) : process.env.EOS_BUCKET_URL;
+            const logoBase64 = await getBase64Image(inst.institute_logo?.startsWith('http') ? inst.institute_logo : (inst.institute_logo ? `${cleanBucketUrl}/${inst.institute_logo}` : null));
 
             const browser = await getBrowser();
             page = await browser.newPage();
 
             for (const s of students) {
                 const rawPhoto = s.photo_url || s.profile_image;
-                const photoFullUrl = rawPhoto?.startsWith('http') ? rawPhoto : (rawPhoto ? `${process.env.S3_BUCKET_URL}/${rawPhoto}` : null);
+                const photoFullUrl = rawPhoto?.startsWith('http') ? rawPhoto : (rawPhoto ? `${cleanBucketUrl}/${rawPhoto}` : null);
                 const photoBase64 = photoFullUrl ? await getBase64Image(photoFullUrl) : null;
                 const instAddress = [inst.institute_address, inst.landmark, inst.district, inst.state, inst.pincode].filter(Boolean).join(', ');
 

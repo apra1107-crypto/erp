@@ -59,15 +59,15 @@ const debugPasswordReset = async () => {
       console.log();
     }
 
-    // 4. Check AWS SES configuration
-    console.log('4️⃣ AWS SES Configuration:');
-    console.log(`   AWS_REGION: ${process.env.AWS_REGION ? '✅ SET' : '❌ NOT SET'}`);
-    console.log(`   AWS_ACCESS_KEY_ID: ${process.env.AWS_ACCESS_KEY_ID ? '✅ SET' : '❌ NOT SET'}`);
-    console.log(`   AWS_SECRET_ACCESS_KEY: ${process.env.AWS_SECRET_ACCESS_KEY ? '✅ SET' : '❌ NOT SET'}`);
-    console.log(`   SES_FROM_EMAIL: ${process.env.SES_FROM_EMAIL ? '✅ SET (' + process.env.SES_FROM_EMAIL + ')' : '❌ NOT SET'}\n`);
+    console.log('4️⃣ Cloud Storage (EOS) Configuration:');
+    console.log(`   EOS_REGION: ${process.env.EOS_REGION ? '✅ SET' : '❌ NOT SET'}`);
+    console.log(`   EOS_ACCESS_KEY: ${process.env.EOS_ACCESS_KEY ? '✅ SET' : '❌ NOT SET'}`);
+    console.log(`   EOS_SECRET_KEY: ${process.env.EOS_SECRET_KEY ? '✅ SET' : '❌ NOT SET'}`);
+    console.log(`   EOS_BUCKET: ${process.env.EOS_BUCKET ? '✅ SET' : '❌ NOT SET'}`);
+    console.log(`   EOS_ENDPOINT: ${process.env.EOS_ENDPOINT ? '✅ SET' : '❌ NOT SET'}\n`);
 
-    if (!process.env.AWS_REGION || !process.env.AWS_ACCESS_KEY_ID || !process.env.AWS_SECRET_ACCESS_KEY) {
-      console.log('   ⚠️  AWS credentials are missing! OTP emails will fail.\n');
+    if (!process.env.EOS_REGION || !process.env.EOS_ACCESS_KEY || !process.env.EOS_SECRET_KEY) {
+      console.log('   ⚠️  Cloud storage credentials are missing! Image uploads will fail.\n');
     }
 
     // 5. Check if generateOTP and sendPasswordResetOTP are importable

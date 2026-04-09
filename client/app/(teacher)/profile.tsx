@@ -10,6 +10,7 @@ import { useTheme } from '../../context/ThemeContext';
 import { API_ENDPOINTS } from '../../constants/Config';
 import SalaryHistoryBottomSheet from '../../components/SalaryHistoryBottomSheet';
 import TeacherAttendanceBottomSheet from '../../components/TeacherAttendanceBottomSheet';
+import { getFullImageUrl } from '../../utils/imageHelper';
 
 export default function TeacherProfile() {
     const router = useRouter();
@@ -162,7 +163,7 @@ export default function TeacherProfile() {
                 <View style={styles.profileSection}>
                     <View style={styles.avatarWrapper}>
                         {profile?.photo_url ? (
-                            <Image source={{ uri: profile.photo_url }} style={styles.avatarImg} />
+                            <Image source={{ uri: getFullImageUrl(profile.photo_url) ?? undefined }} style={styles.avatarImg} />
                         ) : (
                             <View style={styles.placeholderAvatar}>
                                 <Text style={styles.avatarInitial}>{profile?.name?.charAt(0) || 'T'}</Text>

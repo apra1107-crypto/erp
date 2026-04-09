@@ -28,6 +28,15 @@ import Toast from 'react-native-toast-message';
 
 const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get('window');
 
+type ExamItem = {
+  id: number;
+  name: string;
+  class_name: string | number;
+  section: string;
+  is_published?: boolean;
+  [key: string]: any;
+};
+
 const ModernToggle = ({ active, onToggle, theme }: { active: boolean, onToggle: () => void, theme: any }) => {
     return (
         <TouchableOpacity 
@@ -65,7 +74,7 @@ export default function ResultsDashboard() {
   const router = useRouter();
   const insets = useSafeAreaInsets();
   const { theme, isDark } = useTheme();
-  const [exams, setExams] = useState([]);
+  const [exams, setExams] = useState<ExamItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
 

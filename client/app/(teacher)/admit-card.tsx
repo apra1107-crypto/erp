@@ -25,6 +25,7 @@ import * as Sharing from 'expo-sharing';
 import { cacheDirectory, writeAsStringAsync } from 'expo-file-system/legacy';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { API_ENDPOINTS, BASE_URL } from '../../constants/Config';
+import { getFullImageUrl } from '../../utils/imageHelper';
 import { useNavigation } from 'expo-router';
 import Toast from 'react-native-toast-message';
 import { useTheme } from '../../context/ThemeContext';

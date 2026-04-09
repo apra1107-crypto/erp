@@ -8,6 +8,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { useTheme } from '../../context/ThemeContext';
 import { API_ENDPOINTS } from '../../constants/Config';
 import { formatDate } from '../../utils/dateFormatter';
+import { getFullImageUrl } from '../../utils/imageHelper';
 
 export default function StudentProfile() {
     const router = useRouter();
@@ -160,7 +161,7 @@ export default function StudentProfile() {
                 <View style={styles.profileCard}>
                     <View style={styles.avatarContainer}>
                         {studentData?.photo_url ? (
-                            <Image source={{ uri: studentData.photo_url }} style={styles.avatar} />
+                            <Image source={{ uri: getFullImageUrl(studentData.photo_url) ?? undefined }} style={styles.avatar} />
                         ) : (
                             <Ionicons name="person" size={60} color={theme.border} />
                         )}

@@ -13,6 +13,7 @@ import Animated, { FadeInUp } from 'react-native-reanimated';
 
 import { useTheme } from '../../../context/ThemeContext';
 import { API_ENDPOINTS, BASE_URL } from '../../../constants/Config';
+import { getFullImageUrl } from '../../../utils/imageHelper';
 import IDCardPreview from '../../../components/IDCardPreview';
 
 const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get('window');
@@ -99,12 +100,6 @@ export default function TeacherIDCardStudentSelection() {
                 Toast.show({ type: 'info', text1: 'Limited Selection', text2: `Selected first ${MAX_SELECTION} students.` });
             }
         }
-    };
-
-    const getFullImageUrl = (url: string | null | undefined): string | null => {
-        if (!url) return null;
-        if (url.startsWith('http')) return url;
-        return `${BASE_URL}${url.startsWith('/') ? '' : '/'}${url}`;
     };
 
     const handleGeneratePDF = async () => {

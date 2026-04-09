@@ -7,7 +7,7 @@ import axios from 'axios';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import Toast from 'react-native-toast-message';
 import Animated, { FadeInRight, FadeOutLeft } from 'react-native-reanimated';
-
+import { getFullImageUrl } from '../../../../utils/imageHelper';
 import { useTheme } from '../../../../context/ThemeContext';
 import { API_ENDPOINTS } from '../../../../constants/Config';
 
@@ -348,7 +348,7 @@ export default function RouteConfiguration() {
                                             style={[styles.studentCard, isCurrent && styles.studentCardActive, isElsewhere && styles.studentCardElsewhere]}
                                             onPress={() => isCurrent ? handleLocalRemove(item.id) : handleLocalAssign(item)}
                                         >
-                                            <Image source={item.photo_url ? { uri: item.photo_url } : require('../../../../assets/images/react-logo.png')} style={styles.studentAvatar} />
+                                            <Image source={item.photo_url ? { uri: getFullImageUrl(item.photo_url) ?? undefined } : require('../../../../assets/images/react-logo.png')} style={styles.studentAvatar} />
                                             <View style={{ flex: 1 }}>
                                                 <Text style={[styles.studentName, { color: theme.text }]}>{item.name}</Text>
                                                 <Text style={styles.studentClass}>Class {item.class}-{item.section}</Text>

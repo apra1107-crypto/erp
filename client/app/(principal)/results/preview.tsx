@@ -7,6 +7,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useTheme } from '../../../context/ThemeContext';
 import { API_ENDPOINTS, BASE_URL } from '../../../constants/Config';
+import { getFullImageUrl } from '../../../utils/imageHelper';
 
 const { width } = Dimensions.get('window');
 
@@ -203,7 +204,7 @@ export default function ReportCardPreview() {
                         {/* Header */}
                         <View style={styles.header}>
                             <View style={styles.instRow}>
-                                {institute.logo_url && <Image source={{ uri: institute.logo_url }} style={styles.logo} />}
+                                {institute.logo_url && <Image source={{ uri: getFullImageUrl(institute.logo_url) ?? undefined }} style={styles.logo} />}
                                 <Text style={styles.instName}>{institute.institute_name}</Text>
                             </View>
                             {institute.affiliation && <Text style={styles.instAffiliation}>{institute.affiliation}</Text>}
@@ -226,7 +227,7 @@ export default function ReportCardPreview() {
                             </View>
                             <View style={styles.photoBox}>
                                 {(student.photo_url || student.profile_image) ? (
-                                    <Image source={{ uri: student.photo_url || student.profile_image }} style={styles.photo} />
+                                    <Image source={{ uri: getFullImageUrl(student.photo_url || student.profile_image) ?? undefined }} style={styles.photo} />
                                 ) : (
                                     <Ionicons name="person" size={40} color="#e2e8f0" />
                                 )}

@@ -9,6 +9,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { useTheme } from '../../context/ThemeContext';
 import { API_ENDPOINTS } from '../../constants/Config';
 import { useSocket } from '../../context/SocketContext';
+import { getFullImageUrl } from '../../utils/imageHelper';
 
 const API_URL = API_ENDPOINTS.AUTH.STUDENT;
 
@@ -330,7 +331,7 @@ export default function StudentLogin() {
         {institutes.map((inst) => (
           <TouchableOpacity key={inst.id} style={styles.listItem} onPress={() => handleSelectInstitute(inst)}>
             <View style={styles.listIcon}>
-              {inst.logo_url ? <Image source={{ uri: inst.logo_url }} style={styles.logoImg} /> : <Ionicons name="business" size={24} color={theme.primary} />}
+              {inst.logo_url ? <Image source={{ uri: getFullImageUrl(inst.logo_url) || undefined }} style={styles.logoImg} /> : <Ionicons name="business" size={24} color={theme.primary} />}
             </View>
             <View style={styles.listContent}>
               <Text style={styles.listTitle}>{inst.institute_name}</Text>
@@ -356,7 +357,7 @@ export default function StudentLogin() {
         {students.map((stud) => (
           <TouchableOpacity key={stud.id} style={styles.listItem} onPress={() => handleSelectStudent(stud)}>
             <View style={styles.listIcon}>
-              {stud.photo_url ? <Image source={{ uri: stud.photo_url }} style={styles.avatar} /> : <Ionicons name="person" size={24} color={theme.primary} />}
+              {stud.photo_url ? <Image source={{ uri: getFullImageUrl(stud.photo_url) ?? undefined }} style={styles.avatar} /> : <Ionicons name="person" size={24} color={theme.primary} />}
             </View>
             <View style={styles.listContent}>
               <Text style={styles.listTitle}>{stud.name}</Text>
@@ -383,7 +384,7 @@ export default function StudentLogin() {
         <View style={styles.profileSection}>
           <View style={styles.avatarWrapper}>
             {selectedStudent?.photo_url ? (
-              <Image source={{ uri: selectedStudent.photo_url }} style={styles.largeAvatar} />
+              <Image source={{ uri: getFullImageUrl(selectedStudent.photo_url) ?? undefined }} style={styles.largeAvatar} />
             ) : (
               <View style={[styles.largeAvatar, { backgroundColor: theme.primary + '10', justifyContent: 'center', alignItems: 'center' }]}>
                 <Ionicons name="person" size={40} color={theme.primary} />

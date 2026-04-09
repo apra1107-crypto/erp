@@ -24,6 +24,7 @@ import { API_ENDPOINTS, BASE_URL } from '../../constants/Config';
 import { useNavigation, useRouter, useLocalSearchParams } from 'expo-router';
 import Toast from 'react-native-toast-message';
 import { useTheme } from '../../context/ThemeContext';
+import { getFullImageUrl } from '../../utils/imageHelper';
 
 const { width } = Dimensions.get('window');
 
@@ -145,12 +146,6 @@ const StudentAdmitCardScreen = () => {
         const m = (date.getMonth() + 1).toString().padStart(2, '0');
         const y = date.getFullYear();
         return `${d}-${m}-${y}`;
-    };
-
-    const getFullImageUrl = (url: string | null | undefined): string | null => {
-        if (!url) return null;
-        if (url.startsWith('http')) return url;
-        return `${BASE_URL}${url.startsWith('/') ? '' : '/'}${url}`;
     };
 
     const toBase64 = async (url: string | null | undefined) => {

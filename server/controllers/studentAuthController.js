@@ -508,8 +508,11 @@ export const getStudentDashboardData = async (req, res) => {
         // 5. Fetch Student's own fee structure and status for current month
         const studentFeeDetailsRes = await pool.query(
             `SELECT s.monthly_fees, s.transport_fees, s.transport_facility, s.admission_date,
-                    (SELECT status FROM student_fees f WHERE f.student_id = s.id AND f.month = $2 AND f.year = $3 AND f.session_id = $4) as payment_status
-             FROM students s WHERE s.id = $1`,
+                    f.status as payment_status, f.amount_paid, f.amount_due
+             FROM students s 
+             LEFT JOIN student_fees f ON f.student_id = s.id 
+                AND f.month = $2 AND f.year = $3 AND f.session_id = $4
+             WHERE s.id = $1`,
             [studentId, currentMonth, currentYear, sessionId]
         );
 
@@ -586,7 +589,7 @@ export const getStudentFeesData = async (req, res) => {
 
         // 2. Get all activated monthly fees for this session
         const activatedMonthsRes = await pool.query(
-            `SELECT month, year FROM monthly_fee_activations 
+            `SELECT month, year, is_pay_now_active FROM monthly_fee_activations 
              WHERE institute_id = $1 AND session_id = $2 AND is_activated = true
              ORDER BY year DESC, month DESC`,
             [instituteId, sessionId]
@@ -623,10 +626,10 @@ export const getStudentFeesData = async (req, res) => {
 
         // 4. Get monthly payment records
         const paymentsRes = await pool.query(
-            `SELECT month, year, status, paid_at, payment_method, transaction_id, collected_by
+            `SELECT month, year, status, paid_at, payment_method, transaction_id, collected_by, amount_paid, amount_due
              FROM student_fees 
              WHERE student_id = $1 AND institute_id = $2 AND session_id = $3
-             ORDER BY paid_at DESC`,
+             ORDER BY year DESC, month DESC`,
             [studentId, instituteId, sessionId]
         );
 
@@ -678,7 +681,7 @@ export const getMyFees = async (req, res) => {
 
         // Get payment records
         const feesRes = await pool.query(
-            `SELECT month, year, status, paid_at 
+            `SELECT month, year, status, paid_at, amount_paid, amount_due 
              FROM student_fees 
              WHERE student_id = $1 AND institute_id = $2 AND session_id = $3
              ORDER BY year DESC, month DESC`,

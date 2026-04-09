@@ -12,6 +12,7 @@ import Toast from 'react-native-toast-message';
 import DateTimePicker from '@react-native-community/datetimepicker';
 import { useTheme } from '../../../context/ThemeContext';
 import { API_ENDPOINTS } from '../../../constants/Config';
+import { getFullImageUrl } from '../../../utils/imageHelper';
 
 const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get('window');
 
@@ -331,7 +332,7 @@ export default function ClassHomework() {
                 {data.map((s, i) => (
                     <View key={i} style={styles.studentItem}>
                         {s.photo_url ? (
-                            <Image source={{ uri: s.photo_url }} style={styles.studentAvatar} />
+                            <Image source={{ uri: getFullImageUrl(s.photo_url) ?? undefined }} style={styles.studentAvatar} />
                         ) : (
                             <View style={[styles.studentAvatar, { backgroundColor: theme.primary + '15', justifyContent: 'center', alignItems: 'center' }]}>
                                 <Text style={{ color: theme.primary, fontWeight: '900' }}>{s.name[0]}</Text>

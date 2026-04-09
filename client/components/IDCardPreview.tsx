@@ -1,6 +1,7 @@
 import React from 'react';
 import { View, Text, StyleSheet, Image, Dimensions } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
+import { getFullImageUrl } from '../utils/imageHelper';
 
 const { width } = Dimensions.get('window');
 const PORTRAIT_WIDTH = width * 0.85;
@@ -29,7 +30,7 @@ export default function IDCardPreview({ student, institute, isDark, template = '
             <LinearGradient colors={['#1e3c72', '#2a5298']} style={styles.classicHeader}>
                 <View style={styles.headerContent}>
                     {institute.logo_url && (
-                        <Image source={{ uri: institute.logo_url }} style={styles.schoolLogo} resizeMode="contain" />
+                        <Image source={{ uri: getFullImageUrl(institute.logo_url) || undefined }} style={styles.schoolLogo} resizeMode="contain" />
                     )}
                     <View style={styles.schoolInfo}>
                         <Text style={styles.schoolName} numberOfLines={2}>{institute.name}</Text>
@@ -38,7 +39,7 @@ export default function IDCardPreview({ student, institute, isDark, template = '
                 </View>
                 <View style={styles.photoContainer}>
                     <Image
-                        source={student.photo_url ? { uri: student.photo_url } : require('../assets/images/react-logo.png')}
+                        source={student.photo_url ? { uri: getFullImageUrl(student.photo_url) ?? undefined } : require('../assets/images/react-logo.png')}
                         style={styles.photo}
                     />
                 </View>
@@ -66,7 +67,7 @@ export default function IDCardPreview({ student, institute, isDark, template = '
             <View style={styles.modernContent}>
                 <View style={styles.modernHeader}>
                     {institute.logo_url && (
-                        <Image source={{ uri: institute.logo_url }} style={styles.modernLogo} />
+                        <Image source={{ uri: getFullImageUrl(institute.logo_url) || undefined }} style={styles.modernLogo} />
                     )}
                     <View style={{ flex: 1 }}>
                         <Text style={styles.modernSchoolName} numberOfLines={2}>{institute.name}</Text>
@@ -76,7 +77,7 @@ export default function IDCardPreview({ student, institute, isDark, template = '
 
                 <View style={styles.modernPhotoRow}>
                     <Image
-                        source={student.photo_url ? { uri: student.photo_url } : require('../assets/images/react-logo.png')}
+                        source={student.photo_url ? { uri: getFullImageUrl(student.photo_url) ?? undefined } : require('../assets/images/react-logo.png')}
                         style={styles.modernPhoto}
                     />
                     <View style={{ marginLeft: 15, justifyContent: 'center' }}>
@@ -103,7 +104,7 @@ export default function IDCardPreview({ student, institute, isDark, template = '
             <View style={styles.elegantBorder}>
                 <View style={{ alignItems: 'center', marginBottom: 10 }}>
                     {institute.logo_url && (
-                        <Image source={{ uri: institute.logo_url }} style={styles.elegantLogo} />
+                        <Image source={{ uri: getFullImageUrl(institute.logo_url) || undefined }} style={styles.elegantLogo} />
                     )}
                     <Text style={styles.elegantSchoolName}>{institute.name}</Text>
                     <Text style={styles.elegantAddress}>{institute.address}</Text>
@@ -112,7 +113,7 @@ export default function IDCardPreview({ student, institute, isDark, template = '
 
                 <View style={{ alignItems: 'center', marginBottom: 15 }}>
                     <Image
-                        source={student.photo_url ? { uri: student.photo_url } : require('../assets/images/react-logo.png')}
+                        source={student.photo_url ? { uri: getFullImageUrl(student.photo_url) ?? undefined } : require('../assets/images/react-logo.png')}
                         style={styles.elegantPhoto}
                     />
                     <Text style={styles.elegantStudentName}>{student.name}</Text>
@@ -133,7 +134,7 @@ export default function IDCardPreview({ student, institute, isDark, template = '
         <View style={[styles.card, styles.proCard, cardStyle]}>
             <View style={styles.proHeader}>
                 <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
-                    {institute.logo_url && <Image source={{ uri: institute.logo_url }} style={styles.proLogo} />}
+                    {institute.logo_url && <Image source={{ uri: getFullImageUrl(institute.logo_url) || undefined }} style={styles.proLogo} />}
                     <View style={{ flex: 1 }}>
                         <Text style={styles.proSchoolName}>{institute.name}</Text>
                         <Text style={styles.proAddress}>{institute.address}</Text>
@@ -143,7 +144,7 @@ export default function IDCardPreview({ student, institute, isDark, template = '
 
             <View style={styles.proBody}>
                 <Image
-                    source={student.photo_url ? { uri: student.photo_url } : require('../assets/images/react-logo.png')}
+                    source={student.photo_url ? { uri: getFullImageUrl(student.photo_url) ?? undefined } : require('../assets/images/react-logo.png')}
                     style={styles.proPhoto}
                 />
                 <View style={{ marginTop: 45, alignItems: 'center' }}>
@@ -175,7 +176,7 @@ export default function IDCardPreview({ student, institute, isDark, template = '
         return (
             <View style={[styles.card, styles.landscapeCard, cardStyle]}>
                 <LinearGradient colors={['#667eea', '#764ba2']} start={{ x: 0, y: 0 }} end={{ x: 1, y: 0 }} style={styles.landHeaderStrip}>
-                    {institute.logo_url ? <Image source={{ uri: institute.logo_url }} style={styles.landInstLogo} /> : <View style={styles.landInstLogoPlaceholder}><Text style={styles.landInstLogoText}>{institute.name?.charAt(0)}</Text></View>}
+                    {institute.logo_url ? <Image source={{ uri: getFullImageUrl(institute.logo_url) || undefined }} style={styles.landInstLogo} /> : <View style={styles.landInstLogoPlaceholder}><Text style={styles.landInstLogoText}>{institute.name?.charAt(0)}</Text></View>}
                     <Text style={styles.landInstName} numberOfLines={1}>{institute.name}</Text>
                 </LinearGradient>
                 
@@ -208,7 +209,7 @@ export default function IDCardPreview({ student, institute, isDark, template = '
 
                     <View style={styles.landRightCol}>
                         <View style={styles.landPhotoBox}>
-                            <Image source={student.photo_url ? { uri: student.photo_url } : require('../assets/images/react-logo.png')} style={styles.landPhotoImg} />
+                            <Image source={student.photo_url ? { uri: getFullImageUrl(student.photo_url) ?? undefined } : require('../assets/images/react-logo.png')} style={styles.landPhotoImg} />
                         </View>
                     </View>
                 </View>

@@ -12,6 +12,7 @@ import Toast from 'react-native-toast-message';
 import { useTheme } from '../../../context/ThemeContext';
 import DateTimePicker from '@react-native-community/datetimepicker';
 import { API_ENDPOINTS } from '../../../constants/Config';
+import { getFullImageUrl } from '@/utils/imageHelper';
 
 const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get('window');
 
@@ -262,7 +263,7 @@ export default function PrincipalClassHomework() {
             <ScrollView style={styles.studentList}>
                 {data.map((s, i) => (
                     <View key={i} style={styles.studentItem}>
-                        {s.photo_url ? <Image source={{ uri: s.photo_url }} style={styles.studentAvatar} /> : <View style={[styles.studentAvatar, { backgroundColor: theme.primary + '15', justifyContent: 'center', alignItems: 'center' }]}><Text style={{ color: theme.primary, fontWeight: '900' }}>{s.name[0]}</Text></View>}
+                        {s.photo_url ? <Image source={{ uri: getFullImageUrl(s.photo_url) ?? undefined }} style={styles.studentAvatar} /> : <View style={[styles.studentAvatar, { backgroundColor: theme.primary + '15', justifyContent: 'center', alignItems: 'center' }]}><Text style={{ color: theme.primary, fontWeight: '900' }}>{s.name[0]}</Text></View>}
                         <View style={styles.studentInfo}><Text style={styles.studentName}>{s.name}</Text><Text style={styles.studentRoll}>Roll No: {s.roll_no}</Text></View>
                         {activeTab === 'tick' && <Text style={styles.doneTime}>{new Date(s.completed_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</Text>}
                     </View>

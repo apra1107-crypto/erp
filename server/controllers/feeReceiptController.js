@@ -73,7 +73,7 @@ export const generateFeeReceiptPDF = async (req, res) => {
 
             // 2. Process Logo
             const rawLogo = institute.logo_url;
-            const logoFullUrl = rawLogo?.startsWith('http') ? rawLogo : (rawLogo ? `${process.env.S3_BUCKET_URL}/${rawLogo}` : null);
+            const logoFullUrl = rawLogo?.startsWith('http') ? rawLogo : (rawLogo ? `${process.env.EOS_BUCKET_URL}/${rawLogo}` : null);
             const logoBase64 = await getBase64Image(logoFullUrl);
 
             // 3. Prepare Formatting

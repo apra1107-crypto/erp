@@ -34,14 +34,27 @@ export const usePushNotifications = (): PushNotificationState => {
                 Notifications.setNotificationHandler({
                     handleNotification: async (notification: any) => {
                         // PRODUCTION UX: Only show banners in foreground for HIGH PRIORITY types
-                        const type = notification.request.content.data?.type;
-                        const isHighPriority = ['attendance', 'homework', 'exam', 'notice'].includes(type);
+                        const data = notification.request.content.data;
+                        const type = data?.type || data?.notificationType;
+                        
+                        const highPriorityTypes = [
+                            'attendance', 
+                            'homework', 
+                            'exam', 
+                            'notice', 
+                            'admit-card', 
+                            'RESULT_PUBLISHED',
+                            'fee_payment',
+                            'monthly_fee'
+                        ];
+
+                        const isHighPriority = highPriorityTypes.includes(type);
 
                         return {
-                            shouldShowAlert: isHighPriority,
+                            shouldShowBanner: true,
+                            shouldShowList: true,
                             shouldPlaySound: true,
                             shouldSetBadge: true,
-                            shouldShowBanner: isHighPriority,
                             priority: Notifications.AndroidNotificationPriority.MAX,
                         };
                     },

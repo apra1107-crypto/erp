@@ -22,6 +22,12 @@ interface FeeReceiptBottomSheetProps {
     } | null;
 }
 
+type ReceiptBreakdownItem = {
+    label?: string;
+    reason?: string;
+    amount: number | string;
+};
+
 const months = [
     "January", "February", "March", "April", "May", "June",
     "July", "August", "September", "October", "November", "December"
@@ -48,7 +54,7 @@ export default function FeeReceiptBottomSheet({ isOpen, onClose, data }: FeeRece
         } catch (error) {}
     };
 
-    const breakage = useMemo(() => {
+    const breakage = useMemo<ReceiptBreakdownItem[]>(() => {
         if (!data?.student) return [];
         if (data.type === 'ONE-TIME' && data.student.breakdown) return data.student.breakdown;
         const items = [{ label: 'Monthly Tuition Fee', amount: parseFloat(data.student.monthly_fees || 0) }];
@@ -69,7 +75,7 @@ export default function FeeReceiptBottomSheet({ isOpen, onClose, data }: FeeRece
         }
     };
 
-    const totalAmount = breakage.reduce((sum, item) => sum + parseFloat(item.amount || 0), 0);
+    const totalAmount = breakage.reduce((sum: number, item: ReceiptBreakdownItem) => sum + parseFloat(String(item.amount || 0)), 0);
     const paidDate = data?.payment?.paid_at ? new Date(data.payment.paid_at) : new Date();
     const formattedDate = paidDate.toLocaleDateString('en-IN', { day: '2-digit', month: 'long', year: 'numeric' });
     const dayName = paidDate.toLocaleDateString('en-IN', { weekday: 'long' });
@@ -124,7 +130,7 @@ export default function FeeReceiptBottomSheet({ isOpen, onClose, data }: FeeRece
         paymentMeta: { gap: 4 },
         metaText: { fontSize: 10, color: '#475569' },
         txId: { backgroundColor: '#f1f5f9', paddingHorizontal: 4, borderRadius: 4, fontWeight: '700' },
-        thankYou: { textAlign: 'right' },
+        thankYou: { alignItems: 'flex-end' },
         compGen: { fontSize: 8, fontWeight: '600', color: '#94a3b8', marginBottom: 4 },
         thankText: { fontSize: 12, fontWeight: '800', color: '#1a1a1a', fontStyle: 'italic' }
     });
@@ -190,10 +196,10 @@ export default function FeeReceiptBottomSheet({ isOpen, onClose, data }: FeeRece
                                     <Text style={[styles.tableHeaderText, { flex: 2 }]}>Description</Text>
                                     <Text style={[styles.tableHeaderText, { flex: 1, textAlign: 'right' }]}>Amount</Text>
                                 </View>
-                                {breakage.map((item, i) => (
+                                {breakage.map((item: ReceiptBreakdownItem, i: number) => (
                                     <View key={i} style={styles.tableRow}>
                                         <Text style={[styles.tableCell, { flex: 2 }]}>{item.reason || item.label}</Text>
-                                        <Text style={[styles.tableCell, { flex: 1, textAlign: 'right' }]}>₹{parseFloat(item.amount).toLocaleString()}</Text>
+                                        <Text style={[styles.tableCell, { flex: 1, textAlign: 'right' }]}>₹{parseFloat(String(item.amount)).toLocaleString()}</Text>
                                     </View>
                                 ))}
                                 <View style={styles.tableFooter}>

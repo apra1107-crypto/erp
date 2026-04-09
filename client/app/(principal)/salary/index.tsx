@@ -8,6 +8,7 @@ import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
 import { useTheme } from '../../../context/ThemeContext';
 import { API_ENDPOINTS } from '../../../constants/Config';
 import Toast from 'react-native-toast-message';
+import { getFullImageUrl } from '@/utils/imageHelper';
 
 const { width } = Dimensions.get('window');
 
@@ -195,7 +196,7 @@ export default function SalaryManagementScreen() {
                         <View key={teacher.id} style={styles.card}>
                             <View style={styles.teacherInfo}>
                                 <Image 
-                                    source={teacher.photo_url ? { uri: teacher.photo_url } : require('../../../assets/images/favicon.png')} 
+                                    source={teacher.photo_url ? { uri: getFullImageUrl(teacher.photo_url)} : require('../../../assets/images/favicon.png')} 
                                     style={styles.avatar} 
                                 />
                                 <View style={{ flex: 1 }}>

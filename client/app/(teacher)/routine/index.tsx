@@ -879,7 +879,7 @@ export default function RoutineManager() {
                     </View>
                 ) : (
                     filteredOverview.map((r, idx) => {
-                        const gradients = [
+                        const gradients: [string, string][] = [
                             ['#6366f1', '#a855f7'],
                             ['#0ea5e9', '#2563eb'],
                             ['#10b981', '#3b82f6'],

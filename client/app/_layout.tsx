@@ -4,7 +4,7 @@ import { SocketProvider } from '../context/SocketContext';
 import { useEffect, useRef } from 'react';
 import { usePushNotifications } from '../hooks/usePushNotifications';
 import Toast from 'react-native-toast-message';
-import { View, Text, Platform, Alert } from 'react-native';
+import { View, Text, Platform, Alert, TouchableOpacity, DeviceEventEmitter } from 'react-native';
 import axios from 'axios';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { API_ENDPOINTS } from '../constants/Config';
@@ -24,16 +24,7 @@ import { LinearGradient } from 'expo-linear-gradient';
 export const toastConfig = {
   subscription: ({ props }: any) => {
     // Define stunning gradient backgrounds and text colors based on status
-    const themes: {
-      [key: string]: {
-        gradient: readonly [string, string, ...string[]];
-        text: string;
-        subText: string;
-        dialText: string;
-        dialSubText: string;
-        borderColor: string;
-      };
-    } = {
+    const themes: any = {
       default: { gradient: ['#475569', '#1e293b'], text: '#FFFFFF', subText: '#cbd5e1', dialText: '#FFFFFF', dialSubText: '#94a3b8', borderColor: '#475569' },
       active: { gradient: ['#0d9488', '#0f766e'], text: '#FFFFFF', subText: '#99f6e4', dialText: '#FFFFFF', dialSubText: '#5eead4', borderColor: '#0d9488' },
       warning: { gradient: ['#f59e0b', '#d97706'], text: '#FFFFFF', subText: '#fef3c7', dialText: '#FFFFFF', dialSubText: '#fde68a', borderColor: '#f59e0b' },
@@ -41,74 +32,81 @@ export const toastConfig = {
       special: { gradient: ['#6d28d9', '#5b21b6'], text: '#FFFFFF', subText: '#ddd6fe', dialText: '#FFFFFF', dialSubText: '#c4b5fd', borderColor: '#6d28d9' },
     };
 
-    let currentTheme;
-    if (props.label === 'Premium Active') {
+    let currentTheme = themes.default;
+    const label = props?.label || 'Premium Status';
+    
+    if (label === 'Premium Active') {
         if (props.color === '#22d3ee' || props.color === '#34d399') currentTheme = themes.active;
         else if (props.color === '#fcd34d') currentTheme = themes.warning;
         else currentTheme = themes.critical;
-    } else if (props.label === 'Special Access') {
+    } else if (label === 'Special Access') {
         currentTheme = themes.special;
-    } else {
-        currentTheme = themes.default; // Expired
     }
+
+    const startDate = props?.startDate ? new Date(props.startDate) : new Date();
+    const formattedStartDate = isNaN(startDate.getTime()) ? 'Recently' : startDate.toLocaleDateString('en-IN', { day: '2-digit', month: 'short' });
+    const timeLeft = props?.timeLeft || '0d';
+    const daysLeft = timeLeft.match(/\d+/)?.[0] || '0';
     
     return (
-      <View style={{ width: '95%', borderRadius: 28, overflow: 'hidden' }}>
-        <LinearGradient
-          colors={currentTheme.gradient}
-          style={{
-            paddingVertical: 22,
-            paddingHorizontal: 18,
-            flexDirection: 'row',
-            alignItems: 'center',
-            borderWidth: 2,
-            borderColor: currentTheme.borderColor,
-            shadowColor: '#000',
-            shadowOffset: { width: 0, height: 4 },
-            shadowOpacity: 0.2,
-            shadowRadius: 15,
-            elevation: 12,
-          }}
-        >
-          {/* Status Icon */}
-          <View style={{
-            width: 55, height: 55, borderRadius: 20,
-            backgroundColor: 'rgba(255, 255, 255, 0.15)',
-            justifyContent: 'center', alignItems: 'center', marginRight: 15,
-          }}>
-            <Ionicons 
-              name={props.label === 'Expired' ? 'lock-closed' : (props.label === 'Special Access' ? 'shield-checkmark' : 'checkmark-done')} 
-              size={28} color={currentTheme.text} 
-            />
-          </View>
+      <View style={{ width: '95%', borderRadius: 28, alignSelf: 'center', shadowColor: '#000', shadowOffset: { width: 0, height: 10 }, shadowOpacity: 0.3, shadowRadius: 20, elevation: 15 }}>
+        <View style={{ borderRadius: 28, overflow: 'hidden', borderWidth: 1, borderColor: 'rgba(255,255,255,0.1)' }}>
+            <LinearGradient
+            colors={currentTheme.gradient}
+            style={{
+                paddingVertical: 22,
+                paddingHorizontal: 20,
+                flexDirection: 'row',
+                alignItems: 'center',
+            }}
+            >
+            {/* Status Icon */}
+            <View style={{
+                width: 56, height: 56, borderRadius: 20,
+                backgroundColor: 'rgba(255, 255, 255, 0.15)',
+                justifyContent: 'center', alignItems: 'center', marginRight: 15,
+            }}>
+                <Ionicons 
+                name={label === 'Expired' ? 'lock-closed' : (label === 'Special Access' ? 'shield-checkmark' : 'checkmark-done')} 
+                size={28} color="#fff" 
+                />
+            </View>
 
-          {/* Main Content */}
-          <View style={{ flex: 1 }}>
-            <Text style={{ color: currentTheme.text, fontWeight: '900', fontSize: 17, textTransform: 'uppercase' }}>
-              {props.label}
-            </Text>
-            <Text style={{ color: currentTheme.subText, fontSize: 13, marginTop: 5, fontWeight: '500' }}>
-              Plan: ₹{props.monthlyPrice?.toLocaleString()}/mo • Since: {new Date(props.startDate).toLocaleDateString('en-IN', { day: '2-digit', month: 'short' })}
-            </Text>
-            <Text style={{ color: currentTheme.subText, fontSize: 13, marginTop: 2, fontWeight: '500' }}>
-              Valid Till: {props.expiryDate}
-            </Text>
-          </View>
+            {/* Main Content */}
+            <View style={{ flex: 1 }}>
+                <Text style={{ color: '#fff', fontWeight: '900', fontSize: 18, textTransform: 'uppercase', letterSpacing: 0.5 }}>
+                {label}
+                </Text>
+                <View style={{ marginTop: 4 }}>
+                    <Text style={{ color: 'rgba(255,255,255,0.95)', fontSize: 13, fontWeight: '800' }}>
+                    Plan: ₹{(props?.monthlyPrice || 0).toLocaleString()}/month
+                    </Text>
+                    <Text style={{ color: 'rgba(255,255,255,0.8)', fontSize: 11, marginTop: 2, fontWeight: '700' }}>
+                    Valid Till: {props?.expiryDate}
+                    </Text>
+                    <Text style={{ color: 'rgba(255,255,255,0.6)', fontSize: 10, marginTop: 2, fontWeight: '600' }}>
+                    Taken On: {props?.takenOn}
+                    </Text>
+                </View>
+            </View>
 
-          {/* Days Left Dial */}
-          <View style={{
-            width: 75, height: 75, borderRadius: 40,
-            backgroundColor: 'rgba(0, 0, 0, 0.15)',
-            alignItems: 'center', justifyContent: 'center', marginLeft: 10,
-          }}>
-            <Text style={{ color: currentTheme.dialText, fontSize: 28, fontWeight: '900' }}>
-              {props.label === 'Expired' ? '0' : props.timeLeft.split('d')[0]}
-            </Text>
-            <Text style={{ color: currentTheme.dialSubText, fontSize: 10, fontWeight: '700', textTransform: 'uppercase', marginTop: -2 }}>
-              Days Left
-            </Text>
-          </View>
-        </LinearGradient>
+            {/* Days Left Dial */}
+            <View style={{
+                width: 75, height: 75, borderRadius: 40,
+                backgroundColor: 'rgba(0, 0, 0, 0.2)',
+                alignItems: 'center', justifyContent: 'center', marginLeft: 10,
+                borderWidth: 2,
+                borderColor: 'rgba(255,255,255,0.1)'
+            }}>
+                <Text style={{ color: '#fff', fontSize: 26, fontWeight: '900' }}>
+                {label === 'Expired' ? '0' : daysLeft}
+                </Text>
+                <Text style={{ color: 'rgba(255,255,255,0.6)', fontSize: 9, fontWeight: '800', textTransform: 'uppercase', marginTop: -2 }}>
+                {timeLeft.includes('h') ? 'Hours' : 'Days'} Left
+                </Text>
+            </View>
+            </LinearGradient>
+        </View>
       </View>
     );
   },
@@ -146,31 +144,68 @@ export const toastConfig = {
     </View>
   ),
   homework: (props: any) => (
-    <View style={{ width: '95%', backgroundColor: '#fff', borderRadius: 24, padding: 0, overflow: 'hidden', elevation: 12, shadowColor: '#f97316', shadowOffset: { width: 0, height: 8 }, shadowOpacity: 0.2, shadowRadius: 15 }}>
-        <LinearGradient colors={['#f97316', '#ea580c']} start={{ x: 0, y: 0 }} end={{ x: 1, y: 0 }} style={{ padding: 16, flexDirection: 'row', alignItems: 'center' }}>
-            <View style={{ width: 44, height: 44, borderRadius: 22, backgroundColor: 'rgba(255,255,255,0.2)', justifyContent: 'center', alignItems: 'center', marginRight: 12 }}>
-                <Ionicons name="book" size={24} color="#fff" />
+    <View style={{ width: '95%', backgroundColor: '#fff', borderRadius: 20, padding: 16, flexDirection: 'row', alignItems: 'center', borderLeftWidth: 6, borderLeftColor: '#f97316', elevation: 10, shadowColor: '#000', shadowOffset: { width: 0, height: 5 }, shadowOpacity: 0.1, shadowRadius: 10 }}>
+        <TouchableOpacity style={{ flexDirection: 'row', alignItems: 'center', flex: 1 }} activeOpacity={0.9} onPress={() => props.onPress ? props.onPress() : (props.props?.onPress ? props.props.onPress() : null)}>
+            <View style={{ width: 40, height: 40, borderRadius: 20, backgroundColor: '#f9731620', justifyContent: 'center', alignItems: 'center', marginRight: 12 }}>
+                <Ionicons name="book" size={22} color="#f97316" />
             </View>
             <View style={{ flex: 1 }}>
-                <Text style={{ fontSize: 18, fontWeight: '900', color: '#fff' }}>{props.text1}</Text>
-                <Text style={{ fontSize: 13, color: 'rgba(255,255,255,0.9)', fontWeight: '700' }}>{props.text2}</Text>
+                <Text style={{ fontSize: 16, fontWeight: '900', color: '#1e293b' }}>{props.text1}</Text>
+                {props.text2 && <Text style={{ fontSize: 13, color: '#64748b', marginTop: 2, fontWeight: '600' }}>{props.text2}</Text>}
             </View>
-            <Ionicons name="chevron-forward" size={20} color="#fff" />
-        </LinearGradient>
+        </TouchableOpacity>
     </View>
   ),
   notice: (props: any) => (
-    <View style={{ width: '95%', backgroundColor: '#fff', borderRadius: 24, padding: 0, overflow: 'hidden', elevation: 12, shadowColor: '#6366f1', shadowOffset: { width: 0, height: 8 }, shadowOpacity: 0.2, shadowRadius: 15 }}>
-        <LinearGradient colors={['#6366f1', '#4f46e5']} start={{ x: 0, y: 0 }} end={{ x: 1, y: 0 }} style={{ padding: 16, flexDirection: 'row', alignItems: 'center' }}>
-            <View style={{ width: 44, height: 44, borderRadius: 22, backgroundColor: 'rgba(255,255,255,0.2)', justifyContent: 'center', alignItems: 'center', marginRight: 12 }}>
-                <Ionicons name="notifications" size={24} color="#fff" />
+    <View style={{ width: '95%', backgroundColor: '#fff', borderRadius: 20, padding: 16, flexDirection: 'row', alignItems: 'center', borderLeftWidth: 6, borderLeftColor: '#6366f1', elevation: 10, shadowColor: '#000', shadowOffset: { width: 0, height: 5 }, shadowOpacity: 0.1, shadowRadius: 10 }}>
+        <TouchableOpacity style={{ flexDirection: 'row', alignItems: 'center', flex: 1 }} activeOpacity={0.9} onPress={() => props.onPress ? props.onPress() : (props.props?.onPress ? props.props.onPress() : null)}>
+            <View style={{ width: 40, height: 40, borderRadius: 20, backgroundColor: '#6366f120', justifyContent: 'center', alignItems: 'center', marginRight: 12 }}>
+                <Ionicons name="notifications" size={22} color="#6366f1" />
             </View>
             <View style={{ flex: 1 }}>
-                <Text style={{ fontSize: 18, fontWeight: '900', color: '#fff' }}>{props.text1}</Text>
-                <Text style={{ fontSize: 13, color: 'rgba(255,255,255,0.9)', fontWeight: '700' }}>{props.text2}</Text>
+                <Text style={{ fontSize: 16, fontWeight: '900', color: '#1e293b' }}>{props.text1}</Text>
+                {props.text2 && <Text style={{ fontSize: 13, color: '#64748b', marginTop: 2, fontWeight: '600' }}>{props.text2}</Text>}
             </View>
-            <Ionicons name="chevron-forward" size={20} color="#fff" />
-        </LinearGradient>
+        </TouchableOpacity>
+    </View>
+  ),
+  'admit-card': (props: any) => (
+    <View style={{ width: '95%', backgroundColor: '#fff', borderRadius: 20, padding: 16, flexDirection: 'row', alignItems: 'center', borderLeftWidth: 6, borderLeftColor: '#af52de', elevation: 10, shadowColor: '#000', shadowOffset: { width: 0, height: 5 }, shadowOpacity: 0.1, shadowRadius: 10 }}>
+        <TouchableOpacity style={{ flexDirection: 'row', alignItems: 'center', flex: 1 }} activeOpacity={0.9} onPress={() => props.onPress ? props.onPress() : (props.props?.onPress ? props.props.onPress() : null)}>
+            <View style={{ width: 40, height: 40, borderRadius: 20, backgroundColor: '#af52de20', justifyContent: 'center', alignItems: 'center', marginRight: 12 }}>
+                <Ionicons name="card" size={22} color="#af52de" />
+            </View>
+            <View style={{ flex: 1 }}>
+                <Text style={{ fontSize: 16, fontWeight: '900', color: '#1e293b' }}>{props.text1}</Text>
+                {props.text2 && <Text style={{ fontSize: 13, color: '#64748b', marginTop: 2, fontWeight: '600' }}>{props.text2}</Text>}
+            </View>
+        </TouchableOpacity>
+    </View>
+  ),
+  'RESULT_PUBLISHED': (props: any) => (
+    <View style={{ width: '95%', backgroundColor: '#fff', borderRadius: 20, padding: 16, flexDirection: 'row', alignItems: 'center', borderLeftWidth: 6, borderLeftColor: '#E91E63', elevation: 10, shadowColor: '#000', shadowOffset: { width: 0, height: 5 }, shadowOpacity: 0.1, shadowRadius: 10 }}>
+        <TouchableOpacity style={{ flexDirection: 'row', alignItems: 'center', flex: 1 }} activeOpacity={0.9} onPress={() => props.onPress ? props.onPress() : (props.props?.onPress ? props.props.onPress() : null)}>
+            <View style={{ width: 40, height: 40, borderRadius: 20, backgroundColor: '#E91E6320', justifyContent: 'center', alignItems: 'center', marginRight: 12 }}>
+                <Ionicons name="trophy" size={22} color="#E91E63" />
+            </View>
+            <View style={{ flex: 1 }}>
+                <Text style={{ fontSize: 16, fontWeight: '900', color: '#1e293b' }}>{props.text1}</Text>
+                {props.text2 && <Text style={{ fontSize: 13, color: '#64748b', marginTop: 2, fontWeight: '600' }}>{props.text2}</Text>}
+            </View>
+        </TouchableOpacity>
+    </View>
+  ),
+  'result': (props: any) => (
+    <View style={{ width: '95%', backgroundColor: '#fff', borderRadius: 20, padding: 16, flexDirection: 'row', alignItems: 'center', borderLeftWidth: 6, borderLeftColor: '#E91E63', elevation: 10, shadowColor: '#000', shadowOffset: { width: 0, height: 5 }, shadowOpacity: 0.1, shadowRadius: 10 }}>
+        <TouchableOpacity style={{ flexDirection: 'row', alignItems: 'center', flex: 1 }} activeOpacity={0.9} onPress={() => props.onPress ? props.onPress() : (props.props?.onPress ? props.props.onPress() : null)}>
+            <View style={{ width: 40, height: 40, borderRadius: 20, backgroundColor: '#E91E6320', justifyContent: 'center', alignItems: 'center', marginRight: 12 }}>
+                <Ionicons name="trophy" size={22} color="#E91E63" />
+            </View>
+            <View style={{ flex: 1 }}>
+                <Text style={{ fontSize: 16, fontWeight: '900', color: '#1e293b' }}>{props.text1}</Text>
+                {props.text2 && <Text style={{ fontSize: 13, color: '#64748b', marginTop: 2, fontWeight: '600' }}>{props.text2}</Text>}
+            </View>
+        </TouchableOpacity>
     </View>
   ),
   attendance: (props: any) => {
@@ -232,6 +267,41 @@ export const toastConfig = {
       </View>
     );
   },
+  pay_now_enabled: (props: any) => (
+    <View style={{ width: '95%', backgroundColor: '#fff', borderRadius: 20, padding: 16, flexDirection: 'row', alignItems: 'center', borderLeftWidth: 6, borderLeftColor: '#3b82f6', elevation: 10, shadowColor: '#000', shadowOffset: { width: 0, height: 5 }, shadowOpacity: 0.1, shadowRadius: 10 }}>
+        <TouchableOpacity style={{ flexDirection: 'row', alignItems: 'center', flex: 1 }} activeOpacity={0.9} onPress={() => props.onPress ? props.onPress() : (props.props?.onPress ? props.props.onPress() : null)}>
+            <View style={{ width: 40, height: 40, borderRadius: 20, backgroundColor: '#3b82f620', justifyContent: 'center', alignItems: 'center', marginRight: 12 }}>
+                <Ionicons name="card" size={22} color="#3b82f6" />
+            </View>
+            <View style={{ flex: 1 }}>
+                <Text style={{ fontSize: 16, fontWeight: '900', color: '#1e293b' }}>{props.text1}</Text>
+                {props.text2 && <Text style={{ fontSize: 13, color: '#64748b', marginTop: 2, fontWeight: '600' }}>{props.text2}</Text>}
+            </View>
+        </TouchableOpacity>
+    </View>
+  ),
+  fee_payment: (props: any) => (
+    <View style={{ width: '95%', backgroundColor: '#fff', borderRadius: 20, padding: 16, flexDirection: 'row', alignItems: 'center', borderLeftWidth: 6, borderLeftColor: '#10b981', elevation: 10, shadowColor: '#000', shadowOffset: { width: 0, height: 5 }, shadowOpacity: 0.1, shadowRadius: 10 }}>
+        <View style={{ width: 40, height: 40, borderRadius: 20, backgroundColor: '#10b98120', justifyContent: 'center', alignItems: 'center', marginRight: 12 }}>
+            <Ionicons name="checkmark-circle" size={24} color="#10b981" />
+        </View>
+        <View style={{ flex: 1 }}>
+            <Text style={{ fontSize: 16, fontWeight: '900', color: '#1e293b' }}>{props.text1}</Text>
+            {props.text2 && <Text style={{ fontSize: 13, color: '#64748b', marginTop: 2, fontWeight: '600' }}>{props.text2}</Text>}
+        </View>
+    </View>
+  ),
+  monthly_fee: (props: any) => (
+    <View style={{ width: '95%', backgroundColor: '#fff', borderRadius: 20, padding: 16, flexDirection: 'row', alignItems: 'center', borderLeftWidth: 6, borderLeftColor: '#6366f1', elevation: 10, shadowColor: '#000', shadowOffset: { width: 0, height: 5 }, shadowOpacity: 0.1, shadowRadius: 10 }}>
+        <View style={{ width: 40, height: 40, borderRadius: 20, backgroundColor: '#6366f120', justifyContent: 'center', alignItems: 'center', marginRight: 12 }}>
+            <Ionicons name="wallet" size={22} color="#6366f1" />
+        </View>
+        <View style={{ flex: 1 }}>
+            <Text style={{ fontSize: 16, fontWeight: '900', color: '#1e293b' }}>{props.text1}</Text>
+            {props.text2 && <Text style={{ fontSize: 13, color: '#64748b', marginTop: 2, fontWeight: '600' }}>{props.text2}</Text>}
+        </View>
+    </View>
+  ),
 };
 
 function RootLayoutContent() {
@@ -255,6 +325,43 @@ function RootLayoutContent() {
       // Show custom toast for all notifications
       const toastType = data?.type || 'success';
       
+      // PERSISTENCE FIX: Save important notifications to history box immediately
+      if (['attendance', 'homework', 'notice', 'admit-card', 'RESULT_PUBLISHED', 'fee_payment', 'monthly_fee'].includes(toastType)) {
+        (async () => {
+          try {
+            const studentStr = await AsyncStorage.getItem('studentData');
+            if (studentStr) {
+              const student = JSON.parse(studentStr);
+              if (student.unique_code) {
+                const key = `notifs_${student.unique_code}`;
+                const saved = await AsyncStorage.getItem(key);
+                const list = saved ? JSON.parse(saved) : [];
+                
+                // Add new one
+                const newNotif = {
+                  id: Math.random().toString(36).substr(2, 9),
+                  time: new Date().toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit' }),
+                  title: (notification as any).request.content.title,
+                  message: (notification as any).request.content.body,
+                  type: toastType === 'RESULT_PUBLISHED' ? 'result' : toastType
+                };
+
+                // Prevent duplicates (simple check by title/message)
+                const exists = list.some((n: any) => n.title === newNotif.title && n.message === newNotif.message);
+                if (!exists) {
+                  const updated = [newNotif, ...list].slice(0, 20);
+                  await AsyncStorage.setItem(key, JSON.stringify(updated));
+                  // GLOBAL UI SYNC: Tell the dashboard to reload its list
+                  DeviceEventEmitter.emit('notificationReceived');
+                }
+              }
+            }
+          } catch (e) {
+            console.error('Error persisting push to history:', e);
+          }
+        })();
+      }
+
       Toast.show({
         type: toastType,
         text1: (notification as any).request.content.title || 'Notification',
@@ -272,6 +379,8 @@ function RootLayoutContent() {
               router.push('/(student)/absent-note');
             } else if (data?.type === 'homework') {
               router.push('/(student)/homework');
+            } else if (data?.type === 'pay_now_enabled' || data?.type === 'monthly_fee' || data?.type === 'one_time_fee') {
+              router.push('/(student)/fees');
             } else if (data?.type === 'notice') {
               if (pathname.includes('(student)')) router.push('/(student)/notice');
               else if (pathname.includes('(teacher)')) router.push('/(teacher)/notice');
@@ -293,6 +402,8 @@ function RootLayoutContent() {
         router.push('/(student)/absent-note');
       } else if (data?.type === 'homework') {
         router.push('/(student)/homework');
+      } else if (data?.type === 'pay_now_enabled' || data?.type === 'monthly_fee' || data?.type === 'one_time_fee') {
+        router.push('/(student)/fees');
       } else if (data?.type === 'notice') {
         if (pathname.includes('(student)')) router.push('/(student)/notice');
         else if (pathname.includes('(teacher)')) router.push('/(teacher)/notice');

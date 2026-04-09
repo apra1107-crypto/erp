@@ -222,13 +222,25 @@ export const verifyFeePayment = async (req, res) => {
             
             const { institute_id, session_id, name } = studentRes.rows[0];
 
+            // 1.1 Calculate baseDue (Snapshot of Tuition + Transport) for this month
+            const profileRes = await db.query('SELECT monthly_fees, transport_fees, transport_facility FROM students WHERE id = $1', [studentId]);
+            const profile = profileRes.rows[0];
+            const baseDue = parseFloat(profile.monthly_fees || 0) + (profile.transport_facility ? parseFloat(profile.transport_fees || 0) : 0);
+
             // 2. Mark as PAID in student_fees
             await db.query(
-                `INSERT INTO student_fees (student_id, institute_id, session_id, month, year, status, paid_at, collected_by, payment_method, transaction_id) 
-                 VALUES ($1, $2, $3, $4, $5, 'paid', NOW(), 'Online', 'Razorpay', $6)
+                `INSERT INTO student_fees (student_id, institute_id, session_id, month, year, status, paid_at, collected_by, payment_method, transaction_id, amount_paid, amount_due) 
+                 VALUES ($1, $2, $3, $4, $5, 'paid', NOW(), 'Online', 'Razorpay', $6, $7, $8)
                  ON CONFLICT (student_id, month, year, session_id) 
-                 DO UPDATE SET status = 'paid', paid_at = NOW(), collected_by = 'Online', payment_method = 'Razorpay', transaction_id = $6`,
-                [studentId, institute_id, session_id, month, year, razorpay_payment_id]
+                 DO UPDATE SET status = 'paid', paid_at = NOW(), collected_by = 'Online', payment_method = 'Razorpay', transaction_id = $6, amount_paid = $7, amount_due = $8`,
+                [studentId, institute_id, session_id, month, year, razorpay_payment_id, baseAmount, baseDue]
+            );
+
+            // 2.1 Mark all monthly extra charges for this student, month, year as paid
+            await db.query(
+                `UPDATE monthly_extra_charges SET status = 'paid' 
+                 WHERE student_id = $1 AND institute_id = $2 AND session_id = $3 AND month = $4 AND year = $5`,
+                [studentId, institute_id, session_id, month, year]
             );
 
             // 3. Notify Principal & Special Teachers via Socket and Push

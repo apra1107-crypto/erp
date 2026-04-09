@@ -9,6 +9,7 @@ import Toast from 'react-native-toast-message';
 import { Ionicons } from '@expo/vector-icons';
 import { useTheme } from '../../context/ThemeContext';
 import { API_ENDPOINTS } from '../../constants/Config';
+import { getFullImageUrl } from '../../utils/imageHelper';
 
 export default function Profile() {
     const router = useRouter();

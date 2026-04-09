@@ -7,7 +7,7 @@ import Toast from 'react-native-toast-message';
 import { LinearGradient } from 'expo-linear-gradient';
 import Animated, { FadeIn, FadeOut, Layout } from 'react-native-reanimated';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-
+import { getFullImageUrl } from '../utils/imageHelper';
 import { useTheme } from '../context/ThemeContext';
 import { API_ENDPOINTS } from '../constants/Config';
 import { generateReceiptPDF } from '../utils/receiptGenerator';
@@ -638,7 +638,7 @@ export default function OneTimeFeesTab({ }: OneTimeFeesTabProps) {
                                                 
                                                 <View style={[styles.avatar, { width: 40, height: 40, borderRadius: 20, marginRight: 12, overflow: 'hidden' }]}>
                                                     {item.photo_url ? (
-                                                        <Image source={{ uri: item.photo_url }} style={{ width: '100%', height: '100%' }} />
+                                                        <Image source={{ uri: getFullImageUrl(item.photo_url) ?? undefined }} style={{ width: '100%', height: '100%' }} />
                                                     ) : (
                                                         <Text style={styles.avatarText}>{item.name?.charAt(0)}</Text>
                                                     )}
@@ -738,7 +738,7 @@ export default function OneTimeFeesTab({ }: OneTimeFeesTabProps) {
                                             >
                                                 <View style={[styles.avatar, { width: 44, height: 44, borderRadius: 22, overflow: 'hidden' }]}>
                                                     {item.photo_url ? (
-                                                        <Image source={{ uri: item.photo_url }} style={{ width: '100%', height: '100%' }} />
+                                                        <Image source={{ uri: getFullImageUrl(item.photo_url) ?? undefined }} style={{ width: '100%', height: '100%' }} />
                                                     ) : (
                                                         <Text style={styles.avatarText}>{item.name?.charAt(0)}</Text>
                                                     )}

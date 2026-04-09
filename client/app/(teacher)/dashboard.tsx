@@ -12,6 +12,7 @@ import Animated, { useSharedValue, useAnimatedStyle, withTiming, withSpring, wit
 import { useTheme } from '../../context/ThemeContext';
 import { useSocket } from '../../context/SocketContext';
 import { API_ENDPOINTS } from '../../constants/Config';
+import { getFullImageUrl } from '@/utils/imageHelper';
 
 if (Platform.OS === 'android' && UIManager.setLayoutAnimationEnabledExperimental) {
     UIManager.setLayoutAnimationEnabledExperimental(true);
@@ -840,8 +841,8 @@ export default function TeacherDashboard() {
             <View style={styles.container}>
                 <StatusBar barStyle={theme.statusBarStyle} backgroundColor="transparent" translucent={true} />
                 <View style={styles.header}>
-                    <TouchableOpacity onPress={() => setShowAccountModal(true)} style={{ marginLeft: -20 }}><View style={{ position: 'relative' }}><Image source={teacherData?.institute_logo ? { uri: teacherData.institute_logo } : require('../../assets/images/react-logo.png')} style={styles.headerLogo} resizeMode="contain" /></View></TouchableOpacity>
-                    <View style={styles.headerRight}><TouchableOpacity onPress={() => !isLocked && setShowProfileMenu(true)} style={[styles.avatarWrapper, isLocked && { opacity: 0.7 }]} activeOpacity={isLocked ? 1 : 0.7}><View style={{ position: 'relative' }}>{teacherData?.photo_url ? <Image source={{ uri: teacherData.photo_url }} style={styles.headerAvatar} /> : <View style={[styles.placeholderAvatar, { backgroundColor: theme.primary }]}><Text style={styles.avatarText}>{teacherData?.name?.charAt(0) || 'T'}</Text></View>}{isLocked ? (<View style={{ position: 'absolute', bottom: 0, right: 0, backgroundColor: theme.danger, width: 18, height: 18, borderRadius: 9, justifyContent: 'center', alignItems: 'center', borderWidth: 2, borderColor: theme.background }}><Ionicons name="lock-closed" size={10} color="#fff" /></View>) : (<View style={styles.onlineDot} />)}</View></TouchableOpacity></View>
+                    <TouchableOpacity onPress={() => setShowAccountModal(true)} style={{ marginLeft: -20 }}><View style={{ position: 'relative' }}><Image source={teacherData?.institute_logo ? { uri: getFullImageUrl(teacherData.institute_logo) ?? undefined } : require('../../assets/images/react-logo.png')} style={styles.headerLogo} resizeMode="contain" /></View></TouchableOpacity>
+                    <View style={styles.headerRight}><TouchableOpacity onPress={() => !isLocked && setShowProfileMenu(true)} style={[styles.avatarWrapper, isLocked && { opacity: 0.7 }]} activeOpacity={isLocked ? 1 : 0.7}><View style={{ position: 'relative' }}>{teacherData?.photo_url ? <Image source={{ uri: getFullImageUrl(teacherData.photo_url) ?? undefined }} style={styles.headerAvatar} /> : <View style={[styles.placeholderAvatar, { backgroundColor: theme.primary }]}><Text style={styles.avatarText}>{teacherData?.name?.charAt(0) || 'T'}</Text></View>}{isLocked ? (<View style={{ position: 'absolute', bottom: 0, right: 0, backgroundColor: theme.danger, width: 18, height: 18, borderRadius: 9, justifyContent: 'center', alignItems: 'center', borderWidth: 2, borderColor: theme.background }}><Ionicons name="lock-closed" size={10} color="#fff" /></View>) : (<View style={styles.onlineDot} />)}</View></TouchableOpacity></View>
                 </View>
 
                 {isSearchActive && <Animated.View style={[styles.animatedSearchBar, animatedSearchStyle]}><Ionicons name="search" size={20} color={theme.textLight} /><TextInput style={styles.searchInput} placeholder="Search Students..." placeholderTextColor={theme.textLight} value={searchQuery} onChangeText={handleSearch} autoFocus /><TouchableOpacity onPress={toggleSearch}><Ionicons name="close-circle" size={20} color={theme.textLight} /></TouchableOpacity></Animated.View>}
@@ -851,7 +852,7 @@ export default function TeacherDashboard() {
                     <TouchableOpacity onPress={toggleSearch} activeOpacity={0.7} style={{ marginLeft: 10 }}><LinearGradient colors={['#3b82f6', '#8b5cf6', '#ec4899']} style={[styles.gradientIconBtn]}><Ionicons name="search" size={22} color="#fff" /></LinearGradient></TouchableOpacity>
                 </View>
 
-                {showResults && <View style={styles.resultsContainer}>{searchResults.length === 0 ? <Text style={styles.noResults}>{isSearching ? 'Searching...' : 'No students found'}</Text> : <FlatList data={searchResults} keyExtractor={(item, index) => item.id.toString() + index} renderItem={({ item }) => <TouchableOpacity style={styles.resultItem} onPress={() => handleCreateResult(item)}><View style={styles.resultAvatar}>{item.photo_url ? <Image source={{ uri: item.photo_url }} style={styles.avatarImg} /> : <Ionicons name="person" size={20} color={theme.textLight} />}</View><View><Text style={styles.resultName}>{item.name}</Text><Text style={styles.resultInfo}>{`Class: ${item.class}-${item.section}`}</Text></View><Text style={[styles.typeBadge, { backgroundColor: theme.primary }]}>STUDENT</Text></TouchableOpacity>} />}</View>}
+                {showResults && <View style={styles.resultsContainer}>{searchResults.length === 0 ? <Text style={styles.noResults}>{isSearching ? 'Searching...' : 'No students found'}</Text> : <FlatList data={searchResults} keyExtractor={(item, index) => item.id.toString() + index} renderItem={({ item }) => <TouchableOpacity style={styles.resultItem} onPress={() => handleCreateResult(item)}><View style={styles.resultAvatar}>{item.photo_url ? <Image source={{ uri: getFullImageUrl(item.photo_url) ?? undefined }} style={styles.avatarImg} /> : <Ionicons name="person" size={20} color={theme.textLight} />}</View><View><Text style={styles.resultName}>{item.name}</Text><Text style={styles.resultInfo}>{`Class: ${item.class}-${item.section}`}</Text></View><Text style={[styles.typeBadge, { backgroundColor: theme.primary }]}>STUDENT</Text></TouchableOpacity>} />}</View>}
 
                 <ScrollView 
                     style={styles.content} 
@@ -1133,7 +1134,7 @@ export default function TeacherDashboard() {
                     <View style={{ marginTop: insets.top + 60, marginRight: 20, width: 280, backgroundColor: theme.card, borderRadius: 24, padding: 20, elevation: 10 }}>
                         <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 20, paddingBottom: 15, borderBottomWidth: 1, borderBottomColor: theme.border }}>
                             {teacherData?.photo_url ? (
-                                <Image source={{ uri: teacherData.photo_url }} style={{ width: 44, height: 44, borderRadius: 22 }} />
+                                <Image source={{ uri: getFullImageUrl(teacherData.photo_url) ?? undefined }} style={{ width: 44, height: 44, borderRadius: 22 }} />
                             ) : (
                                 <View style={{ width: 44, height: 44, borderRadius: 22, backgroundColor: theme.primary, justifyContent: 'center', alignItems: 'center' }}>
                                     <Text style={{ color: '#fff', fontSize: 18, fontWeight: 'bold' }}>{teacherData?.name?.charAt(0) || 'T'}</Text>
@@ -1474,7 +1475,7 @@ export default function TeacherDashboard() {
                                     }}>
                                         <View style={{ width: 60, height: 60, borderRadius: 18, backgroundColor: theme.card, justifyContent: 'center', alignItems: 'center', elevation: 2 }}>
                                             {teacherData?.institute_logo ? (
-                                                <Image source={{ uri: teacherData.institute_logo }} style={{ width: 45, height: 45, resizeMode: 'contain' }} />
+                                                <Image source={{ uri: getFullImageUrl(teacherData.institute_logo) ?? undefined }} style={{ width: 45, height: 45, resizeMode: 'contain' }} />
                                             ) : (
                                                 <Ionicons name="school" size={30} color={theme.primary} />
                                             )}
@@ -1511,7 +1512,7 @@ export default function TeacherDashboard() {
                                             >
                                                 <View style={{ width: 50, height: 50, borderRadius: 15, backgroundColor: theme.primary + '15', justifyContent: 'center', alignItems: 'center', marginRight: 15 }}>
                                                     {acc.institute_logo ? (
-                                                        <Image source={{ uri: acc.institute_logo }} style={{ width: 35, height: 35, resizeMode: 'contain' }} />
+                                                        <Image source={{ uri: getFullImageUrl(acc.institute_logo) ?? undefined }} style={{ width: 35, height: 35, resizeMode: 'contain' }} />
                                                     ) : (
                                                         <Ionicons name="school" size={24} color={theme.primary} />
                                                     )}

@@ -1,5 +1,7 @@
 export const BASE_URL = `https://klassin.co.in`;
 
+export const EOS_BUCKET_URL = 'https://klassinimg.objectstore.e2enetworks.net';
+
 export const API_ENDPOINTS = {
     AUTH: {
         STUDENT: `${BASE_URL}/api/auth/student`,

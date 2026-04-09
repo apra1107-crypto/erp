@@ -9,6 +9,7 @@ import * as FileSystem from 'expo-file-system/legacy';
 import * as Sharing from 'expo-sharing';
 import { useTheme } from '../../../context/ThemeContext';
 import { API_ENDPOINTS, BASE_URL } from '../../../constants/Config';
+import { getFullImageUrl } from '../../../utils/imageHelper';
 
 const { width } = Dimensions.get('window');
 
@@ -226,7 +227,7 @@ export default function StudentReportCardPreview() {
                             </View>
                             <View style={styles.photoBox}>
                                 {(student.photo_url || student.profile_image) ? (
-                                    <Image source={{ uri: student.photo_url || student.profile_image }} style={styles.photo} />
+                                    <Image source={{ uri: getFullImageUrl(student.photo_url) ?? undefined }} style={styles.photo} />
                                 ) : (
                                     <Ionicons name="person" size={40} color="#e2e8f0" />
                                 )}

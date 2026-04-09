@@ -11,6 +11,7 @@ import Animated, { FadeIn, FadeOut, Layout } from 'react-native-reanimated';
 
 import { useTheme } from '../../../context/ThemeContext';
 import { API_ENDPOINTS } from '../../../constants/Config';
+import { getFullImageUrl } from '../../../utils/imageHelper';
 import AddExtraChargeModal from '../../../components/AddExtraChargeModal';
 import OneTimeFeesTab from '../../../components/OneTimeFeesTab';
 import { generateReceiptPDF } from '../../../utils/receiptGenerator';
@@ -59,25 +60,63 @@ export default function Fees() {
             const matchesSearch = (s.name || '').toLowerCase().includes(searchTerm.toLowerCase()) || (s.roll_no || '').toString().includes(searchTerm);
             const matchesClass = filters.class === '' || (s.class || '').toLowerCase().includes(filters.class.toLowerCase());
             const matchesSection = filters.section === '' || (s.section || '').toLowerCase().includes(filters.section.toLowerCase());
-            const matchesStatus = filters.status === 'all' || (filters.status === 'paid' ? s.fee_status === 'paid' : s.fee_status !== 'paid');
-            return matchesSearch && matchesClass && matchesSection && matchesStatus;
+            return matchesSearch && matchesClass && matchesSection;
+        });
+
+        const counts = {
+            all: filtered.length,
+            paid: filtered.filter(s => {
+                const extraChargesSum = (s.extra_charges || []).reduce((acc: number, ec: any) => acc + parseFloat(ec.amount || 0), 0);
+                const baseDue = s.snapshot_amount_due 
+                    ? parseFloat(s.snapshot_amount_due) 
+                    : (parseFloat(s.monthly_fees || 0) + (s.transport_facility ? parseFloat(s.transport_fees || 0) : 0));
+                const totalDue = baseDue + extraChargesSum;
+                const paidAmount = parseFloat(s.amount_paid || 0);
+                return paidAmount >= totalDue && totalDue > 0;
+            }).length,
+            unpaid: filtered.filter(s => {
+                const extraChargesSum = (s.extra_charges || []).reduce((acc: number, ec: any) => acc + parseFloat(ec.amount || 0), 0);
+                const baseDue = s.snapshot_amount_due 
+                    ? parseFloat(s.snapshot_amount_due) 
+                    : (parseFloat(s.monthly_fees || 0) + (s.transport_facility ? parseFloat(s.transport_fees || 0) : 0));
+                const totalDue = baseDue + extraChargesSum;
+                const paidAmount = parseFloat(s.amount_paid || 0);
+                return paidAmount < totalDue;
+            }).length
+        };
+
+        const finalFiltered = filtered.filter(s => {
+            if (filters.status === 'all') return true;
+            
+            const extraChargesSum = (s.extra_charges || []).reduce((acc: number, ec: any) => acc + parseFloat(ec.amount || 0), 0);
+            const baseDue = s.snapshot_amount_due 
+                ? parseFloat(s.snapshot_amount_due) 
+                : (parseFloat(s.monthly_fees || 0) + (s.transport_facility ? parseFloat(s.transport_fees || 0) : 0));
+            const totalDue = baseDue + extraChargesSum;
+            const paidAmount = parseFloat(s.amount_paid || 0);
+            const isFullyPaid = paidAmount >= totalDue && totalDue > 0;
+
+            return filters.status === 'paid' ? isFullyPaid : !isFullyPaid;
         });
 
         const totalExpected = filtered.reduce((sum, s) => {
             const extra = (s.extra_charges || []).reduce((acc: number, ec: any) => acc + parseFloat(ec.amount || 0), 0);
-            return sum + (parseFloat(s.monthly_fees || 0) + (s.transport_facility ? parseFloat(s.transport_fees || 0) : 0) + extra);
+            const base = s.snapshot_amount_due 
+                ? parseFloat(s.snapshot_amount_due) 
+                : (parseFloat(s.monthly_fees || 0) + (s.transport_facility ? parseFloat(s.transport_fees || 0) : 0));
+            return sum + base + extra;
         }, 0);
 
-        const totalCollected = filtered.filter(s => s.fee_status === 'paid').reduce((sum, s) => {
-            const extra = (s.extra_charges || []).reduce((acc: number, ec: any) => acc + parseFloat(ec.amount || 0), 0);
-            return sum + (parseFloat(s.monthly_fees || 0) + (s.transport_facility ? parseFloat(s.transport_fees || 0) : 0) + extra);
+        const totalCollected = filtered.reduce((sum, s) => {
+            return sum + parseFloat(s.amount_paid || 0);
         }, 0);
 
         return {
             expected: totalExpected,
             collected: totalCollected,
-            remaining: totalExpected - totalCollected,
-            filteredStudents: filtered
+            remaining: Math.max(0, totalExpected - totalCollected),
+            filteredStudents: finalFiltered,
+            counts
         };
     }, [students, searchTerm, filters]);
 
@@ -194,11 +233,31 @@ export default function Fees() {
         if (!instituteData) return;
         setProcessingId(student.id);
         try {
-            const breakage = [
-                { label: 'Monthly Tuition Fee', amount: parseFloat(student.monthly_fees || 0) },
-                ...(student.transport_facility ? [{ label: 'Transport Fee', amount: parseFloat(student.transport_fees || 0) }] : []),
-                ...(student.extra_charges || []).map((ec: any) => ({ label: ec.reason, amount: parseFloat(ec.amount) }))
-            ];
+            const isPaid = student.fee_status === 'paid';
+            let breakage = [];
+
+            if (isPaid) {
+                // For paid records, we must respect the actual amount_paid snapshot
+                const totalPaid = parseFloat(student.amount_paid || 0);
+                const extraTotal = (student.extra_charges || []).reduce((acc: number, ec: any) => acc + parseFloat(ec.amount), 0);
+                const transport = student.transport_facility ? parseFloat(student.transport_fees || 0) : 0;
+                
+                // Tuition is the remainder (Total - Transport - Extras)
+                const tuitionPaid = totalPaid - transport - extraTotal;
+
+                breakage = [
+                    { label: 'Monthly Tuition Fee', amount: tuitionPaid },
+                    ...(student.transport_facility ? [{ label: 'Transport Fee', amount: transport }] : []),
+                    ...(student.extra_charges || []).map((ec: any) => ({ label: ec.reason, amount: parseFloat(ec.amount) }))
+                ];
+            } else {
+                // For unpaid, use current profile fees
+                breakage = [
+                    { label: 'Monthly Tuition Fee', amount: parseFloat(student.monthly_fees || 0) },
+                    ...(student.transport_facility ? [{ label: 'Transport Fee', amount: parseFloat(student.transport_fees || 0) }] : []),
+                    ...(student.extra_charges || []).map((ec: any) => ({ label: ec.reason, amount: parseFloat(ec.amount) }))
+                ];
+            }
 
             await generateReceiptPDF({
                 student,
@@ -216,11 +275,27 @@ export default function Fees() {
 
     const handlePreviewMonthly = (student: any) => {
         if (!instituteData) return;
-        const breakage = [
-            { label: 'Monthly Tuition Fee', amount: parseFloat(student.monthly_fees || 0) },
-            ...(student.transport_facility ? [{ label: 'Transport Fee', amount: parseFloat(student.transport_fees || 0) }] : []),
-            ...(student.extra_charges || []).map((ec: any) => ({ label: ec.reason, amount: parseFloat(ec.amount) }))
-        ];
+        const isPaid = student.fee_status === 'paid';
+        let breakage = [];
+
+        if (isPaid) {
+            const totalPaid = parseFloat(student.amount_paid || 0);
+            const extraTotal = (student.extra_charges || []).reduce((acc: number, ec: any) => acc + parseFloat(ec.amount), 0);
+            const transport = student.transport_facility ? parseFloat(student.transport_fees || 0) : 0;
+            const tuitionPaid = totalPaid - transport - extraTotal;
+
+            breakage = [
+                { label: 'Monthly Tuition Fee', amount: tuitionPaid },
+                ...(student.transport_facility ? [{ label: 'Transport Fee', amount: transport }] : []),
+                ...(student.extra_charges || []).map((ec: any) => ({ label: ec.reason, amount: parseFloat(ec.amount) }))
+            ];
+        } else {
+            breakage = [
+                { label: 'Monthly Tuition Fee', amount: parseFloat(student.monthly_fees || 0) },
+                ...(student.transport_facility ? [{ label: 'Transport Fee', amount: parseFloat(student.transport_fees || 0) }] : []),
+                ...(student.extra_charges || []).map((ec: any) => ({ label: ec.reason, amount: parseFloat(ec.amount) }))
+            ];
+        }
 
         setPreviewData({
             institute: instituteData,
@@ -233,12 +308,17 @@ export default function Fees() {
     };
 
     const renderStudentCard = ({ item }: { item: any }) => {
-        const monthly = parseFloat(item.monthly_fees || 0);
-        const transport = item.transport_facility ? parseFloat(item.transport_fees || 0) : 0;
-        const extra = (item.extra_charges || []).reduce((acc: number, ec: any) => acc + parseFloat(ec.amount), 0);
-        const total = monthly + transport + extra;
-        const isPaid = item.fee_status === 'paid';
+        const extraChargesSum = (item.extra_charges || []).reduce((acc: number, ec: any) => acc + parseFloat(ec.amount || 0), 0);
+        const baseDue = item.snapshot_amount_due 
+            ? parseFloat(item.snapshot_amount_due) 
+            : (parseFloat(item.monthly_fees || 0) + (item.transport_facility ? parseFloat(item.transport_fees || 0) : 0));
+        
+        const totalDue = baseDue + extraChargesSum;
+        const paidAmount = parseFloat(item.amount_paid || 0);
+        const isFullyPaid = paidAmount >= totalDue && totalDue > 0;
         const isProcessing = processingId === item.id;
+
+        const transport = item.transport_facility ? parseFloat(item.transport_fees || 0) : 0;
 
         return (
             <Animated.View 
@@ -247,10 +327,14 @@ export default function Fees() {
                 style={[styles.studentCard, { backgroundColor: theme.card, borderColor: theme.border }]}
             >
                 <View style={styles.cardHeader}>
-                    <View style={styles.studentInfo}>
+                    <TouchableOpacity 
+                        style={styles.studentInfo} 
+                        onPress={() => router.push(`/(principal)/students/details/${item.id}`)}
+                        activeOpacity={0.7}
+                    >
                         <View style={[styles.avatar, { backgroundColor: theme.primary + '20', overflow: 'hidden' }]}>
                             {item.photo_url ? (
-                                <Image source={{ uri: item.photo_url }} style={{ width: '100%', height: '100%' }} />
+                                <Image source={{ uri: getFullImageUrl(item.photo_url) ?? undefined }} style={{ width: '100%', height: '100%' }} />
                             ) : (
                                 <Text style={[styles.avatarText, { color: theme.primary }]}>{item.name?.charAt(0)}</Text>
                             )}
@@ -259,9 +343,9 @@ export default function Fees() {
                             <Text style={[styles.studentName, { color: theme.text }]}>{item.name}</Text>
                             <Text style={[styles.studentMeta, { color: theme.textLight }]}>Class {item.class}-{item.section} | Roll: {item.roll_no}</Text>
                         </View>
-                    </View>
-                    <View style={[styles.statusBadge, { backgroundColor: isPaid ? '#4CAF5020' : '#F4433620' }]}>
-                        <Text style={[styles.statusText, { color: isPaid ? '#4CAF50' : '#F44336' }]}>{isPaid ? 'PAID' : 'UNPAID'}</Text>
+                    </TouchableOpacity>
+                    <View style={[styles.statusBadge, { backgroundColor: isFullyPaid ? '#4CAF5020' : (paidAmount > 0 ? '#FF980020' : '#F4433620') }]}>
+                        <Text style={[styles.statusText, { color: isFullyPaid ? '#4CAF50' : (paidAmount > 0 ? '#FF9800' : '#F44336') }]}>{isFullyPaid ? 'PAID' : (paidAmount > 0 ? 'PARTIAL' : 'UNPAID')}</Text>
                     </View>
                 </View>
 
@@ -270,12 +354,12 @@ export default function Fees() {
                 <View style={styles.cardContent}>
                     <View style={styles.breakdownRow}>
                         <Text style={[styles.breakdownLabel, { color: theme.textLight }]}>Tuition Fee</Text>
-                        <Text style={[styles.breakdownValue, { color: theme.text }]}>₹{monthly.toLocaleString()}</Text>
+                        <Text style={[styles.breakdownValue, { color: theme.text }]}>₹{(baseDue - (item.transport_facility ? parseFloat(item.transport_fees || 0) : 0)).toLocaleString()}</Text>
                     </View>
                     {item.transport_facility && (
                         <View style={styles.breakdownRow}>
                             <Text style={[styles.breakdownLabel, { color: theme.textLight }]}>Transport Fee</Text>
-                            <Text style={[styles.breakdownValue, { color: theme.text }]}>₹{transport.toLocaleString()}</Text>
+                            <Text style={[styles.breakdownValue, { color: theme.text }]}>₹{parseFloat(item.transport_fees || 0).toLocaleString()}</Text>
                         </View>
                     )}
                     {(item.extra_charges || []).map((ec: any, idx: number) => (
@@ -284,14 +368,20 @@ export default function Fees() {
                             <Text style={[styles.breakdownValue, { color: theme.text }]}>₹{parseFloat(ec.amount).toLocaleString()}</Text>
                         </View>
                     ))}
+                    {paidAmount > 0 && (
+                        <View style={[styles.breakdownRow, { marginTop: 4 }]}>
+                            <Text style={[styles.breakdownLabel, { color: '#4CAF50', fontWeight: '700' }]}>Total Collected</Text>
+                            <Text style={[styles.breakdownValue, { color: '#4CAF50', fontWeight: '800' }]}>₹{paidAmount.toLocaleString()}</Text>
+                        </View>
+                    )}
                 </View>
 
                 <View style={[styles.cardFooter, { backgroundColor: isDark ? '#ffffff05' : '#00000002' }]}>
                     <View>
-                        <Text style={[styles.totalLabel, { color: theme.textLight }]}>Total Amount</Text>
-                        <Text style={[styles.totalValue, { color: theme.text }]}>₹{total.toLocaleString()}</Text>
+                        <Text style={[styles.totalLabel, { color: theme.textLight }]}>Total Due</Text>
+                        <Text style={[styles.totalValue, { color: theme.text }]}>₹{totalDue.toLocaleString()}</Text>
                     </View>
-                    {!isPaid && (
+                    {!isFullyPaid && (
                         <TouchableOpacity 
                             style={[
                                 styles.collectBtn, 
@@ -313,7 +403,7 @@ export default function Fees() {
                             </View>
                         </TouchableOpacity>
                     )}
-                    {isPaid && (
+                    {isFullyPaid && (
                         <View style={styles.paidActions}>
                             <TouchableOpacity 
                                 style={styles.iconBtn}
@@ -574,10 +664,9 @@ export default function Fees() {
                                     >
                                         <Text style={[
                                             styles.statusBtnText, 
-                                            filters.status === status && { color: '#fff' },
-                                            { color: theme.textLight }
+                                            { color: filters.status === status ? '#fff' : theme.textLight }
                                         ]}>
-                                            {status.toUpperCase()}
+                                            {status.toUpperCase()} ({stats.counts[status as keyof typeof stats.counts]})
                                         </Text>
                                     </TouchableOpacity>
                                 ))}
@@ -608,12 +697,7 @@ export default function Fees() {
             )}
 
             {activeTab === 'onetime' && (
-                <OneTimeFeesTab 
-                    onOpenReceipt={(data) => {
-                        setReceiptData({ student: data.student, payment: data.payment, type: 'ONE-TIME' });
-                        setShowReceipt(true);
-                    }}
-                />
+                <OneTimeFeesTab />
             )}
 
             <AddExtraChargeModal 

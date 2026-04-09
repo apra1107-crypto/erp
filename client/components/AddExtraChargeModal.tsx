@@ -4,6 +4,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { useTheme } from '../context/ThemeContext';
 import { BASE_URL } from '../constants/Config';
+import { getFullImageUrl } from '../utils/imageHelper';
 
 const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get('window');
 
@@ -93,12 +94,6 @@ export default function AddExtraChargeModal({ isOpen, onClose, onConfirm, studen
         setClassFilter('');
         setSectionFilter('');
         onClose();
-    };
-
-    const getFullImageUrl = (url: string | null | undefined): string | null => {
-        if (!url) return null;
-        if (url.startsWith('http')) return url;
-        return `${BASE_URL}${url.startsWith('/') ? '' : '/'}${url}`;
     };
 
     const styles = StyleSheet.create({

@@ -132,9 +132,12 @@ app.get('/api/debug/password-reset-status', async (req, res) => {
       passwordResetTableExists: tableCheck.rows[0].exists,
       totalInstitutes: instituteCount.rows[0].count,
       awsConfigured: {
-        AWS_REGION: !!process.env.AWS_REGION,
-        AWS_ACCESS_KEY_ID: !!process.env.AWS_ACCESS_KEY_ID,
-        AWS_SECRET_ACCESS_KEY: !!process.env.AWS_SECRET_ACCESS_KEY,
+            EOS_REGION: !!process.env.EOS_REGION,
+            EOS_ACCESS_KEY: !!process.env.EOS_ACCESS_KEY,
+            EOS_SECRET_KEY: !!process.env.EOS_SECRET_KEY,
+            EOS_BUCKET: !!process.env.EOS_BUCKET,
+            EOS_ENDPOINT: !!process.env.EOS_ENDPOINT,
+        
         SES_FROM_EMAIL: !!process.env.SES_FROM_EMAIL,
       },
       timestamp: new Date().toISOString()

@@ -1,4 +1,4 @@
-import { S3Client, PutObjectCommand, DeleteObjectCommand } from '@aws-sdk/client-s3';
+import * as Minio from 'minio';
 import { SendMailClient } from 'zeptomail';
 import nodemailer from 'nodemailer';
 import React from 'react';
@@ -15,12 +15,35 @@ const zeptoClient = new SendMailClient({
   token: process.env.ZEPTOMAIL_API_TOKEN,
 });
 
-const s3Client = new S3Client({
-  region: process.env.AWS_REGION,
-  credentials: {
-    accessKeyId: process.env.AWS_ACCESS_KEY_ID,
-    secretAccessKey: process.env.AWS_SECRET_ACCESS_KEY,
-  },
+// Helper to parse EOS_ENDPOINT for MinIO
+const parseEndpoint = (url) => {
+  if (!url) return { endPoint: 'objectstore.e2enetworks.net', port: 443, useSSL: true };
+  
+  try {
+    // Ensure the URL has a protocol for the URL parser
+    const validUrl = url.startsWith('http') ? url : `https://${url}`;
+    const parsed = new URL(validUrl);
+    
+    return {
+      endPoint: parsed.hostname,
+      port: parsed.port ? parseInt(parsed.port) : (parsed.protocol === 'https:' ? 443 : 80),
+      useSSL: parsed.protocol === 'https:',
+    };
+  } catch (e) {
+    // Fallback if URL is totally malformed
+    return { endPoint: url, port: 443, useSSL: true };
+  }
+};
+
+const endpointConfig = parseEndpoint(process.env.EOS_ENDPOINT);
+
+const minioClient = new Minio.Client({
+  endPoint: endpointConfig.endPoint,
+  port: endpointConfig.port,
+  useSSL: endpointConfig.useSSL,
+  accessKey: process.env.EOS_ACCESS_KEY,
+  secretKey: process.env.EOS_SECRET_KEY,
+  region: process.env.EOS_REGION,
 });
 
 // Generate base62 unique code (Clean set: No 0, o, O, i, I, l, L)
@@ -36,51 +59,46 @@ const generateUniqueCode = () => {
   return code;
 };
 
-// Upload image to S3
+// Upload image to cloud storage using MinIO
 const uploadToS3 = async (fileBuffer, fileName, mimetype, folder = 'others') => {
-  // folder can be: 'students', 'teachers', 'logos', or 'others'
   const key = `${folder}/${Date.now()}-${fileName}`;
 
-  const params = {
-    Bucket: process.env.S3_BUCKET_NAME,
-    Key: key,
-    Body: fileBuffer,
-    ContentType: mimetype,
-  };
-
   try {
-    const command = new PutObjectCommand(params);
-    await s3Client.send(command);
-    const photoUrl = `https://${process.env.S3_BUCKET_NAME}.s3.${process.env.AWS_REGION}.amazonaws.com/${key}`;
-    console.log('✅ Image uploaded to S3:', photoUrl);
-    return photoUrl;
+    await minioClient.putObject(
+      process.env.EOS_BUCKET,
+      key,
+      fileBuffer,
+      fileBuffer.length,
+      { 'Content-Type': mimetype }
+    );
+    console.log('✅ Image uploaded to EOS (MinIO):', key);
+    return key;
   } catch (error) {
-    console.error('❌ Error uploading to S3:', error);
+    console.error('❌ Error uploading to EOS (MinIO):', error);
     throw error;
   }
 };
 
-// Delete image from S3
-const deleteFromS3 = async (fileUrl) => {
-  if (!fileUrl) return;
+// Delete image from cloud storage using MinIO
+const deleteFromS3 = async (fileKey) => {
+  if (!fileKey) return;
 
   try {
-    // Extract key from URL
-    // URL format: https://BUCKET.s3.REGION.amazonaws.com/KEY
-    const bucketUrl = `https://${process.env.S3_BUCKET_NAME}.s3.${process.env.AWS_REGION}.amazonaws.com/`;
-    const key = fileUrl.replace(bucketUrl, '');
+    let key = fileKey;
+    if (fileKey.startsWith('http')) {
+      const bucketUrl = process.env.EOS_BUCKET_URL;
+      if (bucketUrl) {
+        key = fileKey.replace(`${bucketUrl}/`, '');
+      } else {
+        const urlParts = fileKey.split('/');
+        key = urlParts.slice(3).join('/');
+      }
+    }
 
-    const params = {
-      Bucket: process.env.S3_BUCKET_NAME,
-      Key: key,
-    };
-
-    const command = new DeleteObjectCommand(params);
-    await s3Client.send(command);
-    console.log('✅ Image deleted from S3:', key);
+    await minioClient.removeObject(process.env.EOS_BUCKET, key);
+    console.log('✅ Image deleted from EOS (MinIO):', key);
   } catch (error) {
-    console.error('❌ Error deleting from S3:', error);
-    // Don't throw error to prevent blocking main flow (logging is enough)
+    console.error('❌ Error deleting from EOS (MinIO):', error);
   }
 };
 
@@ -670,7 +688,7 @@ const sendSubscriptionSuccessEmail = async (email, principalName, instituteId, d
     if (instRes.rows.length > 0) {
       const inst = instRes.rows[0];
       instituteName = inst.institute_name;
-      const logoUrl = inst.logo_url?.startsWith('http') ? inst.logo_url : (inst.logo_url ? `${process.env.S3_BUCKET_URL}/${inst.logo_url}` : null);
+      const logoUrl = inst.logo_url?.startsWith('http') ? inst.logo_url : (inst.logo_url ? `${process.env.EOS_BUCKET_URL}/${inst.logo_url}` : null);
       if (logoUrl) {
         try {
           logoBase64 = await getBase64Image(logoUrl);

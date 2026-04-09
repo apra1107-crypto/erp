@@ -10,8 +10,8 @@ import Toast from 'react-native-toast-message';
 import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 import Animated, { useSharedValue, useAnimatedStyle, withTiming, withSpring, Easing, useAnimatedScrollHandler, interpolateColor, interpolate, Extrapolate, withRepeat, withSequence } from 'react-native-reanimated';
-
 import { API_ENDPOINTS } from '../../constants/Config';
+import { getFullImageUrl } from '../../utils/imageHelper';
 
 const ModernToggle = ({ active, onToggle, theme }: { active: boolean, onToggle: () => void, theme: any }) => {
     return (
@@ -652,9 +652,9 @@ export default function PrincipalDashboard() {
   const handleCreateResult = (item: any) => {
     dismissSearch();
     if (item.type === 'student') {
-        router.push({ pathname: '/(principal)/students', params: { searchId: item.id } });
+        router.push(`/(principal)/students/details/${item.id}` as any);
     } else if (item.type === 'teacher') {
-        router.push({ pathname: '/(principal)/teachers', params: { searchId: item.id } });
+        router.push(`/(principal)/teachers/details/${item.id}` as any);
     }
   };
 
@@ -816,24 +816,29 @@ export default function PrincipalDashboard() {
             </View>
         </TouchableOpacity>
         
-        <View style={{ position: 'absolute', left: 0, right: 0, top: insets.top + 10, bottom: 10, alignItems: 'center', justifyContent: 'center', zIndex: 1, pointerEvents: 'box-none' }}>
+        <View style={{ position: 'absolute', left: 0, right: 0, top: insets.top + 10, bottom: 10, alignItems: 'center', justifyContent: 'center', zIndex: 100, pointerEvents: 'box-none' }}>
             <TouchableOpacity 
                 onPress={() => {
-                    const expiryDate = subData?.subscription_end_date 
-                        ? new Date(subData.subscription_end_date).toLocaleDateString('en-IN', { day: '2-digit', month: 'long', year: 'numeric', hour: '2-digit', minute: '2-digit' })
+                    const expiryFull = subData?.subscription_end_date 
+                        ? new Date(subData.subscription_end_date).toLocaleString('en-IN', { day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit', hour12: true })
                         : 'Unlimited';
+                    
+                    const takenOnFull = (subData?.subscription_start_date || subData?.created_at)
+                        ? new Date(subData?.subscription_start_date || subData?.created_at).toLocaleString('en-IN', { day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit', hour12: true })
+                        : 'N/A';
                     
                     Toast.show({ 
                         type: 'subscription', 
                         position: 'bottom',
-                        bottomOffset: 65,
+                        bottomOffset: insets.bottom + 90,
+                        visibilityTime: 6000,
                         props: { 
                             label: visuals.label, 
                             timeLeft: visuals.timeLeft,
-                            expiryDate: expiryDate,
+                            expiryDate: expiryFull,
+                            takenOn: takenOnFull,
                             color: visuals.color,
-                            monthlyPrice: subData?.monthly_price,
-                            startDate: subData?.subscription_start_date || subData?.created_at,
+                            monthlyPrice: subData?.monthly_price || 0,
                         } 
                     });
                 }} 
@@ -849,7 +854,7 @@ export default function PrincipalDashboard() {
             activeOpacity={isLocked ? 1 : 0.7}
         >
             <View style={{ position: 'relative' }}>
-                {profileData?.principal_photo_url ? <Image source={{ uri: profileData.principal_photo_url }} style={styles.headerAvatar} /> : <View style={styles.placeholderAvatar}><Text style={styles.avatarText}>{userData?.principal_name?.charAt(0) || 'P'}</Text></View>}
+                {profileData?.principal_photo_url ? <Image source={{ uri: getFullImageUrl(profileData.principal_photo_url) || undefined }} style={styles.headerAvatar} /> : <View style={styles.placeholderAvatar}><Text style={styles.avatarText}>{userData?.principal_name?.charAt(0) || 'P'}</Text></View>}
                 {isLocked && (
                     <View style={{ position: 'absolute', bottom: 0, right: 0, backgroundColor: theme.danger, width: 18, height: 18, borderRadius: 9, justifyContent: 'center', alignItems: 'center', borderWidth: 2, borderColor: theme.background }}>
                         <Ionicons name="lock-closed" size={10} color="#fff" />
@@ -891,7 +896,7 @@ export default function PrincipalDashboard() {
         )}
       </View>
 
-      {showResults && <View style={styles.resultsContainer}>{searchResults.length === 0 ? <Text style={styles.noResults}>No results found</Text> : <FlatList data={searchResults} keyExtractor={(item, index) => item.id.toString() + index} renderItem={({ item }) => <TouchableOpacity style={styles.resultItem} onPress={() => handleCreateResult(item)}><View style={styles.resultAvatar}>{item.photo_url ? <Image source={{ uri: item.photo_url }} style={styles.avatarImg} /> : <Ionicons name="person" size={20} color={theme.textLight} />}</View><View><Text style={styles.resultName}>{item.name}</Text><Text style={styles.resultInfo}>{item.type === 'student' ? `Class: ${item.class}-${item.section}` : `Subject: ${item.subject}`}</Text></View><Text style={[styles.typeBadge, { backgroundColor: item.type === 'student' ? theme.primary : theme.secondary }]}>{item.type}</Text></TouchableOpacity>} />}</View>}
+      {showResults && <View style={styles.resultsContainer}>{searchResults.length === 0 ? <Text style={styles.noResults}>No results found</Text> : <FlatList data={searchResults} keyExtractor={(item, index) => item.id.toString() + index} renderItem={({ item }) => <TouchableOpacity style={styles.resultItem} onPress={() => handleCreateResult(item)}><View style={styles.resultAvatar}>{item.photo_url ? <Image source={{ uri: getFullImageUrl(item.photo_url) || undefined }} style={styles.avatarImg} /> : <Ionicons name="person" size={20} color={theme.textLight} />}</View><View><Text style={styles.resultName}>{item.name}</Text><Text style={styles.resultInfo}>{item.type === 'student' ? `Class: ${item.class}-${item.section}` : `Subject: ${item.subject}`}</Text></View><Text style={[styles.typeBadge, { backgroundColor: item.type === 'student' ? theme.primary : theme.secondary }]}>{item.type}</Text></TouchableOpacity>} />}</View>}
 
       <ScrollView style={styles.content} showsVerticalScrollIndicator={false} refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} colors={[theme.primary]} />} contentContainerStyle={{ paddingBottom: insets.bottom + 40, paddingTop: 10 }}>
         {/* Flashcards Carousel */}
@@ -1003,7 +1008,7 @@ export default function PrincipalDashboard() {
                     <View style={{ flexDirection: 'row', alignItems: 'center' }}>
                         <View style={{ position: 'relative' }}>
                             {profileData?.principal_photo_url ? (
-                                <Image source={{ uri: profileData.principal_photo_url }} style={styles.menuAvatar} />
+                                <Image source={{ uri: getFullImageUrl(profileData.principal_photo_url) || undefined }} style={styles.menuAvatar} />
                             ) : (
                                 <View style={[styles.menuAvatar, { backgroundColor: theme.primary + '20', justifyContent: 'center', alignItems: 'center' }]}>
                                     <Text style={{ color: theme.primary, fontSize: 24, fontWeight: 'bold' }}>

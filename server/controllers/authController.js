@@ -131,8 +131,8 @@ const loginInstitute = async (req, res) => {
     // Ensure image URLs are absolute
     const absoluteInstitute = {
         ...institute,
-        logo_url: institute.logo_url?.startsWith('http') ? institute.logo_url : (institute.logo_url ? `${process.env.S3_BUCKET_URL}/${institute.logo_url}` : null),
-        principal_photo_url: institute.principal_photo_url?.startsWith('http') ? institute.principal_photo_url : (institute.principal_photo_url ? `${process.env.S3_BUCKET_URL}/${institute.principal_photo_url}` : null),
+        logo_url: institute.logo_url?.startsWith('http') ? institute.logo_url : (institute.logo_url ? `${process.env.EOS_BUCKET_URL}/${institute.logo_url}` : null),
+        principal_photo_url: institute.principal_photo_url?.startsWith('http') ? institute.principal_photo_url : (institute.principal_photo_url ? `${process.env.EOS_BUCKET_URL}/${institute.principal_photo_url}` : null),
     };
 
     // Generate JWT token

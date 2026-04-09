@@ -9,10 +9,10 @@ import Toast from 'react-native-toast-message';
 import * as MediaLibrary from 'expo-media-library';
 import * as FileSystem from 'expo-file-system/legacy';
 import * as Sharing from 'expo-sharing';
-
 import { useTheme } from '../../../context/ThemeContext';
 import { API_ENDPOINTS, BASE_URL } from '../../../constants/Config';
 import IDCardPreview from '../../../components/IDCardPreview';
+import { getFullImageUrl } from '../../../utils/imageHelper';
 
 const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get('window');
 const MAX_SELECTION = 100; // Increased for Server-side PDF support
@@ -88,12 +88,6 @@ export default function IDCardStudentSelection() {
                 Toast.show({ type: 'info', text1: 'Limited Selection', text2: `Selected first ${MAX_SELECTION} students.` });
             }
         }
-    };
-
-    const getFullImageUrl = (url: string | null | undefined): string | null => {
-        if (!url) return null;
-        if (url.startsWith('http')) return url;
-        return `${BASE_URL}${url.startsWith('/') ? '' : '/'}${url}`;
     };
 
     const handleGeneratePDF = async () => {

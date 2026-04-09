@@ -129,17 +129,9 @@ const getDashboard = async (req, res) => {
 
     // 5. REVENUE STATS for Dashboard Card (Specific to TODAY)
     const dailyMonthlyRes = await pool.query(
-        `SELECT COALESCE(SUM(s.monthly_fees + CASE WHEN s.transport_facility THEN s.transport_fees ELSE 0 END), 0) as collected
-         FROM students s
-         JOIN student_fees f ON s.id = f.student_id AND f.session_id = $2
-         WHERE s.institute_id = $1 AND f.paid_at::date = $3::date AND f.status = 'paid'`,
-        [instituteId, sessionId, today]
-    );
-
-    const dailyExtraRes = await pool.query(
-        `SELECT COALESCE(SUM(amount), 0) as collected
-         FROM monthly_extra_charges
-         WHERE institute_id = $1 AND session_id = $2 AND created_at::date = $3::date AND status = 'paid'`,
+        `SELECT COALESCE(SUM(f.amount_paid), 0) as collected
+         FROM student_fees f
+         WHERE f.institute_id = $1 AND f.session_id = $2 AND f.paid_at::date = $3::date AND f.status = 'paid'`,
         [instituteId, sessionId, today]
     );
 
@@ -153,14 +145,13 @@ const getDashboard = async (req, res) => {
     );
 
     const dailyTotal = parseFloat(dailyMonthlyRes.rows[0].collected || 0) + 
-                       parseFloat(dailyExtraRes.rows[0].collected || 0) + 
                        parseFloat(dailyOneTimeRes.rows[0].collected || 0);
 
     const dashboardData = {
       institute: {
         ...institute,
-        logo_url: institute.logo_url?.startsWith('http') ? institute.logo_url : (institute.logo_url ? `${process.env.S3_BUCKET_URL}/${institute.logo_url}` : null),
-        principal_photo_url: institute.principal_photo_url?.startsWith('http') ? institute.principal_photo_url : (institute.principal_photo_url ? `${process.env.S3_BUCKET_URL}/${institute.principal_photo_url}` : null),
+        logo_url: institute.logo_url?.startsWith('http') ? institute.logo_url : (institute.logo_url ? `${process.env.EOS_BUCKET_URL}/${institute.logo_url}` : null),
+        principal_photo_url: institute.principal_photo_url?.startsWith('http') ? institute.principal_photo_url : (institute.principal_photo_url ? `${process.env.EOS_BUCKET_URL}/${institute.principal_photo_url}` : null),
       },
       today_events: todayEventsRes.rows,
       stats: {
@@ -402,6 +393,7 @@ const updateStudent = async (req, res) => {
       monthly_fees,
       transport_fees,
       delete_photo, // Flag to delete existing photo
+      fee_update_mode, // 'current' or 'upcoming'
     } = req.body;
 
     // Validation checks similarly as addStudent
@@ -410,18 +402,20 @@ const updateStudent = async (req, res) => {
       return res.status(400).json({ message: 'Please fill all required fields' });
     }
 
-    // Get existing student to check for photo
+    // Get existing student to check for photo and current fees
     const existingStudent = await pool.query('SELECT * FROM students WHERE id = $1', [id]);
     if (existingStudent.rows.length === 0) {
       return res.status(404).json({ message: 'Student not found' });
     }
     const currentStudent = existingStudent.rows[0];
+    const instituteId = currentStudent.institute_id;
+    const sessionId = currentStudent.session_id;
 
     // Check roll no uniqueness if changed
     if (currentStudent.roll_no !== roll_no || currentStudent.class !== studentClass || currentStudent.section !== section) {
       const checkRoll = await pool.query(
         'SELECT * FROM students WHERE institute_id = $1 AND roll_no = $2 AND class = $3 AND section = $4 AND id != $5',
-        [req.user.institute_id, roll_no, studentClass, section, id]
+        [instituteId, roll_no, studentClass, section, id]
       );
       if (checkRoll.rows.length > 0) {
         return res.status(400).json({ message: 'Roll number already exists in this class/section' });
@@ -432,20 +426,43 @@ const updateStudent = async (req, res) => {
 
     // Handle Photo Logic
     if (req.file) {
-      // New photo provided
-      // 1. Delete old photo if exists
-      if (currentStudent.photo_url) {
-        await deleteFromS3(currentStudent.photo_url);
-      }
-      // 2. Upload new photo
+      if (currentStudent.photo_url) await deleteFromS3(currentStudent.photo_url);
       photoUrl = await uploadToS3(req.file.buffer, req.file.originalname, req.file.mimetype, 'students');
     } else if (delete_photo === 'true') {
-      // Requested to delete photo
-      if (currentStudent.photo_url) {
-        await deleteFromS3(currentStudent.photo_url);
-      }
+      if (currentStudent.photo_url) await deleteFromS3(currentStudent.photo_url);
       photoUrl = null;
     }
+
+    const newMonthly = parseFloat(monthly_fees || 0);
+    const newTransport = parseFloat(transport_fees || 0);
+    const oldMonthly = parseFloat(currentStudent.monthly_fees || 0);
+    const oldTransport = parseFloat(currentStudent.transport_fees || 0);
+
+    // FEE UPDATE LOGIC: Automatically apply to unpaid months based on mode
+    if (newMonthly !== oldMonthly || newTransport !== oldTransport) {
+        const totalNewDue = newMonthly + (currentStudent.transport_facility ? newTransport : 0);
+        
+        let query = `UPDATE student_fees SET amount_due = $1, status = 'pending' 
+                    WHERE student_id = $2 AND session_id = $3 AND status != 'paid'`;
+        const params = [totalNewDue, id, sessionId];
+
+        // NEW CONDITION: Include current month if unpaid, plus all future months
+        if (fee_update_mode === 'upcoming' || true) { 
+            const now = new Date();
+            const currentMonth = now.getMonth() + 1; // 1-12
+            const currentYear = now.getFullYear();
+            // Changed '>' to '>=' for the month check in the current year
+            query += ` AND (year > $4 OR (year = $4 AND month >= $5))`;
+            params.push(currentYear, currentMonth);
+        }
+
+        // Update records in the database
+        await pool.query(query, params);
+    }
+
+    // Always use the new fees for the profile update
+    const finalMonthly = newMonthly;
+    const finalTransport = newTransport;
 
     // Update DB
     const result = await pool.query(
@@ -456,7 +473,7 @@ const updateStudent = async (req, res) => {
        WHERE id = $16 RETURNING *`,
       [name, studentClass, section, roll_no, dob, gender, father_name, mother_name,
         mobile, email, address, transport_facility === 'true', photoUrl, 
-        parseFloat(monthly_fees || 0), parseFloat(transport_fees || 0), id]
+        finalMonthly, finalTransport, id]
     );
 
     res.status(200).json({
@@ -688,8 +705,8 @@ const getProfile = async (req, res) => {
     const profile = result.rows[0];
     const absoluteProfile = {
         ...profile,
-        logo_url: profile.logo_url?.startsWith('http') ? profile.logo_url : (profile.logo_url ? `${process.env.S3_BUCKET_URL}/${profile.logo_url}` : null),
-        principal_photo_url: profile.principal_photo_url?.startsWith('http') ? profile.principal_photo_url : (profile.principal_photo_url ? `${process.env.S3_BUCKET_URL}/${profile.principal_photo_url}` : null),
+        logo_url: profile.logo_url?.startsWith('http') ? profile.logo_url : (profile.logo_url ? `${process.env.EOS_BUCKET_URL}/${profile.logo_url}` : null),
+        principal_photo_url: profile.principal_photo_url?.startsWith('http') ? profile.principal_photo_url : (profile.principal_photo_url ? `${process.env.EOS_BUCKET_URL}/${profile.principal_photo_url}` : null),
     };
 
     res.status(200).json({ profile: absoluteProfile });
@@ -924,13 +941,29 @@ const collectFee = async (req, res) => {
       });
     }
 
+    // Calculate actual amount being paid from profile snapshot PLUS any extra charges
+    const studentProfile = student.rows[0];
+    const studentFull = await pool.query('SELECT monthly_fees, transport_fees, transport_facility FROM students WHERE id = $1', [id]);
+    const profile = studentFull.rows[0];
+    
+    // Sum monthly extra charges for this student/month/year
+    const extraChargesRes = await pool.query(
+        `SELECT COALESCE(SUM(amount), 0) as total_extra FROM monthly_extra_charges 
+         WHERE student_id = $1 AND institute_id = $2 AND session_id = $3 AND month = $4 AND year = $5`,
+        [id, instituteId, sessionId, parseInt(month), parseInt(year)]
+    );
+    const extraTotal = parseFloat(extraChargesRes.rows[0].total_extra || 0);
+
+    const baseDue = parseFloat(profile.monthly_fees || 0) + (profile.transport_facility ? parseFloat(profile.transport_fees || 0) : 0);
+    const totalDue = baseDue + extraTotal;
+
     // Insert or update status in student_fees
     await pool.query(
-      `INSERT INTO student_fees (student_id, institute_id, session_id, month, year, status, paid_at, collected_by, payment_method) 
-       VALUES ($1, $2, $3, $4, $5, 'paid', NOW(), $6, 'Cash')
+      `INSERT INTO student_fees (student_id, institute_id, session_id, month, year, status, paid_at, collected_by, payment_method, amount_paid, amount_due) 
+       VALUES ($1, $2, $3, $4, $5, 'paid', NOW(), $6, 'Cash', $7, $8)
        ON CONFLICT (student_id, month, year, session_id) 
-       DO UPDATE SET status = 'paid', paid_at = NOW(), collected_by = $6, payment_method = 'Cash'`,
-      [id, instituteId, sessionId, parseInt(month), parseInt(year), collectedByName]
+       DO UPDATE SET status = 'paid', paid_at = NOW(), collected_by = $6, payment_method = 'Cash', amount_paid = $7, amount_due = $8`,
+      [id, instituteId, sessionId, parseInt(month), parseInt(year), collectedByName, totalDue, baseDue]
     );
 
     // Also mark all extra charges for this student, month, year as paid
@@ -1032,7 +1065,8 @@ const getFeesStatus = async (req, res) => {
         const query = `
             SELECT s.*, 
             CASE WHEN f.status = 'paid' THEN 'paid' ELSE 'pending' END as month_fee_status,
-            f.payment_method, f.transaction_id, f.collected_by, f.paid_at, f.month, f.year
+            f.payment_method, f.transaction_id, f.collected_by, f.paid_at, f.month, f.year,
+            f.amount_paid, f.amount_due as snapshot_amount_due
             FROM students s
             LEFT JOIN student_fees f ON s.id = f.student_id 
                 AND f.month = $3::integer AND f.year = $4::integer AND f.session_id = $2
@@ -1163,18 +1197,28 @@ const getStats = async (req, res) => {
         // Monthly Fees Stats ( Tuition + Transport + Extra Charges )
         const monthlyRevenueRes = await pool.query(
             `SELECT 
-                (SELECT COALESCE(SUM(monthly_fees + CASE WHEN transport_facility THEN transport_fees ELSE 0 END), 0) 
-                 FROM students WHERE institute_id = $1 AND session_id = $2 AND is_active = true
-                 AND admission_date <= MAKE_DATE($4::int, $3::int, 1) + interval '1 month' - interval '1 day') +
-                (SELECT COALESCE(SUM(amount), 0) FROM monthly_extra_charges 
-                 WHERE institute_id = $1 AND session_id = $2 AND month = $3::integer AND year = $4::integer) as expected,
+                (
+                    SELECT COALESCE(SUM(
+                        COALESCE(f.amount_due, s.monthly_fees + CASE WHEN s.transport_facility THEN s.transport_fees ELSE 0 END)
+                    ), 0)
+                    FROM students s
+                    LEFT JOIN student_fees f ON s.id = f.student_id 
+                        AND f.month = $3::integer AND f.year = $4::integer AND f.session_id = $2
+                    WHERE s.institute_id = $1 AND s.session_id = $2 AND s.is_active = true
+                    AND s.admission_date <= MAKE_DATE($4::int, $3::int, 1) + interval '1 month' - interval '1 day'
+                ) +
+                (
+                    SELECT COALESCE(SUM(amount), 0) 
+                    FROM monthly_extra_charges 
+                    WHERE institute_id = $1 AND session_id = $2 AND month = $3::integer AND year = $4::integer
+                ) as expected,
                 
-                (SELECT COALESCE(SUM(s.monthly_fees + CASE WHEN s.transport_facility THEN s.transport_fees ELSE 0 END), 0)
-                 FROM students s
-                 JOIN student_fees f ON s.id = f.student_id AND f.month = $3::integer AND f.year = $4::integer AND f.session_id = $2
-                 WHERE s.institute_id = $1 AND s.session_id = $2 AND s.is_active = true AND f.status = 'paid') +
-                (SELECT COALESCE(SUM(amount), 0) FROM monthly_extra_charges 
-                 WHERE institute_id = $1 AND session_id = $2 AND month = $3::integer AND year = $4::integer AND status = 'paid') as collected`,
+                (
+                    SELECT COALESCE(SUM(f.amount_paid), 0)
+                    FROM student_fees f
+                    WHERE f.institute_id = $1 AND f.session_id = $2
+                    AND f.month = $3::integer AND f.year = $4::integer AND f.status = 'paid'
+                ) as collected`,
             [instituteId, sessionId, statsMonth, statsYear]
         );
 
@@ -1307,12 +1351,15 @@ const getMonthlyActivationStatus = async (req, res) => {
         }
 
         const result = await pool.query(
-            `SELECT is_activated FROM monthly_fee_activations 
+            `SELECT is_activated, is_pay_now_active FROM monthly_fee_activations 
              WHERE institute_id = $1 AND session_id = $2 AND month = $3 AND year = $4`,
             [instituteId, sessionId, parseInt(month), parseInt(year)]
         );
 
-        res.status(200).json({ activated: result.rows[0]?.is_activated || false });
+        res.status(200).json({ 
+            activated: result.rows[0]?.is_activated || false,
+            isPayNowActive: result.rows[0]?.is_pay_now_active || false
+        });
     } catch (error) {
         console.error('Get monthly activation status error:', error);
         res.status(500).json({ message: 'Server error' });
@@ -1324,21 +1371,36 @@ const toggleMonthlyActivation = async (req, res) => {
     try {
         const instituteId = req.user.institute_id || req.user.id;
         const sessionId = req.user.current_session_id;
-        const { month, year, activate } = req.body;
+        const { month, year, activate, isPayNowActive } = req.body;
 
-        if (!month || !year || activate === undefined) {
-            return res.status(400).json({ message: 'Month, year and activate flag are required' });
+        if (!month || !year) {
+            return res.status(400).json({ message: 'Month and year are required' });
         }
 
         await pool.query(
-            `INSERT INTO monthly_fee_activations (institute_id, session_id, month, year, is_activated)
-             VALUES ($1, $2, $3, $4, $5)
+            `INSERT INTO monthly_fee_activations (institute_id, session_id, month, year, is_activated, is_pay_now_active)
+             VALUES ($1, $2, $3, $4, COALESCE($5, FALSE), COALESCE($6, FALSE))
              ON CONFLICT (institute_id, session_id, month, year) 
-             DO UPDATE SET is_activated = $5, activated_at = NOW()`,
-            [instituteId, sessionId, parseInt(month), parseInt(year), activate]
+             DO UPDATE SET 
+                is_activated = COALESCE($5, monthly_fee_activations.is_activated),
+                is_pay_now_active = COALESCE($6, monthly_fee_activations.is_pay_now_active),
+                activated_at = NOW()`,
+            [instituteId, sessionId, parseInt(month), parseInt(year), activate ?? null, isPayNowActive ?? null]
         );
 
         if (activate) {
+            // Create pending fee records for all active students for this month
+            // This ensures every student has a fixed 'amount_due' snapshot for this month
+            await pool.query(
+                `INSERT INTO student_fees (student_id, institute_id, session_id, month, year, status, amount_due)
+                 SELECT id, institute_id, session_id, $1, $2, 'pending', 
+                        (monthly_fees + CASE WHEN transport_facility THEN transport_fees ELSE 0 END)
+                 FROM students
+                 WHERE institute_id = $3 AND session_id = $4 AND is_active = true
+                 ON CONFLICT (student_id, month, year, session_id) DO NOTHING`,
+                [parseInt(month), parseInt(year), instituteId, sessionId]
+            );
+
             // Fetch some stats for the flashcard
             const months = [
                 "January", "February", "March", "April", "May", "June",
@@ -1374,8 +1436,43 @@ const toggleMonthlyActivation = async (req, res) => {
             }
         }
 
+        if (isPayNowActive) {
+            const months = [
+                "January", "February", "March", "April", "May", "June",
+                "July", "August", "September", "October", "November", "December"
+            ];
+            const notifTitle = 'Online Payment Enabled';
+            const notifBody = `You can now pay your ${months[parseInt(month) - 1]} ${year} fees through the "Pay Now" button.`;
+
+            // Emit socket event for real-time notification box
+            emitToAllStudents(instituteId, 'pay_now_enabled', {
+                month: parseInt(month),
+                year: parseInt(year),
+                monthName: months[parseInt(month) - 1],
+                title: notifTitle,
+                message: notifBody,
+                timestamp: new Date().toISOString()
+            });
+
+            // Send Push Notifications
+            try {
+                const studentsRes = await pool.query(
+                    'SELECT push_token FROM students WHERE institute_id = $1 AND push_token IS NOT NULL AND push_token != $2',
+                    [instituteId, '']
+                );
+                // Deduplicate tokens here before passing to sendPushNotification
+                const tokens = [...new Set(studentsRes.rows.map(r => r.push_token))]; 
+                if (tokens.length > 0) {
+                    const { sendPushNotification } = await import('../utils/pushNotification.js');
+                    await sendPushNotification(tokens, notifTitle, notifBody, { type: 'pay_now_enabled' });
+                }
+            } catch (pErr) {
+                console.error('[PayNowNotif] Push failed:', pErr);
+            }
+        }
+
         res.status(200).json({ 
-            message: activate ? 'Monthly fees activated successfully' : 'Monthly fees deactivated',
+            message: activate ? 'Monthly fees activated successfully' : (isPayNowActive ? 'Online payment enabled' : 'Settings updated'),
             activated: activate 
         });
     } catch (error) {
@@ -1491,7 +1588,7 @@ const getStudentFeesFull = async (req, res) => {
 
     // 4. Get monthly payment records
     const paymentsRes = await pool.query(
-      `SELECT month, year, status, paid_at, payment_method, transaction_id, collected_by
+      `SELECT month, year, status, paid_at, payment_method, transaction_id, collected_by, amount_paid, amount_due
        FROM student_fees 
        WHERE student_id = $1 AND institute_id = $2 AND session_id = $3
        ORDER BY year DESC, month DESC`,
@@ -1538,34 +1635,50 @@ const getDailyRevenueDetails = async (req, res) => {
           sessionId = sessionRes.rows[0]?.current_session_id;
         }
 
-        const { date, type } = req.query;
+        const { date, type, month, year } = req.query;
 
         if (!date) return res.status(400).json({ message: 'Date is required' });
 
         let allPayments = [];
+        let advancePayments = [];
 
         if (!type || type === 'monthly') {
-            // Get students who paid monthly fees on this date
-            const monthlyPayments = await pool.query(
-                `SELECT s.id, s.name, s.class, s.section, s.roll_no, s.photo_url,
-                        (s.monthly_fees + CASE WHEN s.transport_facility THEN s.transport_fees ELSE 0 END) as amount,
-                        'Monthly' as fee_type, f.paid_at
+            const m = parseInt(month);
+            const y = parseInt(year);
+
+            // 1. Get Daily Payments (on selected date for target month)
+            let dailyQuery = `SELECT s.id, s.name, s.class, s.section, s.roll_no, s.photo_url,
+                        f.amount_paid as amount,
+                        'Monthly' as fee_type, f.paid_at, f.month, f.year
                  FROM students s
                  JOIN student_fees f ON s.id = f.student_id
-                 WHERE s.institute_id = $1 AND f.session_id = $2 AND f.paid_at::date = $3::date AND f.status = 'paid'`,
-                [instituteId, sessionId, date]
-            );
+                 WHERE s.institute_id = $1 AND f.session_id = $2 AND f.paid_at::date = $3::date AND f.status = 'paid'`;
+            
+            const dailyParams = [instituteId, sessionId, date];
+            if (month && year) {
+                dailyQuery += ` AND f.month = $4 AND f.year = $5`;
+                dailyParams.push(m, y);
+            }
+            const dailyRes = await pool.query(dailyQuery, dailyParams);
+            allPayments = [...dailyRes.rows];
 
-            // Get students who paid extra charges on this date
-            const extraCharges = await pool.query(
-                `SELECT s.id, s.name, s.class, s.section, s.roll_no, s.photo_url,
-                        ec.amount, ec.reason as fee_type, ec.created_at as paid_at
-                 FROM students s
-                 JOIN monthly_extra_charges ec ON s.id = ec.student_id
-                 WHERE s.institute_id = $1 AND ec.session_id = $2 AND ec.created_at::date = $3::date AND ec.status = 'paid'`,
-                [instituteId, sessionId, date]
-            );
-            allPayments = [...allPayments, ...monthlyPayments.rows, ...extraCharges.rows];
+            // 2. Get Advance Payments (paid BEFORE the 1st of the target month for target month)
+            if (month && year) {
+                const firstOfMonth = `${y}-${m.toString().padStart(2, '0')}-01`;
+                const advRes = await pool.query(
+                    `SELECT s.id, s.name, s.class, s.section, s.roll_no, s.photo_url,
+                            f.amount_paid as amount,
+                            'Monthly' as fee_type, f.paid_at, f.month, f.year
+                     FROM students s
+                     JOIN student_fees f ON s.id = f.student_id
+                     WHERE s.institute_id = $1 AND f.session_id = $2 
+                       AND f.month = $3 AND f.year = $4
+                       AND f.paid_at::date < $5::date AND f.status = 'paid'
+                     ORDER BY f.paid_at DESC`,
+                    [instituteId, sessionId, m, y, firstOfMonth]
+                );
+                advancePayments = advRes.rows;
+            }
         }
 
         if (!type || type === 'onetime') {
@@ -1587,24 +1700,22 @@ const getDailyRevenueDetails = async (req, res) => {
             new Date(b.paid_at).getTime() - new Date(a.paid_at).getTime()
         );
 
-        // Calculate Monthly Total for the selected date's month/year
+        // Calculate Monthly Total for the selected month/year (TOTAL = Advance + Current Month)
         const selectedDateObj = new Date(date);
-        const m = selectedDateObj.getMonth() + 1;
-        const y = selectedDateObj.getFullYear();
+        const m = parseInt(month) || selectedDateObj.getMonth() + 1;
+        const y = parseInt(year) || selectedDateObj.getFullYear();
         let monthlyTotal = 0;
 
         if (!type || type === 'monthly') {
+            // Sum EVERY payment for the target month/year, regardless of when it was paid
             const mTotalRes = await pool.query(
-                `SELECT 
-                    (SELECT COALESCE(SUM(s.monthly_fees + CASE WHEN s.transport_facility THEN s.transport_fees ELSE 0 END), 0)
-                     FROM students s
-                     JOIN student_fees f ON s.id = f.student_id AND f.month = $3::integer AND f.year = $4::integer AND f.session_id = $2
-                     WHERE s.institute_id = $1 AND s.session_id = $2 AND s.is_active = true AND f.status = 'paid') +
-                    (SELECT COALESCE(SUM(amount), 0) FROM monthly_extra_charges 
-                     WHERE institute_id = $1 AND session_id = $2 AND month = $3::integer AND year = $4::integer AND status = 'paid') as total`,
+                `SELECT COALESCE(SUM(f.amount_paid), 0) as total
+                 FROM student_fees f
+                 WHERE f.institute_id = $1 AND f.session_id = $2 
+                 AND f.month = $3 AND f.year = $4 AND f.status = 'paid'`,
                 [instituteId, sessionId, m, y]
             );
-            monthlyTotal += parseFloat(mTotalRes.rows[0]?.total || 0);
+            monthlyTotal = parseFloat(mTotalRes.rows[0]?.total || 0);
         }
 
         if (!type || type === 'onetime') {
@@ -1623,6 +1734,7 @@ const getDailyRevenueDetails = async (req, res) => {
 
         res.status(200).json({
             payments: allPayments,
+            advancePayments: advancePayments,
             monthlyTotal: monthlyTotal,
             monthName: selectedDateObj.toLocaleDateString('en-IN', { month: 'long' })
         });

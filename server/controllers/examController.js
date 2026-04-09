@@ -65,8 +65,30 @@ export const togglePublishExam = async (req, res) => {
                     tokens,
                     'Result Published! 📊',
                     `The results for ${exam.name} have been published. Check your marksheet now!`,
-                    { type: 'RESULT_PUBLISHED', examId: exam.id }
+                    { type: 'RESULT_PUBLISHED', id: exam.id }
                 );
+
+                // Socket Notification: Target each student individually via unique_code room
+                const io = req.app.get('io');
+                if (io) {
+                    const { emitToStudent } = await import('../utils/socket.js');
+                    const studentDetails = await pool.query(
+                        `SELECT unique_code FROM students 
+                         WHERE institute_id = $1 AND "class" = $2 AND "section" = $3 AND is_active = true`,
+                        [institute_id, exam.class_name, exam.section]
+                    );
+                    
+                    studentDetails.rows.forEach(s => {
+                        if (s.unique_code) {
+                            emitToStudent(s.unique_code, 'result_published', {
+                                id: exam.id,
+                                exam_name: exam.name,
+                                title: 'Result Published! 📊',
+                                body: `The results for ${exam.name} have been published.`
+                            });
+                        }
+                    });
+                }
             }
         }
 
@@ -396,14 +418,15 @@ const generatePDFLogic = async (examId, studentIds, instituteId, res) => {
 
             // --- DATA PRE-OPTIMIZATION (BASE64) ---
             const rawLogo = exam.logo_url;
-            const logoFullUrl = rawLogo?.startsWith('http') ? rawLogo : (rawLogo ? `${process.env.S3_BUCKET_URL}/${rawLogo}` : null);
+            const cleanBucketUrl = process.env.EOS_BUCKET_URL?.endsWith('/') ? process.env.EOS_BUCKET_URL.slice(0, -1) : process.env.EOS_BUCKET_URL;
+            const logoFullUrl = rawLogo?.startsWith('http') ? rawLogo : (rawLogo ? `${cleanBucketUrl}/${rawLogo}` : null);
             const logoBase64 = await getBase64Image(logoFullUrl);
 
             // Fetch Student Photos & Attendance in small chunks
             const optimizedStudents = [];
             for (const s of students) {
                 const rawPhoto = s.photo_url || s.profile_image;
-                const photoFullUrl = rawPhoto?.startsWith('http') ? rawPhoto : (rawPhoto ? `${process.env.S3_BUCKET_URL}/${rawPhoto}` : null);
+                const photoFullUrl = rawPhoto?.startsWith('http') ? rawPhoto : (rawPhoto ? `${cleanBucketUrl}/${rawPhoto}` : null);
                 
                 let photoBase64 = null;
                 if (photoFullUrl) {

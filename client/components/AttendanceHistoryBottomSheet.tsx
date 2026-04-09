@@ -6,6 +6,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import Toast from 'react-native-toast-message';
 import { useTheme } from '../context/ThemeContext';
 import { API_ENDPOINTS } from '../constants/Config';
+import { getFullImageUrl } from '../utils/imageHelper';
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
 
@@ -190,7 +191,7 @@ const AttendanceHistoryBottomSheet = ({ visible, onClose, student }: AttendanceH
                     <ScrollView showsVerticalScrollIndicator={false} refreshControl={<RefreshControl refreshing={refreshing} onRefresh={fetchAllData} />}>
                         {student && (
                             <View style={styles.studentHeader}>
-                                <Image source={student.photo_url ? { uri: student.photo_url } : require('../assets/images/favicon.png')} style={styles.avatar} />
+                                <Image source={student.photo_url ? { uri: getFullImageUrl(student.photo_url) || undefined } : require('../assets/images/favicon.png')} style={styles.avatar} />
                                 <View>
                                     <Text style={styles.studentName}>{student.name}</Text>
                                     <Text style={styles.studentSub}>Class {student.class}-{student.section} • Roll: {student.roll_no}</Text>

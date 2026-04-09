@@ -18,9 +18,10 @@ export const sendMulticastPushNotification = async (messages) => {
     
     // Ensure channelId is set for Android (Crucial for Banners)
     messages.forEach(msg => {
-        if (!msg.channelId) msg.channelId = 'klassin-alerts-v3';
-        if (!msg.sound) msg.sound = 'default';
-        if (!msg.priority) msg.priority = 'high';
+        msg.channelId = 'klassin-alerts-v3';
+        msg.sound = 'default';
+        msg.priority = 'high';
+        msg._displayInForeground = true; // Extra hint for Expo
     });
 
     let chunks = expo.chunkPushNotifications(messages);
@@ -165,7 +166,10 @@ export const broadcastInstituteNotification = async (instituteId, title, body, d
 };
 
 export const sendPushNotification = async (pushTokens, title, body, data = {}) => {
-    const messages = pushTokens.map(token => ({
+    // Dedup tokens to prevent multiple notifications to the same device (e.g. if student has multiple accounts)
+    const uniqueTokens = Array.isArray(pushTokens) ? [...new Set(pushTokens)] : [pushTokens];
+    
+    const messages = uniqueTokens.map(token => ({
         to: token,
         title,
         body,

@@ -26,7 +26,9 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import * as Sharing from 'expo-sharing';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useTheme } from '../../../context/ThemeContext';
+
 import { API_ENDPOINTS, BASE_URL } from '../../../constants/Config';
+import { getFullImageUrl } from '../../../utils/imageHelper';
 import Toast from 'react-native-toast-message';
 
 const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get('window');
@@ -447,7 +449,7 @@ export default function ExamDetail() {
                 <View style={styles.studentRow}>
                     <View style={styles.avatar}>
                         {item.student.profile_image ? (
-                            <Image source={{ uri: item.student.profile_image }} style={styles.avatarImg} />
+                            <Image source={{ uri: getFullImageUrl(item.student.profile_image) || '' }} style={styles.avatarImg} />
                         ) : (
                             <Text style={[styles.avatarText, { color: theme.primary }]}>{item.student.name[0]}</Text>
                         )}
@@ -609,6 +611,12 @@ export default function ExamDetail() {
             fontWeight: '700',
             color: theme.text,
         },
+        label: {
+            fontSize: 11,
+            fontWeight: '800',
+            marginBottom: 8,
+            letterSpacing: 0.4,
+        },
         subHeaderLabel: { fontSize: 10, fontWeight: '800', color: theme.textLight, textAlign: 'center', marginBottom: 4 },
         dropdownList: {
             position: 'absolute',
@@ -754,7 +762,7 @@ export default function ExamDetail() {
                             <View style={styles.studentRow}>
                                 <View style={styles.avatar}>
                                     {item.student.profile_image ? (
-                                        <Image source={{ uri: item.student.profile_image }} style={styles.avatarImg} />
+                                        <Image source={{ uri: getFullImageUrl(item.student.profile_image) || '' }} style={styles.avatarImg} />
                                     ) : (
                                         <Text style={[styles.avatarText, { color: theme.primary }]}>{item.student.name[0]}</Text>
                                     )}

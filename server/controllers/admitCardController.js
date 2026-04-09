@@ -58,7 +58,8 @@ const generateAdmitCardPDFLogic = async (eventId, studentIds, instituteId, res) 
 
             // --- IMAGE OPTIMIZATION (BASE64) ---
             const rawLogo = event.institute_logo;
-            const logoFullUrl = rawLogo?.startsWith('http') ? rawLogo : (rawLogo ? `${process.env.S3_BUCKET_URL}/${rawLogo}` : null);
+            const cleanBucketUrl = process.env.EOS_BUCKET_URL?.endsWith('/') ? process.env.EOS_BUCKET_URL.slice(0, -1) : process.env.EOS_BUCKET_URL;
+            const logoFullUrl = rawLogo?.startsWith('http') ? rawLogo : (rawLogo ? `${cleanBucketUrl}/${rawLogo}` : null);
             const logoBase64 = await getBase64Image(logoFullUrl);
 
             // Fetch Student Photos in small chunks (Sequential batches of 5)
@@ -68,7 +69,7 @@ const generateAdmitCardPDFLogic = async (eventId, studentIds, instituteId, res) 
                 const chunk = students.slice(i, i + CHUNK_SIZE);
                 const results = await Promise.all(chunk.map(async (s) => {
                     const rawPhoto = s.photo_url || s.profile_image;
-                    const photoFullUrl = rawPhoto?.startsWith('http') ? rawPhoto : (rawPhoto ? `${process.env.S3_BUCKET_URL}/${rawPhoto}` : null);
+                    const photoFullUrl = rawPhoto?.startsWith('http') ? rawPhoto : (rawPhoto ? `${cleanBucketUrl}/${rawPhoto}` : null);
                     
                     let photoBase64 = null;
                     if (photoFullUrl) {
@@ -460,7 +461,7 @@ export const generateStudentAdmitCardPDF = async (req, res) => {
 export const createAdmitCard = async (req, res) => {
     try {
         const { exam_name, classes, schedule } = req.body;
-        const teacher_id = req.user.id;
+        const teacher_id = (req.user.type === 'teacher' || req.user.role === 'teacher') ? req.user.id : null;
         const institute_id = req.user.institute_id || req.user.id;
         let sessionId = req.headers['x-academic-session-id'] || req.user.current_session_id;
 
@@ -620,7 +621,57 @@ export const toggleAdmitCardVisibility = async (req, res) => {
                 return res.status(404).json({ message: 'Admit card not found' });
             }
 
-            res.status(200).json({ message: 'Success', admitCard: result.rows[0] });
+            const admitCard = result.rows[0];
+
+            // Notify students if published
+            if (is_published) {
+                const classes = admitCard.classes || []; // array of {class, section}
+                if (classes.length > 0) {
+                    // Fetch all student tokens for these classes
+                    let query = `SELECT push_token, class, section FROM students 
+                                 WHERE institute_id = $1 AND push_token IS NOT NULL AND is_active = true AND (`;
+                    
+                    const params = [instituteId];
+                    const conditions = classes.map((cs, idx) => {
+                        params.push(cs.class, cs.section);
+                        return `("class" = $${params.length - 1} AND "section" = $${params.length})`;
+                    });
+                    
+                    query += conditions.join(' OR ') + ')';
+                    
+                    const studentsResult = await pool.query(query, params);
+                    const tokens = studentsResult.rows.map(s => s.push_token);
+
+                    if (tokens.length > 0) {
+                        const title = 'Admit Card Published! 🪪';
+                        const body = `Your admit card for ${admitCard.exam_name} is now available. Download it from the app.`;
+                        
+                        await sendPushNotification(tokens, title, body, { 
+                            type: 'admit-card', 
+                            id: admitCard.id 
+                        });
+
+                        // Socket Notifications: Target each student individually via unique_code room
+                        const io = req.app.get('io');
+                        if (io) {
+                            const { emitToStudent } = await import('../utils/socket.js');
+                            // Re-use studentsResult to get unique_codes
+                            studentsResult.rows.forEach(s => {
+                                if (s.unique_code) {
+                                    emitToStudent(s.unique_code, 'admit_card_published', {
+                                        id: admitCard.id,
+                                        exam_name: admitCard.exam_name,
+                                        title,
+                                        body
+                                    });
+                                }
+                            });
+                        }
+                    }
+                }
+            }
+
+            res.status(200).json({ message: 'Success', admitCard });
         } catch (dbErr) {
             console.error('[AdmitCard] DB Error in toggle:', dbErr.message);
             // If column is missing, we need to inform the client/system

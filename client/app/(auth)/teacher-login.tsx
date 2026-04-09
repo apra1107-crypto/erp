@@ -8,6 +8,7 @@ import Toast from 'react-native-toast-message';
 import { Ionicons } from '@expo/vector-icons';
 import { useTheme } from '../../context/ThemeContext';
 import { API_ENDPOINTS } from '../../constants/Config';
+import { getFullImageUrl } from '../../utils/imageHelper';
 
 const API_URL = API_ENDPOINTS.AUTH.TEACHER;
 
@@ -276,7 +277,7 @@ export default function TeacherLogin() {
         {institutes.map((inst) => (
           <TouchableOpacity key={inst.id} style={styles.listItem} onPress={() => handleSelectInstitute(inst)}>
             <View style={styles.listIcon}>
-              {inst.logo_url ? <Image source={{ uri: inst.logo_url }} style={styles.logoImg} /> : <Ionicons name="business" size={24} color={theme.secondary} />}
+              {inst.logo_url ? <Image source={{ uri: getFullImageUrl(inst.logo_url) || undefined }} style={styles.logoImg} /> : <Ionicons name="business" size={24} color={theme.secondary} />}
             </View>
             <View style={styles.listContent}>
               <Text style={styles.listTitle}>{inst.institute_name}</Text>
@@ -302,7 +303,7 @@ export default function TeacherLogin() {
         {teachers.map((teach) => (
           <TouchableOpacity key={teach.id} style={styles.listItem} onPress={() => handleSelectTeacher(teach)}>
             <View style={styles.listIcon}>
-              {teach.photo_url ? <Image source={{ uri: teach.photo_url }} style={styles.avatar} /> : <Ionicons name="person" size={24} color={theme.secondary} />}
+              {teach.photo_url ? <Image source={{ uri: getFullImageUrl(teach.photo_url) ?? undefined }} style={styles.avatar} /> : <Ionicons name="person" size={24} color={theme.secondary} />}
             </View>
             <View style={styles.listContent}>
               <Text style={styles.listTitle}>{teach.name}</Text>

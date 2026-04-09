@@ -88,10 +88,16 @@ export default function FeesScreen() {
 
         let breakage = [];
         if (type === 'MONTHLY') {
+            const monthExtraCharges = (feeData.extra_charges || []).filter((ec: any) => ec.month === item.month && ec.year === item.year);
+            const paymentRecord = feeData?.payments?.find((p: any) => p.month === item.month && p.year === item.year);
+            
+            const baseDue = paymentRecord?.amount_due 
+                ? parseFloat(paymentRecord.amount_due) 
+                : (feeData.fee_structure.monthly_fees + (feeData.fee_structure.transport_facility ? feeData.fee_structure.transport_fees : 0));
+
             breakage = [
-                { label: 'Monthly Tuition Fee', amount: feeData.fee_structure.monthly_fees },
-                ...(feeData.fee_structure.transport_facility ? [{ label: 'Transport Fee', amount: feeData.fee_structure.transport_fees }] : []),
-                ...extraCharges.map(ec => ({ label: ec.reason, amount: parseFloat(ec.amount) })),
+                { label: 'Base Fee (Tuition + Trans.)', amount: baseDue },
+                ...monthExtraCharges.map((ec: any) => ({ label: ec.reason, amount: parseFloat(ec.amount) })),
                 { label: 'Platform Fee (2% + GST)', amount: convenienceFee }
             ];
         } else {
@@ -144,11 +150,35 @@ export default function FeesScreen() {
             let breakage = [];
             if (payment.type === 'MONTHLY') {
                 const monthExtraCharges = (feeData?.extra_charges || []).filter((ec: any) => ec.month === payment.month && ec.year === payment.year);
-                breakage = [
-                    { label: 'Monthly Tuition Fee', amount: feeData.fee_structure.monthly_fees },
-                    ...(feeData.fee_structure.transport_facility ? [{ label: 'Transport Fee', amount: feeData.fee_structure.transport_fees }] : []),
-                    ...monthExtraCharges.map((ec: any) => ({ label: ec.reason, amount: parseFloat(ec.amount) }))
-                ];
+                const isPaid = payment.status === 'paid';
+
+                if (isPaid && payment.amount_paid) {
+                    const totalPaid = parseFloat(payment.amount_paid);
+                    const extraTotal = monthExtraCharges.reduce((sum: number, ec: any) => sum + parseFloat(ec.amount), 0);
+                    const transport = feeData.fee_structure.transport_facility ? parseFloat(feeData.fee_structure.transport_fees || 0) : 0;
+                    
+                    // Tuition is the remainder (Total - Transport - Extras)
+                    const tuitionPaid = totalPaid - transport - extraTotal;
+
+                    breakage = [
+                        { label: 'Monthly Tuition Fee', amount: tuitionPaid },
+                        ...(feeData.fee_structure.transport_facility ? [{ label: 'Transport Fee', amount: transport }] : []),
+                        ...monthExtraCharges.map((ec: any) => ({ label: ec.reason, amount: parseFloat(ec.amount) }))
+                    ];
+                } else {
+                    const baseDue = payment.amount_due 
+                        ? parseFloat(payment.amount_due) 
+                        : (feeData.fee_structure.monthly_fees + (feeData.fee_structure.transport_facility ? feeData.fee_structure.transport_fees : 0));
+                    
+                    const transport = feeData.fee_structure.transport_facility ? parseFloat(feeData.fee_structure.transport_fees || 0) : 0;
+                    const tuition = baseDue - transport;
+
+                    breakage = [
+                        { label: 'Monthly Tuition Fee', amount: tuition },
+                        ...(feeData.fee_structure.transport_facility ? [{ label: 'Transport Fee', amount: transport }] : []),
+                        ...monthExtraCharges.map((ec: any) => ({ label: ec.reason, amount: parseFloat(ec.amount) }))
+                    ];
+                }
             } else {
                 breakage = [{ label: payment.reason, amount: payment.due_amount }];
             }
@@ -278,7 +308,7 @@ export default function FeesScreen() {
     };
 
     const combinedHistory = [
-        ...(feeData?.payments || []).map((p: any) => ({ ...p, type: 'MONTHLY' })),
+        ...(feeData?.payments || []).filter((p: any) => p.status === 'paid').map((p: any) => ({ ...p, type: 'MONTHLY' })),
         ...(feeData?.one_time_fees || []).filter((f: any) => f.status === 'paid').map((f: any) => ({ ...f, type: 'ONE-TIME', month: new Date(f.updated_at).getMonth() + 1, year: new Date(f.updated_at).getFullYear(), paid_at: f.updated_at }))
     ].sort((a, b) => new Date(b.paid_at).getTime() - new Date(a.paid_at).getTime());
 
@@ -304,7 +334,15 @@ export default function FeesScreen() {
                             <Ionicons name="download-outline" size={18} color={theme.primary} />
                         )}
                     </TouchableOpacity>
-                    <Text style={[styles.historyAmount, { color: theme.success, marginTop: 4 }]}>₹{(item.type === 'ONE-TIME' ? parseFloat(item.paid_amount) : (feeData.fee_structure.monthly_fees + (feeData.fee_structure.transport_facility ? feeData.fee_structure.transport_fees : 0) + (feeData.extra_charges || []).filter((ec: any) => ec.month === item.month && ec.year === item.year).reduce((sum: number, ec: any) => sum + parseFloat(ec.amount), 0))).toLocaleString()}</Text>
+                    <Text style={[styles.historyAmount, { color: theme.success, marginTop: 4 }]}>
+                        ₹{(item.type === 'ONE-TIME' 
+                            ? parseFloat(item.paid_amount) 
+                            : (item.amount_paid 
+                                ? parseFloat(item.amount_paid)
+                                : (feeData.fee_structure.monthly_fees + (feeData.fee_structure.transport_facility ? feeData.fee_structure.transport_fees : 0) + (feeData.extra_charges || []).filter((ec: any) => ec.month === item.month && ec.year === item.year).reduce((sum: number, ec: any) => sum + parseFloat(ec.amount), 0))
+                            )
+                        ).toLocaleString()}
+                    </Text>
                 </View>
             </View>
         );
@@ -333,14 +371,52 @@ export default function FeesScreen() {
                             return (
                                 <>
                                     {pendingMonthly.map((item: any, index: number) => {
-                                        const extra = (feeData.extra_charges || []).filter((ec: any) => ec.month === item.month && ec.year === item.year).reduce((sum: number, ec: any) => sum + parseFloat(ec.amount || 0), 0);
-                                        const total = feeData.fee_structure.monthly_fees + (feeData.fee_structure.transport_facility ? feeData.fee_structure.transport_fees : 0) + extra;
+                                        const paymentRecord = feeData?.payments?.find((p: any) => p.month === item.month && p.year === item.year);
+                                        const monthExtraCharges = (feeData.extra_charges || []).filter((ec: any) => ec.month === item.month && ec.year === item.year);
+                                        const extra = monthExtraCharges.reduce((sum: number, ec: any) => sum + parseFloat(ec.amount || 0), 0);
+                                        
+                                        const baseDue = paymentRecord?.amount_due 
+                                            ? parseFloat(paymentRecord.amount_due) 
+                                            : (feeData.fee_structure.monthly_fees + (feeData.fee_structure.transport_facility ? feeData.fee_structure.transport_fees : 0));
+                                        
+                                        const total = baseDue + extra;
+
                                         return (
                                             <View key={`m-${index}`} style={styles.cardContainer}>
                                                 <LinearGradient colors={getMonthColor(index)} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={styles.flashcard}>
-                                                    <View><Text style={styles.cardMonth}>{MONTHS[item.month - 1]}</Text><Text style={styles.cardYear}>{item.year} - Monthly</Text></View>
-                                                    <View><Text style={styles.amountLabel}>Total Due</Text><Text style={styles.amountValue}>₹{total.toLocaleString()}</Text></View>
-                                                    <TouchableOpacity style={styles.payButton} onPress={() => handlePayNow(item, total, [], 'MONTHLY')}><Text style={[styles.payButtonText, { color: getMonthColor(index)[1] }]}>Pay Now</Text></TouchableOpacity>
+                                                    <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start' }}>
+                                                        <View>
+                                                            <Text style={styles.cardMonth}>{MONTHS[item.month - 1]}</Text>
+                                                            <Text style={styles.cardYear}>{item.year} - Monthly</Text>
+                                                        </View>
+                                                        <View style={styles.extraBadge}><Text style={styles.extraBadgeText}>DUE</Text></View>
+                                                    </View>
+
+                                                    <View style={{ marginVertical: 10, gap: 4 }}>
+                                                        <View style={styles.miniBreakdownRow}>
+                                                            <Text style={styles.miniBreakdownLabel}>Tuition Fee</Text>
+                                                            <Text style={styles.miniBreakdownValue}>₹{(baseDue - (feeData.fee_structure.transport_facility ? feeData.fee_structure.transport_fees : 0)).toLocaleString()}</Text>
+                                                        </View>
+                                                        {feeData.fee_structure.transport_facility && (
+                                                            <View style={styles.miniBreakdownRow}>
+                                                                <Text style={styles.miniBreakdownLabel}>Transport Fee</Text>
+                                                                <Text style={styles.miniBreakdownValue}>₹{feeData.fee_structure.transport_fees.toLocaleString()}</Text>
+                                                            </View>
+                                                        )}
+                                                        {monthExtraCharges.map((ec: any, idx: number) => (
+                                                            <View key={idx} style={styles.miniBreakdownRow}>
+                                                                <Text style={styles.miniBreakdownLabel}>{ec.reason}</Text>
+                                                                <Text style={styles.miniBreakdownValue}>₹{parseFloat(ec.amount).toLocaleString()}</Text>
+                                                            </View>
+                                                        ))}
+                                                    </View>
+
+                                                    <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-end' }}>
+                                                        <View>
+                                                            <Text style={styles.amountLabel}>Total Due</Text>
+                                                            <Text style={styles.amountValue}>₹{total.toLocaleString()}</Text>
+                                                        </View>
+                                                    </View>
                                                 </LinearGradient>
                                             </View>
                                         );
@@ -351,9 +427,35 @@ export default function FeesScreen() {
                                         return (
                                             <View key={`ot-${index}`} style={styles.cardContainer}>
                                                 <LinearGradient colors={color} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={styles.flashcard}>
-                                                    <View><Text style={[styles.cardMonth, {fontSize: 20}]} numberOfLines={1}>{item.reason}</Text><Text style={styles.cardYear}>One-Time Fee</Text></View>
-                                                    <View><Text style={styles.amountLabel}>Remaining</Text><Text style={styles.amountValue}>₹{remaining.toLocaleString()}</Text></View>
-                                                    <TouchableOpacity style={styles.payButton} onPress={() => handlePayNow(item, remaining, [], 'ONE-TIME')}><Text style={[styles.payButtonText, { color: color[1] }]}>Pay Balance</Text></TouchableOpacity>
+                                                    <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start' }}>
+                                                        <View style={{ flex: 1 }}>
+                                                            <Text style={[styles.cardMonth, {fontSize: 20}]} numberOfLines={1}>{item.reason}</Text>
+                                                            <Text style={styles.cardYear}>One-Time Fee</Text>
+                                                        </View>
+                                                        <View style={styles.extraBadge}><Text style={styles.extraBadgeText}>PENDING</Text></View>
+                                                    </View>
+
+                                                    <View style={{ marginVertical: 10, gap: 4 }}>
+                                                        {(item.breakdown || []).map((b: any, idx: number) => (
+                                                            <View key={idx} style={styles.miniBreakdownRow}>
+                                                                <Text style={styles.miniBreakdownLabel}>{b.reason}</Text>
+                                                                <Text style={styles.miniBreakdownValue}>₹{parseFloat(b.amount).toLocaleString()}</Text>
+                                                            </View>
+                                                        ))}
+                                                        {parseFloat(item.paid_amount) > 0 && (
+                                                            <View style={styles.miniBreakdownRow}>
+                                                                <Text style={styles.miniBreakdownLabel}>Already Paid</Text>
+                                                                <Text style={styles.miniBreakdownValue}>- ₹{parseFloat(item.paid_amount).toLocaleString()}</Text>
+                                                            </View>
+                                                        )}
+                                                    </View>
+
+                                                    <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-end' }}>
+                                                        <View>
+                                                            <Text style={styles.amountLabel}>Remaining</Text>
+                                                            <Text style={styles.amountValue}>₹{remaining.toLocaleString()}</Text>
+                                                        </View>
+                                                    </View>
                                                 </LinearGradient>
                                             </View>
                                         );
@@ -476,8 +578,11 @@ const styles = StyleSheet.create({
     cardBody: { marginTop: 10 },
     amountLabel: { fontSize: 12, color: 'rgba(255,255,255,0.8)' },
     amountValue: { fontSize: 28, fontWeight: '900', color: '#fff' },
-    payButton: { backgroundColor: '#fff', paddingVertical: 10, paddingHorizontal: 20, borderRadius: 12, alignSelf: 'flex-start', marginTop: 10 },
+    payButton: { backgroundColor: '#fff', paddingVertical: 10, paddingHorizontal: 20, borderRadius: 12 },
     payButtonText: { fontSize: 14, fontWeight: '900' },
+    miniBreakdownRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
+    miniBreakdownLabel: { fontSize: 11, color: 'rgba(255,255,255,0.7)', fontWeight: '600' },
+    miniBreakdownValue: { fontSize: 11, color: '#fff', fontWeight: '700' },
     historyItem: { flexDirection: 'row', justifyContent: 'space-between', paddingVertical: 15 },
     historyLeft: { flexDirection: 'row', gap: 12, flex: 1 },
     iconCircle: { width: 40, height: 40, borderRadius: 12, justifyContent: 'center', alignItems: 'center' },

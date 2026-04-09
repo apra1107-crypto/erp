@@ -14,6 +14,8 @@ interface ReceiptData {
 }
 
 export const generateReceiptPDF = async (data: ReceiptData) => {
+    let targetUrl = '';
+
     try {
         const teacherToken = await AsyncStorage.getItem('teacherToken');
         const principalToken = await AsyncStorage.getItem('principalToken') || await AsyncStorage.getItem('token');
@@ -31,7 +33,7 @@ export const generateReceiptPDF = async (data: ReceiptData) => {
             baseEndpoint = API_ENDPOINTS.AUTH.STUDENT;
         }
 
-        const targetUrl = `${baseEndpoint}/generate-fee-receipt`;
+        targetUrl = `${baseEndpoint}/generate-fee-receipt`;
 
         // Prepare data for backend
         const payload = {

@@ -1,5 +1,5 @@
 import { useState, useEffect, useMemo } from 'react';
-import { View, Text, StyleSheet, ScrollView, TextInput, TouchableOpacity, Image, Switch, ActivityIndicator, Alert, Platform, StatusBar, KeyboardAvoidingView } from 'react-native';
+import { View, Text, StyleSheet, ScrollView, TextInput, TouchableOpacity, Image, Switch, ActivityIndicator, Alert, Platform, StatusBar, KeyboardAvoidingView, Modal } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useRouter, useLocalSearchParams } from 'expo-router';
 import * as ImagePicker from 'expo-image-picker';
@@ -10,6 +10,7 @@ import DateTimePicker from '@react-native-community/datetimepicker';
 import { Ionicons } from '@expo/vector-icons';
 import { useTheme } from '../../../../context/ThemeContext';
 import { API_ENDPOINTS } from '../../../../constants/Config';
+import { getFullImageUrl } from '../../../../utils/imageHelper';
 import AttendanceHistoryBottomSheet from '../../../../components/AttendanceHistoryBottomSheet';
 import MonthlyTransactionBottomSheet from '../../../../components/MonthlyTransactionBottomSheet';
 import Animated, { useSharedValue, useAnimatedStyle, withSpring, interpolateColor } from 'react-native-reanimated';
@@ -153,15 +154,17 @@ export default function StudentDetails() {
     };
 
     const handleUpdate = async () => {
+        // Prevent double saving
+        if (saving) return;
+
         try {
             setSaving(true);
             const token = await AsyncStorage.getItem('principalToken') || await AsyncStorage.getItem('token');
             const data = new FormData();
 
-            data.append('student_id', id as string);
             data.append('name', formData.name);
-            data.append('dob', formData.dob.toISOString().split('T')[0]);
-            data.append('admission_date', formData.admission_date.toISOString().split('T')[0]);
+            data.append('dob', formData.dob instanceof Date ? formData.dob.toISOString().split('T')[0] : new Date(formData.dob).toISOString().split('T')[0]);
+            data.append('admission_date', formData.admission_date instanceof Date ? formData.admission_date.toISOString().split('T')[0] : new Date(formData.admission_date).toISOString().split('T')[0]);
             data.append('mobile', formData.mobile);
             data.append('email', formData.email);
             data.append('class', formData.class);
@@ -172,19 +175,25 @@ export default function StudentDetails() {
             data.append('father_name', formData.father_name);
             data.append('mother_name', formData.mother_name);
             data.append('transport_facility', String(formData.transport_facility));
-            data.append('monthly_fees', formData.monthly_fees);
-            data.append('transport_fees', formData.transport_fees);
-
-            if (photo) {
+            data.append('monthly_fees', String(formData.monthly_fees));
+            data.append('transport_fees', String(formData.transport_fees));
+            
+            if (photo && photo.uri) {
+                const photoName = photo.uri.split('/').pop() || 'photo.jpg';
+                const match = /\.(\w+)$/.exec(photoName);
+                const type = match ? `image/${match[1]}` : `image`;
+                
                 data.append('photo', {
                     uri: photo.uri,
-                    type: 'image/jpeg',
-                    name: 'photo.jpg',
+                    type: type,
+                    name: photoName,
                 } as any);
             } else if (deletePhoto) {
                 data.append('delete_photo', 'true');
             }
 
+            console.log('Sending update request to:', `${API_ENDPOINTS.PRINCIPAL}/student/update/${id}`);
+            
             await axios.put(
                 `${API_ENDPOINTS.PRINCIPAL}/student/update/${id}`,
                 data,
@@ -192,17 +201,20 @@ export default function StudentDetails() {
                     headers: {
                         Authorization: `Bearer ${token}`,
                         'Content-Type': 'multipart/form-data',
-                    }
+                    },
+                    timeout: 15000 // Add timeout to avoid infinite hang
                 }
             );
 
-            Toast.show({ type: 'success', text1: 'Success', text2: 'Student updated' });
+            Toast.show({ type: 'success', text1: 'Success', text2: 'Student updated successfully' });
             setIsEditing(false);
             setPhoto(null);
             fetchStudentDetails();
-        } catch (error) {
-            console.error('Update error:', error);
-            Toast.show({ type: 'error', text1: 'Error', text2: 'Failed to update student' });
+            fetchFullFeesData(); // Force refresh of the full fees data for snapshots
+        } catch (error: any) {
+            console.error('Update error details:', error.response?.data || error.message);
+            const errMsg = error.response?.data?.message || 'Failed to update student profile';
+            Toast.show({ type: 'error', text1: 'Update Failed', text2: errMsg });
         } finally {
             setSaving(false);
         }
@@ -364,7 +376,7 @@ export default function StudentDetails() {
                 </TouchableOpacity>
                 <Text style={styles.headerTitle}>Student Details</Text>
                 {isEditing ? (
-                    <TouchableOpacity style={styles.saveBtn} onPress={handleUpdate} disabled={saving}>
+                    <TouchableOpacity style={styles.saveBtn} onPress={() => handleUpdate()} disabled={saving}>
                         {saving ? <ActivityIndicator size="small" color="#fff" /> : <Text style={styles.saveBtnText}>Save</Text>}
                     </TouchableOpacity>
                 ) : (
@@ -383,7 +395,7 @@ export default function StudentDetails() {
                     <View style={styles.profileCard}>
                         <TouchableOpacity style={styles.avatarWrapper} onPress={isEditing ? pickImage : undefined} activeOpacity={isEditing ? 0.7 : 1}>
                             {(photo || originalData?.photo_url) ? (
-                                <Image source={{ uri: photo ? photo.uri : originalData.photo_url }} style={styles.avatarImg} />
+                                <Image source={{ uri: photo ? photo.uri : (getFullImageUrl(originalData.photo_url) || undefined) }} style={styles.avatarImg} />
                             ) : (
                                 <Ionicons name="person" size={50} color={theme.border} />
                             )}

@@ -630,7 +630,7 @@ export default function RoutineManager() {
                 </View>
             ))}
             {!isViewOnly && (
-                <TouchableOpacity style={[styles.button, { backgroundColor: theme.accent, marginTop: 5 }]} onPress={addSlot}>
+                <TouchableOpacity style={[styles.button, { backgroundColor: theme.primary, marginTop: 5 }]} onPress={addSlot}>
                     <Text style={styles.buttonText}>+ Add New Slot</Text>
                 </TouchableOpacity>
             )}

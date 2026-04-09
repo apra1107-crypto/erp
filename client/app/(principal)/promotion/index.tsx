@@ -7,6 +7,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
 import { useTheme } from '../../../context/ThemeContext';
 import { API_ENDPOINTS } from '../../../constants/Config';
+import { getFullImageUrl } from '../../../utils/imageHelper';
 import Toast from 'react-native-toast-message';
 
 export default function PromotionScreen() {
@@ -453,7 +454,7 @@ export default function PromotionScreen() {
                             <View key={idx} style={styles.card}>
                                 <View style={styles.avatarContainer}>
                                     {item.photo_url ? (
-                                        <Image source={{ uri: item.photo_url }} style={styles.studentImg} />
+                                        <Image source={{ uri: getFullImageUrl(item.photo_url) || undefined }} style={styles.studentImg} />
                                     ) : (
                                         <View style={styles.placeholderIcon}>
                                             <Ionicons name="person" size={24} color="#fff" />

@@ -10,6 +10,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { BlurView } from 'expo-blur';
 import { useTheme } from '../../../../../context/ThemeContext';
 import { API_ENDPOINTS } from '../../../../../constants/Config';
+import { getFullImageUrl } from '../../../../../utils/imageHelper';
 
 export default function TakeAttendance() {
     const router = useRouter();
@@ -575,7 +576,7 @@ export default function TakeAttendance() {
                                 <View style={styles.studentInfo}>
                                     <View style={styles.studentPhotoWrapper}>
                                         {student.photo_url ? (
-                                            <Image source={{ uri: student.photo_url }} style={styles.studentPhoto} />
+                                            <Image source={{ uri: getFullImageUrl(student.photo_url) ?? undefined }} style={styles.studentPhoto} />
                                         ) : (
                                             <View style={styles.photoPlaceholder}>
                                                 <Ionicons name="person" size={24} color={theme.textLight} />
@@ -715,7 +716,7 @@ export default function TakeAttendance() {
                         <View style={styles.modalHeader}>
                             <View style={styles.modalStudentInfo}>
                                 {selectedRequest?.photo_url ? (
-                                    <Image source={{ uri: selectedRequest.photo_url }} style={styles.modalStudentPhoto} />
+                                    <Image source={{ uri: getFullImageUrl(selectedRequest.photo_url) ?? undefined }} style={styles.modalStudentPhoto} />
                                 ) : (
                                     <View style={[styles.modalStudentPhoto, { backgroundColor: theme.primary + '10', justifyContent: 'center', alignItems: 'center' }]}>
                                         <Ionicons name="person" size={24} color={theme.primary} />

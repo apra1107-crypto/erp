@@ -9,7 +9,7 @@ import Toast from 'react-native-toast-message';
 import { useSocket } from '../../../../context/SocketContext';
 import { useTheme } from '../../../../context/ThemeContext';
 import { API_ENDPOINTS } from '../../../../constants/Config';
-
+import { getFullImageUrl } from '../../../../utils/imageHelper';
 import DateTimePicker from '@react-native-community/datetimepicker';
 
 export default function TeacherLiveTracking() {
@@ -273,7 +273,7 @@ export default function TeacherLiveTracking() {
                                         const isMarked = !!log;
                                         return (
                                             <View key={student.student_id} style={[styles.studentPill, isMarked && styles.studentPillBoarded]}>
-                                                <Image source={student.photo_url ? { uri: student.photo_url } : require('../../../../assets/images/react-logo.png')} style={styles.avatar} />
+                                                <Image source={student.photo_url ? { uri: getFullImageUrl(student.photo_url) ?? undefined } : require('../../../../assets/images/react-logo.png')} style={styles.avatar} />
                                                 <View>
                                                     <Text style={styles.sName}>{student.student_name}</Text>
                                                     <Text style={styles.sInfo}>Class {student.class}-{student.section}</Text>

@@ -5,6 +5,7 @@ import { useTheme } from '../context/ThemeContext';
 import axios from 'axios';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { API_ENDPOINTS, BASE_URL } from '../constants/Config';
+import { getFullImageUrl } from '../utils/imageHelper';
 import { LinearGradient } from 'expo-linear-gradient';
 
 const { height: SCREEN_HEIGHT, width: SCREEN_WIDTH } = Dimensions.get('window');
@@ -59,6 +60,7 @@ export default function MonthlyTransactionBottomSheet({ isOpen, onClose, data }:
             const response = await axios.get(`${API_ENDPOINTS.PRINCIPAL}/student/${studentId}/fees-full`, {
                 headers: { Authorization: `Bearer ${token}` }
             });
+            console.log('Fee History API Response:', JSON.stringify(response.data.payments.slice(0, 2), null, 2));
             setHistoryData(response.data);
         } catch (error) {
             console.error('Error fetching fee history:', error);
@@ -113,12 +115,6 @@ export default function MonthlyTransactionBottomSheet({ isOpen, onClose, data }:
         emptyText: { color: theme.textLight, marginTop: 15, fontSize: 16, fontWeight: '700', textAlign: 'center' }
     });
 
-    const getFullImageUrl = (url: string | null | undefined): string | null => {
-        if (!url) return null;
-        if (url.startsWith('http')) return url;
-        return `${BASE_URL}${url.startsWith('/') ? '' : '/'}${url}`;
-    };
-
     const isAfterAdmission = (month: number, year: number, admissionDateStr: string | null) => {
         if (!admissionDateStr) return true;
         
@@ -161,8 +157,16 @@ export default function MonthlyTransactionBottomSheet({ isOpen, onClose, data }:
                     const isPaid = payment?.status === 'paid';
                     const extraForMonth = extra_charges.filter((ec: any) => ec.month === cycle.month && ec.year === cycle.year);
                     const totalExtra = extraForMonth.reduce((sum: number, ec: any) => sum + parseFloat(ec.amount), 0);
-                    const baseAmt = parseFloat(fee_structure?.monthly_fees || 0) + (student?.transport_facility ? parseFloat(fee_structure?.transport_fees || 0) : 0);
-                    const totalForMonth = baseAmt + totalExtra;
+                    
+                    // NEW: Use the historical snapshot if available, otherwise fall back to current structure
+                    // We check if amount_due is strictly not null and not undefined
+                    const hasSnapshot = payment && payment.amount_due !== null && payment.amount_due !== undefined;
+                    const snapshotBase = hasSnapshot ? parseFloat(payment.amount_due) : (
+                        parseFloat(fee_structure?.monthly_fees || 0) + 
+                        (student?.transport_facility ? parseFloat(fee_structure?.transport_fees || 0) : 0)
+                    );
+                    
+                    const totalForMonth = snapshotBase + totalExtra;
 
                     return (
                         <View key={idx} style={[styles.historyItem, { backgroundColor: theme.card, borderWidth: 1, borderColor: theme.border }]}>
@@ -200,7 +204,7 @@ export default function MonthlyTransactionBottomSheet({ isOpen, onClose, data }:
                                         <Text style={styles.extraTitle}>Breakdown</Text>
                                         <View style={styles.extraRow}>
                                             <Text style={styles.extraText}>Base Tuition & Transport</Text>
-                                            <Text style={styles.extraAmt}>₹{baseAmt.toLocaleString()}</Text>
+                                            <Text style={styles.extraAmt}>₹{snapshotBase.toLocaleString()}</Text>
                                         </View>
                                         {extraForMonth.map((ec: any, i: number) => (
                                             <View key={i} style={styles.extraRow}>

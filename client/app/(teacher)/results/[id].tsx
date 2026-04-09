@@ -27,6 +27,7 @@ import * as Sharing from 'expo-sharing';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useTheme } from '../../../context/ThemeContext';
 import { API_ENDPOINTS, BASE_URL } from '../../../constants/Config';
+import { getFullImageUrl } from '../../../utils/imageHelper';
 import Toast from 'react-native-toast-message';
 
 const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get('window');
@@ -427,7 +428,7 @@ export default function TeacherExamDetail() {
                             onPress={() => isSelectionMode ? toggleStudentSelection(item.student.id) : router.push(`/(teacher)/results/preview?examId=${id}&studentId=${item.student.id}`)}
                         >
                             <View style={styles.studentRow}>
-                                <View style={styles.avatar}>{item.student.profile_image ? <Image source={{ uri: item.student.profile_image }} style={{width:'100%', height:'100%'}} /> : <Text style={{fontSize:18, fontWeight:'900', color:theme.primary}}>{item.student.name[0]}</Text>}</View>
+                                <View style={styles.avatar}>{item.student.profile_image ? <Image source={{ uri: getFullImageUrl(item.student.profile_image) || '' }} style={{width:'100%', height:'100%'}} /> : <Text style={{fontSize:18, fontWeight:'900', color:theme.primary}}>{item.student.name[0]}</Text>}</View>
                                 <View style={{ flex: 1 }}>
                                     <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
                                         <Text style={[styles.studentName, { color: theme.text }]}>{item.student.name}</Text>

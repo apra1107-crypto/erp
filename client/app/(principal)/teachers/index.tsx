@@ -7,6 +7,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Ionicons } from '@expo/vector-icons';
 import { useTheme } from '../../../context/ThemeContext';
 import { API_ENDPOINTS } from '../../../constants/Config';
+import { getFullImageUrl } from '../../../utils/imageHelper';
 
 export default function TeacherList() {
     const router = useRouter();
@@ -255,11 +256,12 @@ export default function TeacherList() {
                                 onPress={() => router.push(`/(principal)/teachers/details/${item.id}`)}
                                 activeOpacity={0.7}
                             >
-                                <View style={styles.imageContainer}>
-                                    {item.photo_url ? (
-                                        <Image source={{ uri: item.photo_url }} style={styles.teacherImage} />
-                                    ) : (
-                                        <View style={styles.placeholderImage}>
+                                                        <View style={styles.imageContainer}>
+                                                            {item.photo_url ? (
+                                                                <Image source={{ uri: getFullImageUrl(item.photo_url) || undefined }} style={styles.teacherImage} />
+                                                            ) : (
+                                                                <View style={styles.placeholderImage}>
+                                
                                             <Ionicons name="person" size={28} color={theme.border} />
                                         </View>
                                     )}

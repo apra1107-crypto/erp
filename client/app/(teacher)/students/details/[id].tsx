@@ -13,6 +13,7 @@ import MonthlyTransactionBottomSheet from '../../../../components/MonthlyTransac
 import * as ImagePicker from 'expo-image-picker';
 import DateTimePicker from '@react-native-community/datetimepicker';
 import Animated, { useSharedValue, useAnimatedStyle, withSpring, interpolateColor } from 'react-native-reanimated';
+import { getFullImageUrl } from '../../../../utils/imageHelper';
 
 const ModernToggle = ({ value, onValueChange, activeColor }: { value: boolean, onValueChange: (v: boolean) => void, activeColor: string }) => {
     const translateX = useSharedValue(value ? 22 : 2);
@@ -371,7 +372,7 @@ export default function StudentDetails() {
                     <View style={styles.profileCard}>
                         <TouchableOpacity style={styles.avatarWrapper} onPress={isEditing ? pickImage : undefined} activeOpacity={isEditing ? 0.7 : 1}>
                             {(photo || student.photo_url) ? (
-                                <Image source={{ uri: photo ? photo.uri : student.photo_url }} style={styles.avatarImg} />
+                                <Image source={{ uri: photo ? photo.uri : getFullImageUrl(student.photo_url) }} style={styles.avatarImg} />
                             ) : (
                                 <Ionicons name="person" size={50} color={theme.border} />
                             )}

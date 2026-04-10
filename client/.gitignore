@@ -41,3 +41,11 @@ app-example
 # generated native folders
 /ios
 /android
+
+# Firebase Secrets
+fcm.json
+google-services.json
+
+# Firebase Secrets
+fcm.json
+google-services.json

@@ -1,7 +1,7 @@
 import * as FileSystem from 'expo-file-system/legacy';
 import * as Sharing from 'expo-sharing';
 import { useState, useEffect, useMemo, useCallback, useRef } from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, ActivityIndicator, Image, ScrollView, Modal, TextInput, Dimensions, KeyboardAvoidingView, Platform, StatusBar, LayoutAnimation, RefreshControl, UIManager, FlatList, Pressable, Alert, BackHandler, DeviceEventEmitter } from 'react-native';
+import { View, Text, StyleSheet, TouchableOpacity, ActivityIndicator, Image, ScrollView, Modal, TextInput, Dimensions, KeyboardAvoidingView, Platform, StatusBar, LayoutAnimation, RefreshControl, UIManager, FlatList, Pressable, Alert, BackHandler, DeviceEventEmitter, AppState } from 'react-native';
 
 if (Platform.OS === 'android' && UIManager.setLayoutAnimationEnabledExperimental) {
     UIManager.setLayoutAnimationEnabledExperimental(true);
@@ -144,6 +144,25 @@ export default function StudentDashboard() {
     const [studentData, setStudentData] = useState<any>(null);
     const [isDownloading, setIsDownloading] = useState(false);
     const [loading, setLoading] = useState(true);
+
+    const appState = useRef(AppState.currentState);
+
+    useEffect(() => {
+        const subscription = AppState.addEventListener('change', nextAppState => {
+            if (
+                appState.current.match(/inactive|background/) &&
+                nextAppState === 'active'
+            ) {
+                console.log('App re-entered foreground (Student). Refreshing dashboard...');
+                onRefresh();
+            }
+            appState.current = nextAppState;
+        });
+
+        return () => {
+            subscription.remove();
+        };
+    }, []);
 
     const downloadResultPDF = async (examId: number) => {
         try {

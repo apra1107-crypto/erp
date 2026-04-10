@@ -1,5 +1,5 @@
-import React, { useState, useEffect } from 'react';
-import { Modal, View, Text, TouchableOpacity, StyleSheet, Platform, ActivityIndicator } from 'react-native';
+import React, { useState, useEffect, useRef } from 'react';
+import { Modal, View, Text, TouchableOpacity, StyleSheet, Platform, ActivityIndicator, AppState } from 'react-native';
 import * as FileSystem from 'expo-file-system/legacy';
 import * as IntentLauncher from 'expo-intent-launcher';
 import * as Sharing from 'expo-sharing';
@@ -15,9 +15,28 @@ const UpdateModal = () => {
     const [updateInfo, setUpdateInfo] = useState<any>(null);
     const [downloadProgress, setDownloadProgress] = useState(0);
     const [isDownloading, setIsDownloading] = useState(false);
+    
+    const appState = useRef(AppState.currentState);
 
     useEffect(() => {
+        // Initial check on mount
         checkVersion();
+
+        // Listen for app state changes (background -> foreground)
+        const subscription = AppState.addEventListener('change', nextAppState => {
+            if (
+                appState.current.match(/inactive|background/) &&
+                nextAppState === 'active'
+            ) {
+                console.log('App has come to the foreground! Re-checking version...');
+                checkVersion();
+            }
+            appState.current = nextAppState;
+        });
+
+        return () => {
+            subscription.remove();
+        };
     }, []);
 
     const checkVersion = async () => {

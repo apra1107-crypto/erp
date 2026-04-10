@@ -5,7 +5,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { BASE_URL } from '../constants/Config';
 
 // Extract base URL correctly (remove /api/...)
-const SOCKET_URL = BASE_URL;
+const SOCKET_URL = BASE_URL.split('/api')[0];
 
 export interface SocketContextType {
     socket: Socket | null;
@@ -36,7 +36,7 @@ export const SocketProvider: React.FC<{ children: React.ReactNode }> = ({ childr
         const connectSocket = async () => {
             try {
                 newSocket = io(SOCKET_URL, {
-                    transports: ['websocket'],
+                    transports: ['polling', 'websocket'],
                     reconnection: true,
                     reconnectionAttempts: Infinity,
                     reconnectionDelay: 1000,

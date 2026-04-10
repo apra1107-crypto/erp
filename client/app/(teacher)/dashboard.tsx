@@ -1,5 +1,5 @@
 import { useState, useEffect, useMemo, useRef, useCallback } from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, ActivityIndicator, Image, ScrollView, Modal, TextInput, Dimensions, KeyboardAvoidingView, Platform, StatusBar, RefreshControl, FlatList, LayoutAnimation, UIManager, Alert, TouchableWithoutFeedback, Keyboard, BackHandler } from 'react-native';
+import { View, Text, StyleSheet, TouchableOpacity, ActivityIndicator, Image, ScrollView, Modal, TextInput, Dimensions, KeyboardAvoidingView, Platform, StatusBar, RefreshControl, FlatList, LayoutAnimation, UIManager, Alert, TouchableWithoutFeedback, Keyboard, BackHandler, AppState } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useRouter, useFocusEffect } from 'expo-router';
 import axios from 'axios';
@@ -113,7 +113,7 @@ export default function TeacherDashboard() {
     const router = useRouter();
     const { isDark, theme, toggleTheme } = useTheme();
     const insets = useSafeAreaInsets();
-    const { socket } = useSocket();
+    const { socket, isConnected, lastConnectedAt } = useSocket();
 
     useFocusEffect(
         useCallback(() => {
@@ -133,6 +133,25 @@ export default function TeacherDashboard() {
     const [teacherData, setTeacherData] = useState<any>(null);
     const [loading, setLoading] = useState(true);
     const [refreshing, setRefreshing] = useState(false);
+
+    const appState = useRef(AppState.currentState);
+
+    useEffect(() => {
+        const subscription = AppState.addEventListener('change', nextAppState => {
+            if (
+                appState.current.match(/inactive|background/) &&
+                nextAppState === 'active'
+            ) {
+                console.log('App re-entered foreground (Teacher). Refreshing dashboard...');
+                onRefresh();
+            }
+            appState.current = nextAppState;
+        });
+
+        return () => {
+            subscription.remove();
+        };
+    }, []);
 
     // Subscription States
     const [subStatus, setSubStatus] = useState('loading');
@@ -208,6 +227,7 @@ export default function TeacherDashboard() {
         const joinRooms = () => {
             socket.emit('join_room', `teacher-${teacherData.institute_id}`);
             socket.emit('join_room', `teacher-${teacherData.id}`);
+            socket.emit('join_room', `sub-sync-${teacherData.institute_id}`);
             if (teacherData.special_permission) {
                 socket.emit('join_room', `principal-${teacherData.institute_id}`);
             }
@@ -220,7 +240,7 @@ export default function TeacherDashboard() {
             socket.off('connect', joinRooms);
             socket.off('subscription_update', handleSubUpdate);
         };
-    }, [socket, teacherData?.institute_id, teacherData?.id, teacherData?.special_permission]);
+    }, [socket, isConnected, lastConnectedAt, teacherData?.institute_id, teacherData?.id, teacherData?.special_permission]);
 
     useEffect(() => {
         if (!socket || !teacherData?.id) return;
@@ -256,7 +276,7 @@ export default function TeacherDashboard() {
             socket.off('new_notice');
             socket.off('fee_payment_received');
         };
-    }, [socket, teacherData?.id, teacherData?.special_permission]);
+    }, [socket, isConnected, lastConnectedAt, teacherData?.id, teacherData?.special_permission]);
 
     const checkSubscription = async (id: any) => {
         try {
@@ -264,7 +284,10 @@ export default function TeacherDashboard() {
             const res = await axios.get(`${API_ENDPOINTS.SUBSCRIPTION}/${id}/status`, { headers: { Authorization: `Bearer ${token}` } });
             setSubStatus(res.data.status);
             setSubData(res.data);
-        } catch (e) {}
+        } catch (e) {
+            // FAIL-SAFE: If network fails, lock the dashboard for security
+            setSubStatus('expired');
+        }
     };
     
     const [isSearchActive, setIsSearchActive] = useState(false);
@@ -323,7 +346,7 @@ export default function TeacherDashboard() {
             dismissSearch();
         } else {
             setIsSearchActive(true);
-            searchBarWidth.value = withSpring(SCREEN_WIDTH - 40, { damping: 15 });
+            searchBarWidth.value = withSpring(SCREEN_WIDTH - 100, { damping: 15 });
             searchBarOpacity.value = withTiming(1, { duration: 300 });
         }
     };
@@ -549,6 +572,14 @@ export default function TeacherDashboard() {
             const profile = profileRes.data.teacher;
             setTeacherData(profile);
             await AsyncStorage.setItem('teacherData', JSON.stringify(profile));
+
+            // RE-ESTABLISH SOCKET LINK ON REFRESH
+            if (socket && profile.institute_id) {
+                socket.emit('join_room', `teacher-${profile.institute_id}`);
+                socket.emit('join_room', `teacher-${profile.id}`);
+                socket.emit('join_room', `sub-sync-${profile.institute_id}`);
+            }
+
             await Promise.all([
                 fetchSessions(), 
                 fetchTodayAttendance(forcedSessionId), 
@@ -708,11 +739,22 @@ export default function TeacherDashboard() {
         }
         else if (item.type === 'event') { title = "Institute Event"; mainText = item.data.title; bottomText = item.data.description || "Check calendar"; gradientColors = GRADIENTS.event; iconName = 'star'; }
 
+        const isActuallyLocked = isLocked && item.type !== 'greeting' && item.type !== 'event';
+
         return (
             <TouchableOpacity 
                 activeOpacity={isInteractive ? 1 : 0.95} 
                 onPress={() => { 
-                    if (isLocked && item.type !== 'greeting' && item.type !== 'event') return; 
+                    if (isActuallyLocked) {
+                        Toast.show({ 
+                            type: 'error', 
+                            text1: 'Locked', 
+                            text2: 'Please renew subscription to access details',
+                            position: 'bottom',
+                            bottomOffset: 40
+                        });
+                        return;
+                    }
                     if (item.type === 'student') {
                         router.push({ pathname: '/(teacher)/stats', params: { initialTab: 'students' } });
                     } else if (item.type === 'attendance_merged') {
@@ -725,26 +767,33 @@ export default function TeacherDashboard() {
                         router.push('/(teacher)/academic-calendar');
                     }
                 }} 
-                style={[styles.cardContainer, isLocked && item.type !== 'greeting' && item.type !== 'event' && { opacity: 0.6 }]}
+                style={[styles.cardContainer, isActuallyLocked && { backgroundColor: '#000', elevation: 0 }]}
             >
-                <LinearGradient colors={gradientColors as any} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={styles.cardGradient}>
-                    <View style={styles.cardHeader}>
-                        <View>
-                            {item.type !== 'attendance_merged' ? (
-                                <>
-                                    <Text style={styles.cardTitle}>{title}</Text>
-                                    <Text style={styles.cardSub}>{item.type === 'greeting' ? 'Institute Connect' : dateDayStr}</Text>
-                                </>
-                            ) : (
-                                <View style={{ height: 10 }} />
-                            )}
+                {isActuallyLocked ? (
+                    <View style={{ flex: 1, backgroundColor: '#000', borderRadius: 24, justifyContent: 'center', alignItems: 'center' }}>
+                        <Ionicons name="lock-closed" size={44} color="#333" />
+                        <Text style={{ color: '#222', marginTop: 12, fontWeight: '900', fontSize: 12, letterSpacing: 1 }}>DATA LOCKED</Text>
+                    </View>
+                ) : (
+                    <LinearGradient colors={gradientColors as any} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={styles.cardGradient}>
+                        <View style={styles.cardHeader}>
+                            <View>
+                                {item.type !== 'attendance_merged' ? (
+                                    <>
+                                        <Text style={styles.cardTitle}>{title}</Text>
+                                        <Text style={styles.cardSub}>{item.type === 'greeting' ? 'Institute Connect' : dateDayStr}</Text>
+                                    </>
+                                ) : (
+                                    <View style={{ height: 10 }} />
+                                )}
+                            </View>
+                            <View style={styles.cardIconBg}><Ionicons name={iconName} size={22} color="#fff" /></View>
                         </View>
-                        <View style={styles.cardIconBg}><Ionicons name={isLocked && item.type !== 'greeting' && item.type !== 'event' ? "lock-closed" : iconName} size={22} color="#fff" /></View>
-                    </View>
-                    <View style={item.type === 'attendance_merged' ? { marginTop: -20 } : null}>
-                        <View><Text style={{ fontSize: item.type === 'greeting' || item.type === 'revenue' ? 36 : 28, fontWeight: '900', color: '#fff' }} numberOfLines={2}>{mainText}</Text><Text style={styles.cardBottomText}>{bottomText}</Text>{extraContent}</View>
-                    </View>
-                </LinearGradient>
+                        <View style={item.type === 'attendance_merged' ? { marginTop: -20 } : null}>
+                            <View><Text style={{ fontSize: item.type === 'greeting' || item.type === 'revenue' ? 36 : 28, fontWeight: '900', color: '#fff' }} numberOfLines={2}>{mainText}</Text><Text style={styles.cardBottomText}>{bottomText}</Text>{extraContent}</View>
+                        </View>
+                    </LinearGradient>
+                )}
             </TouchableOpacity>
         );
     };
@@ -822,9 +871,9 @@ export default function TeacherDashboard() {
         notifItemTitle: { fontSize: 14, fontWeight: '800', color: theme.text },
         notifItemMsg: { fontSize: 12, color: theme.textLight, marginTop: 2 },
         notifItemTime: { fontSize: 10, color: theme.textLight, marginLeft: 10, fontWeight: '600' },
-        animatedSearchBar: { position: 'absolute', top: insets.top + 70, right: 20, height: 52, backgroundColor: theme.card, borderRadius: 25, flexDirection: 'row', alignItems: 'center', paddingHorizontal: 15, zIndex: 100, borderWidth: 1, borderColor: theme.border, elevation: 10 },
+        animatedSearchBar: { height: 52, backgroundColor: theme.card, borderRadius: 25, flexDirection: 'row', alignItems: 'center', paddingHorizontal: 15, borderWidth: 1, borderColor: theme.border, elevation: 10 },
         searchInput: { flex: 1, fontSize: 15, color: theme.text, marginLeft: 10 },
-        resultsContainer: { position: 'absolute', top: insets.top + 70, left: 20, right: 20, backgroundColor: theme.card, borderRadius: 15, maxHeight: 350, zIndex: 1000, borderWidth: 1, borderColor: theme.border, elevation: 10 },
+        resultsContainer: { position: 'absolute', top: 65, left: 20, right: 20, backgroundColor: theme.card, borderRadius: 15, maxHeight: 350, zIndex: 1000, borderWidth: 1, borderColor: theme.border, elevation: 10 },
         resultItem: { flexDirection: 'row', alignItems: 'center', padding: 15, borderBottomWidth: 1, borderBottomColor: theme.border },
         resultAvatar: { width: 44, height: 44, borderRadius: 22, backgroundColor: theme.background, marginRight: 15, justifyContent: 'center', alignItems: 'center' },
         avatarImg: { width: 44, height: 44, borderRadius: 22 },
@@ -842,282 +891,353 @@ export default function TeacherDashboard() {
                 <StatusBar barStyle={theme.statusBarStyle} backgroundColor="transparent" translucent={true} />
                 <View style={styles.header}>
                     <TouchableOpacity onPress={() => setShowAccountModal(true)} style={{ marginLeft: -20 }}><View style={{ position: 'relative' }}><Image source={teacherData?.institute_logo ? { uri: getFullImageUrl(teacherData.institute_logo) ?? undefined } : require('../../assets/images/react-logo.png')} style={styles.headerLogo} resizeMode="contain" /></View></TouchableOpacity>
-                    <View style={styles.headerRight}><TouchableOpacity onPress={() => !isLocked && setShowProfileMenu(true)} style={[styles.avatarWrapper, isLocked && { opacity: 0.7 }]} activeOpacity={isLocked ? 1 : 0.7}><View style={{ position: 'relative' }}>{teacherData?.photo_url ? <Image source={{ uri: getFullImageUrl(teacherData.photo_url) ?? undefined }} style={styles.headerAvatar} /> : <View style={[styles.placeholderAvatar, { backgroundColor: theme.primary }]}><Text style={styles.avatarText}>{teacherData?.name?.charAt(0) || 'T'}</Text></View>}{isLocked ? (<View style={{ position: 'absolute', bottom: 0, right: 0, backgroundColor: theme.danger, width: 18, height: 18, borderRadius: 9, justifyContent: 'center', alignItems: 'center', borderWidth: 2, borderColor: theme.background }}><Ionicons name="lock-closed" size={10} color="#fff" /></View>) : (<View style={styles.onlineDot} />)}</View></TouchableOpacity></View>
+                    <View style={styles.headerRight}><TouchableOpacity onPress={() => setShowProfileMenu(true)} style={[styles.avatarWrapper]} activeOpacity={0.7}><View style={{ position: 'relative' }}>{teacherData?.photo_url ? <Image source={{ uri: getFullImageUrl(teacherData.photo_url) ?? undefined }} style={styles.headerAvatar} /> : <View style={[styles.placeholderAvatar, { backgroundColor: theme.primary }]}><Text style={styles.avatarText}>{teacherData?.name?.charAt(0) || 'T'}</Text></View>}<View style={styles.onlineDot} /></View></TouchableOpacity></View>
                 </View>
 
-                {isSearchActive && <Animated.View style={[styles.animatedSearchBar, animatedSearchStyle]}><Ionicons name="search" size={20} color={theme.textLight} /><TextInput style={styles.searchInput} placeholder="Search Students..." placeholderTextColor={theme.textLight} value={searchQuery} onChangeText={handleSearch} autoFocus /><TouchableOpacity onPress={toggleSearch}><Ionicons name="close-circle" size={20} color={theme.textLight} /></TouchableOpacity></Animated.View>}
-
-                <View style={{ position: 'relative', marginTop: 10, marginHorizontal: 20, zIndex: 90, flexDirection: 'row', alignItems: 'center', opacity: isSearchActive ? 0 : 1 }}>
-                    <TouchableOpacity style={[styles.notificationBar]} activeOpacity={isLocked ? 1 : 0.9} onPress={() => !isLocked && notifications.length > 0 && setShowNotifList(true)}><View style={[styles.notifIconCircle, notifications.length === 0 && { backgroundColor: '#6366f1' }]}><Ionicons name="notifications" size={18} color="#fff" />{notifications.length > 0 && <View style={styles.notifBadgeRed} />}</View><View style={{ flex: 1, marginLeft: 12 }}><Text style={[styles.notifTitle, notifications.length === 0 && { color: theme.textLight }]}>{notifications.length > 0 ? `${notifications.length} New Updates` : 'No updates'}</Text><Text style={styles.notifText} numberOfLines={1}>{notifications.length > 0 ? notifications[0].message : 'Everything caught up'}</Text></View><Ionicons name={notifications.length > 0 ? "chevron-down" : "chevron-forward"} size={16} color={theme.textLight} /></TouchableOpacity>
-                    <TouchableOpacity onPress={toggleSearch} activeOpacity={0.7} style={{ marginLeft: 10 }}><LinearGradient colors={['#3b82f6', '#8b5cf6', '#ec4899']} style={[styles.gradientIconBtn]}><Ionicons name="search" size={22} color="#fff" /></LinearGradient></TouchableOpacity>
-                </View>
-
-                {showResults && <View style={styles.resultsContainer}>{searchResults.length === 0 ? <Text style={styles.noResults}>{isSearching ? 'Searching...' : 'No students found'}</Text> : <FlatList data={searchResults} keyExtractor={(item, index) => item.id.toString() + index} renderItem={({ item }) => <TouchableOpacity style={styles.resultItem} onPress={() => handleCreateResult(item)}><View style={styles.resultAvatar}>{item.photo_url ? <Image source={{ uri: getFullImageUrl(item.photo_url) ?? undefined }} style={styles.avatarImg} /> : <Ionicons name="person" size={20} color={theme.textLight} />}</View><View><Text style={styles.resultName}>{item.name}</Text><Text style={styles.resultInfo}>{`Class: ${item.class}-${item.section}`}</Text></View><Text style={[styles.typeBadge, { backgroundColor: theme.primary }]}>STUDENT</Text></TouchableOpacity>} />}</View>}
-
-                <ScrollView 
-                    style={styles.content} 
-                    showsVerticalScrollIndicator={false} 
-                    contentContainerStyle={{ paddingBottom: insets.bottom + 100 }} 
-                    refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} colors={[theme.primary]} tintColor={theme.primary} />}
-                >
-                <View style={{ width: SCREEN_WIDTH, height: 205, marginTop: 15, marginBottom: 5 }}>
-                    <Animated.FlatList 
-                        ref={flatListRef as any} 
-                        data={flashcardData} 
-                        renderItem={renderFlashcardItem} 
-                        keyExtractor={(item, index) => item.type + index} 
-                        horizontal 
-                        pagingEnabled 
-                        showsHorizontalScrollIndicator={false} 
-                        onMomentumScrollEnd={onMomentumScrollEnd} 
-                        getItemLayout={(data, index) => ({ length: SCREEN_WIDTH, offset: SCREEN_WIDTH * index, index })} 
-                        snapToInterval={SCREEN_WIDTH} 
-                        decelerationRate="fast" 
-                        style={{ flex: 1 }} 
-                    />
-                    <View style={{ flexDirection: 'row', justifyContent: 'center', marginTop: 15 }}>
-                        {flashcardData.map((_, idx) => (
-                            <View 
-                                key={idx} 
-                                style={{ 
-                                    width: activeSlide === idx ? 20 : 8, 
-                                    height: 8, 
-                                    borderRadius: 4, 
-                                    backgroundColor: activeSlide === idx ? theme.primary : theme.border, 
-                                    marginHorizontal: 4 
-                                }} 
-                            />
-                        ))}
-                    </View>
-                </View>
-
-                {/* Today's Schedule - Compact Premium Redesign */}
-                <View style={{ marginTop: 15 }}>
-                    <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingHorizontal: 20, marginBottom: 12 }}>
-                        <View>
-                            <Text style={{ fontSize: 18, fontWeight: '900', color: theme.text }}>Today's Schedule</Text>
-                            <View style={{ height: 3, width: 20, backgroundColor: theme.primary, borderRadius: 2, marginTop: 4 }} />
-                        </View>
+                <View style={{ flex: 1, position: 'relative' }}>
+                    <View style={{ position: 'relative', marginTop: 10, marginHorizontal: 20, zIndex: 100, flexDirection: 'row', alignItems: 'center' }}>
+                        {isSearchActive ? (
+                            <Animated.View style={[styles.animatedSearchBar, animatedSearchStyle, { marginRight: 10 }]}>
+                                <Ionicons name="search" size={20} color={theme.textLight} />
+                                <TextInput style={styles.searchInput} placeholder="Search Students..." placeholderTextColor={theme.textLight} value={searchQuery} onChangeText={handleSearch} autoFocus />
+                                <TouchableOpacity onPress={toggleSearch}>
+                                    <Ionicons name="close-circle" size={20} color={theme.textLight} />
+                                </TouchableOpacity>
+                            </Animated.View>
+                        ) : (
+                            <TouchableOpacity style={[styles.notificationBar]} activeOpacity={0.9} onPress={() => { if (isLocked) { Toast.show({ type: 'error', text1: 'Locked', text2: 'Subscription expired', position: 'bottom', bottomOffset: 40 }); return; } if (notifications.length > 0) setShowNotifList(true); }}>
+                                <View style={[styles.notifIconCircle, notifications.length === 0 && { backgroundColor: '#6366f1' }]}><Ionicons name="notifications" size={18} color="#fff" />{notifications.length > 0 && <View style={styles.notifBadgeRed} />}</View>
+                                <View style={{ flex: 1, marginLeft: 12 }}><Text style={[styles.notifTitle, notifications.length === 0 && { color: theme.textLight }]}>{notifications.length > 0 ? `${notifications.length} New Updates` : 'No updates'}</Text><Text style={styles.notifText} numberOfLines={1}>{notifications.length > 0 ? notifications[0].message : 'Everything caught up'}</Text></View>
+                                <Ionicons name={notifications.length > 0 ? "chevron-down" : "chevron-forward"} size={16} color={theme.textLight} />
+                            </TouchableOpacity>
+                        )}
+                        
                         <TouchableOpacity 
-                            style={{ flexDirection: 'row', alignItems: 'center', backgroundColor: isDark ? '#1a1a1a' : '#f0f0f0', paddingHorizontal: 12, paddingVertical: 6, borderRadius: 10 }} 
-                            onPress={() => setIsWeeklyModalOpen(true)}
+                            onPress={() => {
+                                if (isLocked) {
+                                    Toast.show({ type: 'error', text1: 'Locked', text2: 'Subscription expired', position: 'bottom', bottomOffset: 40 });
+                                    return;
+                                }
+                                toggleSearch();
+                            }}
+                            activeOpacity={isLocked ? 1 : 0.7}
                         >
-                            <Text style={{ fontSize: 11, fontWeight: '800', color: theme.textLight, marginRight: 4 }}>WEEKLY</Text>
-                            <Ionicons name="calendar-outline" size={12} color={theme.textLight} />
+                            <LinearGradient colors={['#3b82f6', '#8b5cf6', '#ec4899']} style={[styles.gradientIconBtn]}>
+                                <Ionicons name={isSearchActive ? "close" : "search"} size={22} color="#fff" />
+                            </LinearGradient>
                         </TouchableOpacity>
                     </View>
 
+                    {showResults && <View style={styles.resultsContainer}>{searchResults.length === 0 ? <Text style={styles.noResults}>{isSearching ? 'Searching...' : 'No students found'}</Text> : <FlatList data={searchResults} keyExtractor={(item, index) => item.id.toString() + index} renderItem={({ item }) => <TouchableOpacity style={styles.resultItem} onPress={() => handleCreateResult(item)}><View style={styles.resultAvatar}>{item.photo_url ? <Image source={{ uri: getFullImageUrl(item.photo_url) ?? undefined }} style={styles.avatarImg} /> : <Ionicons name="person" size={20} color={theme.textLight} />}</View><View><Text style={styles.resultName}>{item.name}</Text><Text style={styles.resultInfo}>{`Class: ${item.class}-${item.section}`}</Text></View><Text style={[styles.typeBadge, { backgroundColor: theme.primary }]}>STUDENT</Text></TouchableOpacity>} />}</View>}
+
                     <ScrollView 
-                        ref={studentScrollRef}
-                        horizontal 
-                        showsHorizontalScrollIndicator={false} 
-                        contentContainerStyle={{ paddingLeft: 20, paddingRight: 20, paddingVertical: 5 }}
+                        style={styles.content} 
+                        showsVerticalScrollIndicator={false} 
+                        contentContainerStyle={{ paddingBottom: insets.bottom + 100 }} 
+                        refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} colors={[theme.primary]} tintColor={theme.primary} />}
                     >
-                        {(() => {
-                            if (!routine || !Array.isArray(routine) || routine.length === 0) {
-                                return (
-                                    <View style={{ width: SCREEN_WIDTH - 40, height: 80, backgroundColor: theme.card, borderRadius: 20, justifyContent: 'center', alignItems: 'center', borderWidth: 1, borderColor: theme.border, borderStyle: 'dashed' }}>
-                                        <Text style={{ color: theme.textLight, fontSize: 13, fontWeight: '600' }}>No routine found for today</Text>
-                                    </View>
-                                );
-                            }
+                    <View style={{ width: SCREEN_WIDTH, height: 205, marginTop: 15, marginBottom: 5 }}>
+                        <Animated.FlatList 
+                            ref={flatListRef as any} 
+                            data={flashcardData} 
+                            renderItem={renderFlashcardItem} 
+                            keyExtractor={(item, index) => item.type + index} 
+                            horizontal 
+                            pagingEnabled 
+                            showsHorizontalScrollIndicator={false} 
+                            onMomentumScrollEnd={onMomentumScrollEnd} 
+                            getItemLayout={(data, index) => ({ length: SCREEN_WIDTH, offset: SCREEN_WIDTH * index, index })} 
+                            snapToInterval={SCREEN_WIDTH} 
+                            decelerationRate="fast" 
+                            style={{ flex: 1 }} 
+                            extraData={isLocked}
+                        />
+                        <View style={{ flexDirection: 'row', justifyContent: 'center', marginTop: 15 }}>
+                            {flashcardData.map((_, idx) => (
+                                <View 
+                                    key={idx} 
+                                    style={{ 
+                                        width: activeSlide === idx ? 20 : 8, 
+                                        height: 8, 
+                                        borderRadius: 4, 
+                                        backgroundColor: activeSlide === idx ? theme.primary : theme.border, 
+                                        marginHorizontal: 4 
+                                    }} 
+                                />
+                            ))}
+                        </View>
+                    </View>
 
-                            const days = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
-                            const todayName = days[new Date().getDay()];
-                            const todayData = routine.filter((item: any) => item.day === todayName).sort((a, b) => a.startTime.localeCompare(b.startTime));
+                    {/* Today's Schedule - Compact Premium Redesign */}
+                    <View style={{ marginTop: 15, position: 'relative' }}>
+                        <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingHorizontal: 20, marginBottom: 12 }}>
+                            <View>
+                                <Text style={{ fontSize: 18, fontWeight: '900', color: theme.text }}>Today's Schedule</Text>
+                                <View style={{ height: 3, width: 20, backgroundColor: theme.primary, borderRadius: 2, marginTop: 4 }} />
+                            </View>
+                            <TouchableOpacity 
+                                style={{ flexDirection: 'row', alignItems: 'center', backgroundColor: isDark ? '#1a1a1a' : '#f0f0f0', paddingHorizontal: 12, paddingVertical: 6, borderRadius: 10 }} 
+                                onPress={() => setIsWeeklyModalOpen(true)}
+                            >
+                                <Text style={{ fontSize: 11, fontWeight: '800', color: theme.textLight, marginRight: 4 }}>WEEKLY</Text>
+                                <Ionicons name="calendar-outline" size={12} color={theme.textLight} />
+                            </TouchableOpacity>
+                        </View>
 
-                            if (todayData.length === 0) {
-                                return (
-                                    <View style={{ width: SCREEN_WIDTH - 40, height: 80, backgroundColor: theme.card, borderRadius: 20, justifyContent: 'center', alignItems: 'center', borderWidth: 1, borderColor: theme.border, borderStyle: 'dashed' }}>
-                                        <Text style={{ color: theme.textLight, fontSize: 13, fontWeight: '600' }}>You're free today! ☕</Text>
-                                    </View>
-                                );
-                            }
+                        <ScrollView 
+                            ref={studentScrollRef}
+                            horizontal 
+                            showsHorizontalScrollIndicator={false} 
+                            contentContainerStyle={{ paddingLeft: 20, paddingRight: 20, paddingVertical: 5 }}
+                        >
+                            {(() => {
+                                if (!routine || !Array.isArray(routine) || routine.length === 0) {
+                                    return (
+                                        <View style={{ width: SCREEN_WIDTH - 40, height: 80, backgroundColor: theme.card, borderRadius: 20, justifyContent: 'center', alignItems: 'center', borderWidth: 1, borderColor: theme.border, borderStyle: 'dashed' }}>
+                                            <Text style={{ color: theme.textLight, fontSize: 13, fontWeight: '600' }}>No routine found for today</Text>
+                                        </View>
+                                    );
+                                }
 
-                            return todayData.map((item: any, pIdx: number) => {
-                                const now = new Date();
-                                const currentTime = now.getHours() * 60 + now.getMinutes();
-                                const parseTime = (t: string) => {
-                                    if (!t) return 0;
-                                    const [hours, minutes] = t.split(':').map(Number);
-                                    return hours * 60 + minutes;
-                                };
-                                const start = parseTime(item.startTime);
-                                const end = parseTime(item.endTime);
-                                const isLive = currentTime >= start && currentTime <= end;
+                                const days = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
+                                const todayName = days[new Date().getDay()];
+                                const todayData = routine.filter((item: any) => item.day === todayName).sort((a, b) => a.startTime.localeCompare(b.startTime));
 
-                                // Stunning Premium Blended Gradients
-                                const PREMIUM_GRADIENTS = [
-                                    ['#4158D0', '#C850C0', '#FFCC70'], // Cosmic Fusion
-                                    ['#0093E9', '#80D0C7'],             // Deep Ocean
-                                    ['#8EC5FC', '#E0C3FC'],             // Lavender Sky
-                                    ['#FBAB7E', '#F7CE68'],             // Sunset Glow
-                                    ['#85FFBD', '#FFFB7D'],             // Fresh Mint
-                                    ['#21D4FD', '#B721FF'],             // Electric Violet
-                                    ['#08AEEA', '#2AF598'],             // Arctic Cyan
-                                ];
-                                
-                                const gradient = PREMIUM_GRADIENTS[pIdx % PREMIUM_GRADIENTS.length];
+                                if (todayData.length === 0) {
+                                    return (
+                                        <View style={{ width: SCREEN_WIDTH - 40, height: 80, backgroundColor: theme.card, borderRadius: 20, justifyContent: 'center', alignItems: 'center', borderWidth: 1, borderColor: theme.border, borderStyle: 'dashed' }}>
+                                            <Text style={{ color: theme.textLight, fontSize: 13, fontWeight: '600' }}>You're free today! ☕</Text>
+                                        </View>
+                                    );
+                                }
 
-                                return (
-                                    <TouchableOpacity 
-                                        key={pIdx} 
-                                        activeOpacity={0.95}
-                                        style={{ 
-                                            width: 175, 
-                                            height: 120, 
-                                            marginRight: 16, 
-                                            borderRadius: 28, 
-                                            elevation: isLive ? 15 : 5,
-                                            shadowColor: gradient[0],
-                                            shadowOpacity: isLive ? 0.7 : 0.2,
-                                            shadowRadius: 15,
-                                            shadowOffset: { width: 0, height: 8 },
-                                        }}
-                                    >
-                                        <LinearGradient
-                                            colors={gradient}
-                                            start={{ x: 0, y: 0 }}
-                                            end={{ x: 1, y: 1 }}
+                                return todayData.map((item: any, pIdx: number) => {
+                                    const now = new Date();
+                                    const currentTime = now.getHours() * 60 + now.getMinutes();
+                                    const parseTime = (t: string) => {
+                                        if (!t) return 0;
+                                        const [hours, minutes] = t.split(':').map(Number);
+                                        return hours * 60 + minutes;
+                                    };
+                                    const start = parseTime(item.startTime);
+                                    const end = parseTime(item.endTime);
+                                    const isLive = currentTime >= start && currentTime <= end;
+
+                                    // Stunning Premium Blended Gradients
+                                    const PREMIUM_GRADIENTS = [
+                                        ['#4158D0', '#C850C0', '#FFCC70'], // Cosmic Fusion
+                                        ['#0093E9', '#80D0C7'],             // Deep Ocean
+                                        ['#8EC5FC', '#E0C3FC'],             // Lavender Sky
+                                        ['#FBAB7E', '#F7CE68'],             // Sunset Glow
+                                        ['#85FFBD', '#FFFB7D'],             // Fresh Mint
+                                        ['#21D4FD', '#B721FF'],             // Electric Violet
+                                        ['#08AEEA', '#2AF598'],             // Arctic Cyan
+                                    ];
+                                    
+                                    const gradient = PREMIUM_GRADIENTS[pIdx % PREMIUM_GRADIENTS.length];
+
+                                    return (
+                                        <TouchableOpacity 
+                                            key={pIdx} 
+                                            activeOpacity={0.95}
                                             style={{ 
-                                                flex: 1, 
+                                                width: 175, 
+                                                height: 120, 
+                                                marginRight: 16, 
                                                 borderRadius: 28, 
-                                                padding: 18,
-                                                borderWidth: isLive ? 2.5 : 0,
-                                                borderColor: 'rgba(255,255,255,0.7)',
-                                                justifyContent: 'space-between',
-                                                overflow: 'hidden',
+                                                elevation: isLive ? 15 : 5,
+                                                shadowColor: gradient[0],
+                                                shadowOpacity: isLive ? 0.7 : 0.2,
+                                                shadowRadius: 15,
+                                                shadowOffset: { width: 0, height: 8 },
                                             }}
                                         >
-                                            {/* Advanced Decorative Elements (Glassmorphism) */}
-                                            <View style={{ 
-                                                position: 'absolute', 
-                                                right: -25, 
-                                                top: -25, 
-                                                width: 90, 
-                                                height: 90, 
-                                                borderRadius: 45, 
-                                                backgroundColor: 'rgba(255,255,255,0.2)', 
-                                                zIndex: 0 
-                                            }} />
-                                            
-                                            <View style={{ 
-                                                position: 'absolute', 
-                                                left: -30, 
-                                                bottom: -30, 
-                                                width: 80, 
-                                                height: 80, 
-                                                borderRadius: 40, 
-                                                backgroundColor: 'rgba(0,0,0,0.08)', 
-                                                zIndex: 0 
-                                            }} />
+                                            <LinearGradient
+                                                colors={gradient as [string, string, ...string[]]}
+                                                start={{ x: 0, y: 0 }}
+                                                end={{ x: 1, y: 1 }}
+                                                style={{ 
+                                                    flex: 1, 
+                                                    borderRadius: 28, 
+                                                    padding: 18,
+                                                    borderWidth: isLive ? 2.5 : 0,
+                                                    borderColor: 'rgba(255,255,255,0.7)',
+                                                    justifyContent: 'space-between',
+                                                    overflow: 'hidden',
+                                                }}
+                                            >
+                                                {/* Advanced Decorative Elements (Glassmorphism) */}
+                                                <View style={{ 
+                                                    position: 'absolute', 
+                                                    right: -25, 
+                                                    top: -25, 
+                                                    width: 90, 
+                                                    height: 90, 
+                                                    borderRadius: 45, 
+                                                    backgroundColor: 'rgba(255,255,255,0.2)', 
+                                                    zIndex: 0 
+                                                }} />
+                                                
+                                                <View style={{ 
+                                                    position: 'absolute', 
+                                                    left: -30, 
+                                                    bottom: -30, 
+                                                    width: 80, 
+                                                    height: 80, 
+                                                    borderRadius: 40, 
+                                                    backgroundColor: 'rgba(0,0,0,0.08)', 
+                                                    zIndex: 0 
+                                                }} />
 
-                                            <View style={{ zIndex: 1 }}>
-                                                <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
-                                                    <View style={{ 
-                                                        flexDirection: 'row', 
-                                                        alignItems: 'center', 
-                                                        backgroundColor: 'rgba(255,255,255,0.28)',
-                                                        paddingHorizontal: 10,
-                                                        paddingVertical: 5,
-                                                        borderRadius: 12
-                                                    }}>
-                                                        <Ionicons 
-                                                            name="time" 
-                                                            size={13} 
-                                                            color="#fff" 
-                                                        />
-                                                        <Text style={{ 
-                                                            fontSize: 10.5, 
-                                                            fontWeight: '900', 
-                                                            color: '#fff',
-                                                            marginLeft: 5,
-                                                            letterSpacing: 0.2
+                                                <View style={{ zIndex: 1 }}>
+                                                    <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
+                                                        <View style={{ 
+                                                            flexDirection: 'row', 
+                                                            alignItems: 'center', 
+                                                            backgroundColor: 'rgba(255,255,255,0.28)',
+                                                            paddingHorizontal: 10,
+                                                            paddingVertical: 5,
+                                                            borderRadius: 12
                                                         }}>
-                                                            {item.startTime} - {item.endTime}
+                                                            <Ionicons 
+                                                                name="time" 
+                                                                size={13} 
+                                                                color="#fff" 
+                                                            />
+                                                            <Text style={{ 
+                                                                fontSize: 10.5, 
+                                                                fontWeight: '900', 
+                                                                color: '#fff',
+                                                                marginLeft: 5,
+                                                                letterSpacing: 0.2
+                                                            }}>
+                                                                {item.startTime} - {item.endTime}
+                                                            </Text>
+                                                        </View>
+                                                        
+                                                        {isLive && <LiveBadge />}
+                                                    </View>
+                                                    
+                                                    <Text style={{ 
+                                                        fontSize: 19, 
+                                                        fontWeight: '900', 
+                                                        color: '#fff',
+                                                        letterSpacing: -0.6,
+                                                        textShadowColor: 'rgba(0,0,0,0.15)',
+                                                        textShadowOffset: { width: 0, height: 1.5 },
+                                                        textShadowRadius: 3
+                                                    }} numberOfLines={1}>
+                                                        {item.subject}
+                                                    </Text>
+                                                </View>
+
+                                                <View style={{ 
+                                                    flexDirection: 'row', 
+                                                    alignItems: 'center', 
+                                                    justifyContent: 'space-between',
+                                                    zIndex: 1,
+                                                    marginTop: 4
+                                                }}>
+                                                    <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+                                                        <View style={{ 
+                                                            width: 28, 
+                                                            height: 28, 
+                                                            borderRadius: 10, 
+                                                            backgroundColor: 'rgba(255,255,255,0.3)', 
+                                                            justifyContent: 'center', 
+                                                            alignItems: 'center',
+                                                            marginRight: 10
+                                                        }}>
+                                                            <Ionicons name="school" size={14} color="#fff" />
+                                                        </View>
+                                                        <Text style={{ 
+                                                            fontSize: 14, 
+                                                            fontWeight: '800', 
+                                                            color: 'rgba(255,255,255,0.95)',
+                                                            letterSpacing: -0.2
+                                                        }}>
+                                                            {item.className}-{item.section}
                                                         </Text>
                                                     </View>
                                                     
-                                                    {isLive && <LiveBadge />}
-                                                </View>
-                                                
-                                                <Text style={{ 
-                                                    fontSize: 19, 
-                                                    fontWeight: '900', 
-                                                    color: '#fff',
-                                                    letterSpacing: -0.6,
-                                                    textShadowColor: 'rgba(0,0,0,0.15)',
-                                                    textShadowOffset: { width: 0, height: 1.5 },
-                                                    textShadowRadius: 3
-                                                }} numberOfLines={1}>
-                                                    {item.subject}
-                                                </Text>
-                                            </View>
-
-                                            <View style={{ 
-                                                flexDirection: 'row', 
-                                                alignItems: 'center', 
-                                                justifyContent: 'space-between',
-                                                zIndex: 1,
-                                                marginTop: 4
-                                            }}>
-                                                <View style={{ flexDirection: 'row', alignItems: 'center' }}>
-                                                    <View style={{ 
-                                                        width: 28, 
-                                                        height: 28, 
-                                                        borderRadius: 10, 
-                                                        backgroundColor: 'rgba(255,255,255,0.3)', 
-                                                        justifyContent: 'center', 
-                                                        alignItems: 'center',
-                                                        marginRight: 10
-                                                    }}>
-                                                        <Ionicons name="school" size={14} color="#fff" />
+                                                    <View style={{ backgroundColor: 'rgba(255,255,255,0.2)', padding: 4, borderRadius: 10 }}>
+                                                        <Ionicons name="chevron-forward" size={16} color="#fff" />
                                                     </View>
-                                                    <Text style={{ 
-                                                        fontSize: 14, 
-                                                        fontWeight: '800', 
-                                                        color: 'rgba(255,255,255,0.95)',
-                                                        letterSpacing: -0.2
-                                                    }}>
-                                                        {item.className}-{item.section}
-                                                    </Text>
                                                 </View>
-                                                
-                                                <View style={{ backgroundColor: 'rgba(255,255,255,0.2)', padding: 4, borderRadius: 10 }}>
-                                                    <Ionicons name="chevron-forward" size={16} color="#fff" />
-                                                </View>
-                                            </View>
-                                        </LinearGradient>
-                                    </TouchableOpacity>
-                                );
-                            });
-                        })()}
-                    </ScrollView>
-                </View>
-
-                <View style={styles.actionsContainer}>
-                    <View style={styles.actionsBox}>
-                        {actions.map((action, index) => (
-                            <TouchableOpacity 
-                                key={index} 
-                                style={styles.actionCard} 
-                                onPress={() => router.push(action.path as any)}
-                            >
-                                <View style={[styles.actionIconCircle, { backgroundColor: isDark ? action.bgDark : action.bgLight }]}>
-                                    {(action as any).iconType === 'material' ? (
-                                        <MaterialCommunityIcons name={action.icon as any} size={24} color={action.color} />
-                                    ) : (
-                                        <Ionicons name={action.icon as any} size={24} color={action.color} />
-                                    )}
-                                </View>
-                                <Text style={styles.actionText}>{action.title}</Text>
-                            </TouchableOpacity>
-                        ))}
+                                            </LinearGradient>
+                                        </TouchableOpacity>
+                                    );
+                                });
+                            })()}
+                        </ScrollView>
                     </View>
-                </View>
-            </ScrollView>
 
-            <Modal visible={showNotifList} transparent={true} animationType="fade" onRequestClose={() => setShowNotifList(false)}><TouchableOpacity style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.4)', justifyContent: 'flex-start', paddingTop: insets.top + 70, paddingHorizontal: 20 }} activeOpacity={1} onPress={() => setShowNotifList(false)}><View style={styles.notifDropdown}><View style={styles.notifDropdownHeader}><Text style={styles.notifDropdownTitle}>Recent Updates</Text><TouchableOpacity onPress={() => setNotifications([])}><Text style={{ color: theme.danger, fontWeight: '700' }}>Clear All</Text></TouchableOpacity></View><ScrollView style={{ MAX_HEIGHT: 400 }} showsVerticalScrollIndicator={false}>{notifications.length === 0 ? <View style={{ padding: 20, alignItems: 'center' }}><Text style={{ color: theme.textLight }}>No recent updates</Text></View> : notifications.map((item) => <View key={item.id} style={styles.notifItem}><View style={[styles.notifItemDot, { backgroundColor: item.type === 'fees' ? '#10b981' : item.type === 'request' ? '#f59e0b' : theme.primary }]} /><View style={{ flex: 1 }}><Text style={styles.notifItemTitle}>{item.title}</Text><Text style={styles.notifItemMsg}>{item.message}</Text></View><Text style={styles.notifItemTime}>{item.time}</Text></View>)}</ScrollView></View></TouchableOpacity></Modal>
+                    <View style={styles.actionsContainer}>
+                        <View style={styles.actionsBox}>
+                            {actions.map((action, index) => (
+                                <TouchableOpacity 
+                                    key={index} 
+                                    style={styles.actionCard} 
+                                    onPress={() => router.push(action.path as any)}
+                                >
+                                    <View style={[styles.actionIconCircle, { backgroundColor: isDark ? action.bgDark : action.bgLight }]}>
+                                        {(action as any).iconType === 'material' ? (
+                                            <MaterialCommunityIcons name={action.icon as any} size={24} color={action.color} />
+                                        ) : (
+                                            <Ionicons name={action.icon as any} size={24} color={action.color} />
+                                        )}
+                                    </View>
+                                    <Text style={styles.actionText}>{action.title}</Text>
+                                </TouchableOpacity>
+                            ))}
+                        </View>
+                    </View>
+                </ScrollView>
+
+                {isLocked && (
+                    <View style={{
+                        ...StyleSheet.absoluteFillObject,
+                        backgroundColor: '#000',
+                        zIndex: 1000,
+                        justifyContent: 'center',
+                        alignItems: 'center',
+                        top: 0
+                    }}>
+                        <View style={{ 
+                            width: 80, 
+                            height: 80, 
+                            borderRadius: 40, 
+                            backgroundColor: '#1a1a1a', 
+                            justifyContent: 'center', 
+                            alignItems: 'center',
+                            borderWidth: 1,
+                            borderColor: '#333',
+                            marginBottom: 20
+                        }}>
+                            <Ionicons name="lock-closed" size={40} color={theme.danger} />
+                        </View>
+                        <Text style={{ color: '#fff', fontSize: 20, fontWeight: '900', letterSpacing: 1 }}>DASHBOARD LOCKED</Text>
+                        <Text style={{ color: '#666', fontSize: 13, marginTop: 8, fontWeight: '600' }}>Subscription Expired</Text>
+                        
+                        <TouchableOpacity 
+                            onPress={() => Toast.show({ type: 'error', text1: 'Access Restricted', text2: 'Please contact institute principal', position: 'bottom', bottomOffset: 40 })}
+                            style={{ 
+                                marginTop: 30, 
+                                paddingHorizontal: 25, 
+                                paddingVertical: 12, 
+                                borderRadius: 15, 
+                                backgroundColor: theme.danger + '20',
+                                borderWidth: 1,
+                                borderColor: theme.danger + '40'
+                            }}
+                        >
+                            <Text style={{ color: theme.danger, fontWeight: '800', fontSize: 14 }}>HOW TO UNLOCK?</Text>
+                        </TouchableOpacity>
+                    </View>
+                )}
+                </View>
+
+            <Modal visible={showNotifList} transparent={true} animationType="fade" onRequestClose={() => setShowNotifList(false)}><TouchableOpacity style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.4)', justifyContent: 'flex-start', paddingTop: insets.top + 70, paddingHorizontal: 20 }} activeOpacity={1} onPress={() => setShowNotifList(false)}><View style={styles.notifDropdown}><View style={styles.notifDropdownHeader}><Text style={styles.notifDropdownTitle}>Recent Updates</Text><TouchableOpacity onPress={() => setNotifications([])}><Text style={{ color: theme.danger, fontWeight: '700' }}>Clear All</Text></TouchableOpacity></View><ScrollView style={{ maxHeight: 400 }} showsVerticalScrollIndicator={false}>{notifications.length === 0 ? <View style={{ padding: 20, alignItems: 'center' }}><Text style={{ color: theme.textLight }}>No recent updates</Text></View> : notifications.map((item) => <View key={item.id} style={styles.notifItem}><View style={[styles.notifItemDot, { backgroundColor: item.type === 'fees' ? '#10b981' : item.type === 'request' ? '#f59e0b' : theme.primary }]} /><View style={{ flex: 1 }}><Text style={styles.notifItemTitle}>{item.title}</Text><Text style={styles.notifItemMsg}>{item.message}</Text></View><Text style={styles.notifItemTime}>{item.time}</Text></View>)}</ScrollView></View></TouchableOpacity></Modal>
 
             {/* PROFILE MENU MODAL */}
             <Modal
@@ -1393,7 +1513,7 @@ export default function TeacherDashboard() {
                                                                             <Text style={{ fontSize: 18, fontWeight: '900', color: theme.text, marginBottom: 8 }}>{item.subject}</Text>
                                                                             
                                                                             <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
-                                                                                <View style={{ backgroundColor: theme.primary + '15', paddingHorizontal: 10, paddingVertical: 5, borderRadius: 10, borderSize: 1, borderColor: theme.primary + '20' }}>
+                                                                                <View style={{ backgroundColor: theme.primary + '15', paddingHorizontal: 10, paddingVertical: 5, borderRadius: 10, borderWidth: 1, borderColor: theme.primary + '20' }}>
                                                                                     <Text style={{ fontSize: 11, fontWeight: '800', color: theme.primary }}>CLASS {item.className}-{item.section}</Text>
                                                                                 </View>
                                                                                 <View style={{ width: 4, height: 4, borderRadius: 2, backgroundColor: theme.border }} />

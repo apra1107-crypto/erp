@@ -315,6 +315,50 @@ export const toastConfig = {
         </TouchableOpacity>
     </View>
   ),
+  teacher_attendance: (props: any) => (
+    <View style={{ width: '95%', backgroundColor: '#fff', borderRadius: 20, padding: 16, flexDirection: 'row', alignItems: 'center', borderLeftWidth: 6, borderLeftColor: '#8b5cf6', elevation: 10, shadowColor: '#000', shadowOffset: { width: 0, height: 5 }, shadowOpacity: 0.1, shadowRadius: 10 }}>
+        <View style={{ width: 40, height: 40, borderRadius: 20, backgroundColor: '#8b5cf620', justifyContent: 'center', alignItems: 'center', marginRight: 12 }}>
+            <Ionicons name="people" size={22} color="#8b5cf6" />
+        </View>
+        <View style={{ flex: 1 }}>
+            <Text style={{ fontSize: 16, fontWeight: '900', color: '#1e293b' }}>{props.text1}</Text>
+            {props.text2 && <Text style={{ fontSize: 13, color: '#64748b', marginTop: 2, fontWeight: '600' }}>{props.text2}</Text>}
+        </View>
+    </View>
+  ),
+  salary: (props: any) => (
+    <View style={{ width: '95%', backgroundColor: '#fff', borderRadius: 20, padding: 16, flexDirection: 'row', alignItems: 'center', borderLeftWidth: 6, borderLeftColor: '#10b981', elevation: 10, shadowColor: '#000', shadowOffset: { width: 0, height: 5 }, shadowOpacity: 0.1, shadowRadius: 10 }}>
+        <View style={{ width: 40, height: 40, borderRadius: 20, backgroundColor: '#10b98120', justifyContent: 'center', alignItems: 'center', marginRight: 12 }}>
+            <Ionicons name="cash" size={22} color="#10b981" />
+        </View>
+        <View style={{ flex: 1 }}>
+            <Text style={{ fontSize: 16, fontWeight: '900', color: '#1e293b' }}>{props.text1}</Text>
+            {props.text2 && <Text style={{ fontSize: 13, color: '#64748b', marginTop: 2, fontWeight: '600' }}>{props.text2}</Text>}
+        </View>
+    </View>
+  ),
+  request: (props: any) => (
+    <View style={{ width: '95%', backgroundColor: '#fff', borderRadius: 20, padding: 16, flexDirection: 'row', alignItems: 'center', borderLeftWidth: 6, borderLeftColor: '#f59e0b', elevation: 10, shadowColor: '#000', shadowOffset: { width: 0, height: 5 }, shadowOpacity: 0.1, shadowRadius: 10 }}>
+        <View style={{ width: 40, height: 40, borderRadius: 20, backgroundColor: '#f59e0b20', justifyContent: 'center', alignItems: 'center', marginRight: 12 }}>
+            <Ionicons name="mail" size={22} color="#f59e0b" />
+        </View>
+        <View style={{ flex: 1 }}>
+            <Text style={{ fontSize: 16, fontWeight: '900', color: '#1e293b' }}>{props.text1}</Text>
+            {props.text2 && <Text style={{ fontSize: 13, color: '#64748b', marginTop: 2, fontWeight: '600' }}>{props.text2}</Text>}
+        </View>
+    </View>
+  ),
+  transport_proximity: (props: any) => (
+    <View style={{ width: '95%', backgroundColor: '#fff', borderRadius: 20, padding: 16, flexDirection: 'row', alignItems: 'center', borderLeftWidth: 6, borderLeftColor: '#06b6d4', elevation: 10, shadowColor: '#000', shadowOffset: { width: 0, height: 5 }, shadowOpacity: 0.1, shadowRadius: 10 }}>
+        <View style={{ width: 40, height: 40, borderRadius: 20, backgroundColor: '#06b6d420', justifyContent: 'center', alignItems: 'center', marginRight: 12 }}>
+            <Ionicons name="bus" size={22} color="#06b6d4" />
+        </View>
+        <View style={{ flex: 1 }}>
+            <Text style={{ fontSize: 16, fontWeight: '900', color: '#1e293b' }}>{props.text1}</Text>
+            {props.text2 && <Text style={{ fontSize: 13, color: '#64748b', marginTop: 2, fontWeight: '600' }}>{props.text2}</Text>}
+        </View>
+    </View>
+  ),
 };
 
 function RootLayoutContent() {

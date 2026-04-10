@@ -1,5 +1,5 @@
 import db from '../config/db.js';
-import { emitToPrincipal, emitToAdmin, emitToTeacher } from '../utils/socket.js';
+import { emitToAdmin, emitSubscriptionUpdate } from '../utils/socket.js';
 import { sendWhatsAppMessage } from '../utils/whatsapp.js';
 import { sendSubscriptionSuccessEmail } from '../utils/aws.js';
 
@@ -68,13 +68,8 @@ export const updateSubscriptionSettings = async (req, res) => {
             data: newSettings
         });
 
-        // Emit Socket Event for real-time update
-        emitToPrincipal(instituteId, 'subscription_update', {
-            settings: newSettings,
-            status: status
-        });
-
-        emitToTeacher(instituteId, 'subscription_update', {
+        // Emit Socket Event for real-time update to unified room
+        emitSubscriptionUpdate(instituteId, {
             settings: newSettings,
             status: status
         });
@@ -215,19 +210,14 @@ export const processPayment = async (req, res) => {
             data: result.rows[0]
         });
 
-        // Notify Dashboards
+        // Notify Dashboards via Unified Room
         emitToAdmin('payment_received', {
             instituteId,
             amount,
             subscription_end_date: result.rows[0].subscription_end_date
         });
 
-        emitToPrincipal(instituteId, 'subscription_update', {
-            settings: result.rows[0],
-            status: 'active'
-        });
-
-        emitToTeacher(instituteId, 'subscription_update', {
+        emitSubscriptionUpdate(instituteId, {
             settings: result.rows[0],
             status: 'active'
         });

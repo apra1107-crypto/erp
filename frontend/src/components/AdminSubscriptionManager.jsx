@@ -18,15 +18,34 @@ const AdminSubscriptionManager = ({ instituteId, currentStatus, onUpdate }) => {
     useEffect(() => {
         fetchData();
         joinAdminRoom();
+        if (instituteId) {
+            socket.emit('join_room', `sub-sync-${instituteId}`);
+        }
 
-        socket.on('payment_received', (data) => {
+        const handlePaymentReceived = (data) => {
             if (parseInt(data.instituteId) === parseInt(instituteId)) {
                 fetchData(); // Refresh history and overview
             }
-        });
+        };
+
+        const handleSubUpdate = (data) => {
+            console.log('Real-time subscription update for Admin:', data);
+            if (data.settings) {
+                setSettings({
+                    monthly_price: parseFloat(data.settings.monthly_price) || 499,
+                    subscription_end_date: data.settings.subscription_end_date,
+                    override_access: data.settings.override_access || false
+                });
+                if (onUpdate) onUpdate();
+            }
+        };
+
+        socket.on('payment_received', handlePaymentReceived);
+        socket.on('subscription_update', handleSubUpdate);
 
         return () => {
-            socket.off('payment_received');
+            socket.off('payment_received', handlePaymentReceived);
+            socket.off('subscription_update', handleSubUpdate);
         };
     }, [instituteId]);
 

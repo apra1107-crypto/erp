@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useMemo, useRef, useCallback } from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, ActivityIndicator, TextInput, FlatList, Image, ScrollView, RefreshControl, Modal, StatusBar, Platform, Dimensions, LayoutAnimation, UIManager, Alert, TouchableWithoutFeedback, Keyboard, Pressable, KeyboardAvoidingView, BackHandler } from 'react-native';
+import { View, Text, StyleSheet, TouchableOpacity, ActivityIndicator, TextInput, FlatList, Image, ScrollView, RefreshControl, Modal, StatusBar, Platform, Dimensions, LayoutAnimation, UIManager, Alert, TouchableWithoutFeedback, Keyboard, Pressable, KeyboardAvoidingView, BackHandler, AppState } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useTheme } from '../../context/ThemeContext';
 import { useSocket } from '../../context/SocketContext';
@@ -98,6 +98,25 @@ export default function PrincipalDashboard() {
         }, [])
     );
 
+  const appState = useRef(AppState.currentState);
+
+  useEffect(() => {
+      const subscription = AppState.addEventListener('change', nextAppState => {
+          if (
+              appState.current.match(/inactive|background/) &&
+              nextAppState === 'active'
+          ) {
+              console.log('App re-entered foreground (Principal). Refreshing dashboard...');
+              onRefresh();
+          }
+          appState.current = nextAppState;
+      });
+
+      return () => {
+          subscription.remove();
+      };
+  }, []);
+
   useEffect(() => {
     const loadInitialData = async () => {
         try {
@@ -182,7 +201,7 @@ export default function PrincipalDashboard() {
       setTimeout(() => setIsSearchActive(false), 300);
     } else {
       setIsSearchActive(true);
-      searchBarWidth.value = withSpring(SCREEN_WIDTH - 100, { damping: 15 });
+      searchBarWidth.value = withSpring(SCREEN_WIDTH - 40, { damping: 15 });
       searchBarOpacity.value = withTiming(1, { duration: 300 });
     }
   };
@@ -768,7 +787,7 @@ export default function PrincipalDashboard() {
     notifText: { fontSize: 13, fontWeight: '600', color: theme.text, marginTop: 1 },
     notifBadgeRed: { position: 'absolute', top: -2, right: -2, width: 10, height: 10, borderRadius: 5, backgroundColor: '#ef4444', borderWidth: 2, borderColor: '#fff' },
     gradientIconBtn: { width: 48, height: 48, borderRadius: 24, justifyContent: 'center', alignItems: 'center', elevation: 6 },
-    animatedSearchBar: {position: 'absolute', top: insets.top + 70, right: 20, height: 52, backgroundColor: theme.card, borderRadius: 25, flexDirection: 'row', alignItems: 'center', paddingHorizontal: 15,zIndex: 1000, borderWidth: 1, borderColor: theme.border, elevation: 10 },
+    animatedSearchBar: {position: 'absolute', top: insets.top + 70, right: 20, height: 52, backgroundColor: theme.card, borderRadius: 25, flexDirection: 'row', alignItems: 'center', paddingHorizontal: 15,zIndex: 100, borderWidth: 1, borderColor: theme.border, elevation: 10 },
     searchInput: { flex: 1, fontSize: 15, color: theme.text, marginLeft: 10 },
     resultsContainer: { position: 'absolute', top: 65, left: 20, right: 20, backgroundColor: theme.card, borderRadius: 15, maxHeight: 350, zIndex: 1000, borderWidth: 1, borderColor: theme.border, elevation: 10 },
     resultItem: { flexDirection: 'row', alignItems: 'center', padding: 15, borderBottomWidth: 1, borderBottomColor: theme.border },
@@ -853,7 +872,7 @@ export default function PrincipalDashboard() {
       <View style={{ flex: 1, position: 'relative' }}>
         <View style={{ position: 'relative', marginTop: 10, marginHorizontal: 20, zIndex: 90, flexDirection: 'row', alignItems: 'center' }}>
             {isSearchActive ? (
-                <Animated.View style={[styles.animatedSearchBar, animatedSearchStyle, { marginRight: 10 }]}>
+                <Animated.View style={[styles.animatedSearchBar, animatedSearchStyle, {position:'absolute',top:10,right:60,left:20, zIndex:100 }]}>
                     <Ionicons name="search" size={20} color={theme.textLight} />
                     <TextInput style={styles.searchInput} placeholder="Search Student or Teacher..." placeholderTextColor={theme.textLight} value={searchQuery} onChangeText={handleSearch} autoFocus />
                     <TouchableOpacity onPress={toggleSearch}>
@@ -862,8 +881,8 @@ export default function PrincipalDashboard() {
                 </Animated.View>) : (
                 <TouchableOpacity 
                     style={[styles.notificationBar]} 
-                    onPress={() => notifications.length > 0 && setShowNotifList(true)}
-                    activeOpacity={0.7}
+                    onPress={() => ! isLocked && notifications.length > 0 && setShowNotifList(true)}
+                    activeOpacity={isLocked ? 1 : 0.7}
                 >
                     <View style={styles.notifIconCircle}><Ionicons name="notifications" size={18} color="#fff" />{notifications.length > 0 && <View style={styles.notifBadgeRed} />}</View>
                     <View style={{ flex: 1, marginLeft: 12 }}><Text style={styles.notifTitle}>{notifications.length > 0 ? `${notifications.length} New Updates` : 'No updates'}</Text><Text style={styles.notifText} numberOfLines={1}>{notifications.length > 0 ? notifications[0].message : 'Everything caught up'}</Text></View>
@@ -882,7 +901,7 @@ export default function PrincipalDashboard() {
                 activeOpacity={isLocked ? 1 : 0.7}
             >
                 <LinearGradient colors={['#3b82f6', '#8b5cf6', '#ec4899']} style={[styles.gradientIconBtn]}>
-                    <Ionicons name={isSearchActive ? "close" : "search"} size={22} color="#fff" />
+                    <Ionicons name="search" size={22} color="#fff" />
                 </LinearGradient>
             </TouchableOpacity>
         </View>

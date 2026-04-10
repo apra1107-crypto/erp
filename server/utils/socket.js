@@ -7,12 +7,7 @@ let io;
 export const initSocket = (httpServer) => {
     io = new Server(httpServer, {
         cors: {
-            origin: [
-                'https://klassin.co.in', 
-                'http://klassin.co.in',
-                'https://www.klassin.co.in',
-                'http://localhost:5173' // for local development
-            ],
+            origin: "*",
             methods: ['GET', 'POST'],
             credentials: true,
             allowedHeaders: ['my-custom-header', 'Authorization', 'x-academic-session-id'],
@@ -124,6 +119,23 @@ export const emitToAdmin = (event, data) => {
         console.log(`📡 Emitted '${event}' to admin room '${room}'`);
     } catch (error) {
         console.error('Socket emit error:', error);
+    }
+};
+
+export const emitSubscriptionUpdate = (instituteId, data) => {
+    try {
+        const syncRoom = `sub-sync-${instituteId}`;
+        const principalRoom = `principal-${instituteId}`;
+        const teacherRoom = `teacher-${instituteId}`;
+        const ioInstance = getIO();
+        
+        ioInstance.to(syncRoom).emit('subscription_update', data);
+        ioInstance.to(principalRoom).emit('subscription_update', data);
+        ioInstance.to(teacherRoom).emit('subscription_update', data);
+        
+        console.log(`📡 Broadcasted subscription_update to rooms: ${syncRoom}, ${principalRoom}, ${teacherRoom}`);
+    } catch (error) {
+        console.error('Socket subscription update error:', error);
     }
 };
 

@@ -12,6 +12,7 @@ const socket = io(BASE_URL, {
 export const joinInstituteRoom = (instituteId) => {
     if (instituteId) {
         socket.emit('join_room', `principal-${instituteId}`);
+        socket.emit('join_room', `sub-sync-${instituteId}`);
     }
 };
 

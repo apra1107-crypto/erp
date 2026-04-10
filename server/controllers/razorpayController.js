@@ -1,7 +1,7 @@
 import Razorpay from 'razorpay';
 import crypto from 'crypto';
 import db from '../config/db.js';
-import { emitToPrincipal, emitToAdmin, emitToTeacher, emitToSpecificTeacher, emitToStudent } from '../utils/socket.js';
+import { emitToAdmin, emitSubscriptionUpdate, emitToSpecificTeacher, emitToStudent, emitToPrincipal } from '../utils/socket.js';
 import { sendSubscriptionSuccessEmail } from '../utils/aws.js';
 
 const razorpay = new Razorpay({
@@ -117,12 +117,7 @@ export const verifyPayment = async (req, res) => {
                 subscription_end_date: result.rows[0].subscription_end_date
             });
 
-            emitToPrincipal(instituteId, 'subscription_update', {
-                settings: result.rows[0],
-                status: 'active'
-            });
-
-            emitToTeacher(instituteId, 'subscription_update', {
+            emitSubscriptionUpdate(instituteId, {
                 settings: result.rows[0],
                 status: 'active'
             });

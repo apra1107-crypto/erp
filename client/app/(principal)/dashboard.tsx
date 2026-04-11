@@ -188,6 +188,7 @@ export default function PrincipalDashboard() {
   ], [isDark]);
 
   const [isSearchActive, setIsSearchActive] = useState(false);
+  const searchInputRef = useRef<TextInput>(null);
   const searchBarWidth = useSharedValue(0);
   const searchBarOpacity = useSharedValue(0);
   const animatedSearchStyle = useAnimatedStyle(() => ({ width: searchBarWidth.value, opacity: searchBarOpacity.value }));
@@ -200,10 +201,12 @@ export default function PrincipalDashboard() {
       setShowResults(false);
       setIsSearching(false);
       setIsSearchActive(false);
+      Keyboard.dismiss();
     } else {
       setIsSearchActive(true);
       searchBarWidth.value = withSpring(SCREEN_WIDTH - 100, { damping: 15 });
       searchBarOpacity.value = withTiming(1, { duration: 300 });
+      setTimeout(() => searchInputRef.current?.focus(), 100);
     }
   };
 
@@ -887,12 +890,12 @@ export default function PrincipalDashboard() {
                     <View style={{ flexDirection: 'row', alignItems: 'center', width: SCREEN_WIDTH - 100, height: 52, paddingHorizontal: 15 }}>
                         <Ionicons name="search" size={20} color={theme.textLight} />
                         <TextInput 
+                            ref={searchInputRef}
                             style={styles.searchInput} 
                             placeholder="Search Student or Teacher..." 
                             placeholderTextColor={theme.textLight} 
                             value={searchQuery} 
                             onChangeText={handleSearch} 
-                            autoFocus={isSearchActive}
                         />
                         <TouchableOpacity onPress={toggleSearch}>
                             <Ionicons name="close-circle" size={20} color={theme.textLight} />

@@ -16,14 +16,15 @@ workflows:
     scripts:
       - name: Install dependencies
         script: npm install
-      - name: Prebuild Android Folder
-        script: |
-          # This generates the 'android' folder that is missing from GitHub
-          npx expo prebuild --platform android --no-install
       - name: Decode Firebase Configs
         script: |
-          echo $GOOGLE_SERVICES_JSON | base64 --decode > android/app/google-services.json
+          # Decode to the root of the client folder so Expo can find them
+          echo $GOOGLE_SERVICES_B64 | base64 --decode > google-services.json
           echo $FCM_CONFIG | base64 --decode > fcm.json
+      - name: Prebuild Android Folder
+        script: |
+          # Now that google-services.json exists, prebuild will work
+          npx expo prebuild --platform android --no-install
       - name: Build Android APK
         script: |
           cd android

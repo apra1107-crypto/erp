@@ -198,10 +198,11 @@ export default function PrincipalDashboard() {
       searchBarOpacity.value = withTiming(0, { duration: 200 });
       setSearchQuery('');
       setShowResults(false);
-      setTimeout(() => setIsSearchActive(false), 300);
+      setIsSearching(false);
+      setIsSearchActive(false);
     } else {
       setIsSearchActive(true);
-      searchBarWidth.value = withSpring(SCREEN_WIDTH - 40, { damping: 15 });
+      searchBarWidth.value = withSpring(SCREEN_WIDTH - 100, { damping: 15 });
       searchBarOpacity.value = withTiming(1, { duration: 300 });
     }
   };
@@ -623,10 +624,8 @@ export default function PrincipalDashboard() {
         }
 
         const profileUrl = `${API_ENDPOINTS.PRINCIPAL}/profile`;
-        console.log(`[DashboardRefresh] Attempting profile fetch: ${profileUrl}`);
         const profileRes = await axios.get(profileUrl, { headers: { Authorization: `Bearer ${token}` } });
         const profile = profileRes.data.profile;
-        console.log('[DashboardRefresh] Profile fetched successfully');
 
         // Update local states
         setProfileData(profile);
@@ -769,6 +768,7 @@ export default function PrincipalDashboard() {
     headerAvatar: { width: 44, height: 44, borderRadius: 22, borderWidth: 2, borderColor: theme.primary },
     placeholderAvatar: { width: 44, height: 44, borderRadius: 22, backgroundColor: theme.primary, justifyContent: 'center', alignItems: 'center' },
     avatarText: { color: '#fff', fontSize: 18, fontWeight: 'bold' },
+    onlineDot: { position: 'absolute', bottom: 2, right: 2, width: 12, height: 12, borderRadius: 6, backgroundColor: '#27AE60', borderWidth: 2, borderColor: theme.card },
     subIndicatorContainer: { width: 160, height: 20, backgroundColor: isDark ? '#ffffff10' : '#00000005', borderRadius: 10, borderWidth: 1, borderColor: theme.border, overflow: 'hidden' },
     subLineFill: { height: '100%', borderRadius: 9 },
     content: { flex: 1 },
@@ -787,7 +787,7 @@ export default function PrincipalDashboard() {
     notifText: { fontSize: 13, fontWeight: '600', color: theme.text, marginTop: 1 },
     notifBadgeRed: { position: 'absolute', top: -2, right: -2, width: 10, height: 10, borderRadius: 5, backgroundColor: '#ef4444', borderWidth: 2, borderColor: '#fff' },
     gradientIconBtn: { width: 48, height: 48, borderRadius: 24, justifyContent: 'center', alignItems: 'center', elevation: 6 },
-    animatedSearchBar: {position: 'absolute', top: insets.top + 70, right: 20, height: 52, backgroundColor: theme.card, borderRadius: 25, flexDirection: 'row', alignItems: 'center', paddingHorizontal: 15,zIndex: 100, borderWidth: 1, borderColor: theme.border, elevation: 10 },
+    animatedSearchBar: { position: 'absolute', backgroundColor: theme.card, borderRadius: 25, flexDirection: 'row', alignItems: 'center', zIndex: 100, borderWidth: 1, borderColor: theme.border, elevation: 10 },
     searchInput: { flex: 1, fontSize: 15, color: theme.text, marginLeft: 10 },
     resultsContainer: { position: 'absolute', top: 65, left: 20, right: 20, backgroundColor: theme.card, borderRadius: 15, maxHeight: 350, zIndex: 1000, borderWidth: 1, borderColor: theme.border, elevation: 10 },
     resultItem: { flexDirection: 'row', alignItems: 'center', padding: 15, borderBottomWidth: 1, borderBottomColor: theme.border },
@@ -865,30 +865,41 @@ export default function PrincipalDashboard() {
         >
             <View style={{ position: 'relative' }}>
                 {profileData?.principal_photo_url ? <Image source={{ uri: getFullImageUrl(profileData.principal_photo_url) || undefined }} style={styles.headerAvatar} /> : <View style={styles.placeholderAvatar}><Text style={styles.avatarText}>{userData?.principal_name?.charAt(0) || 'P'}</Text></View>}
+                <View style={styles.onlineDot} />
             </View>
         </TouchableOpacity>
       </View>
 
       <View style={{ flex: 1, position: 'relative' }}>
         <View style={{ position: 'relative', marginTop: 10, marginHorizontal: 20, zIndex: 90, flexDirection: 'row', alignItems: 'center' }}>
-            {isSearchActive ? (
-                <Animated.View style={[styles.animatedSearchBar, animatedSearchStyle, {position:'absolute',top:10,right:60,left:20, zIndex:100 }]}>
-                    <Ionicons name="search" size={20} color={theme.textLight} />
-                    <TextInput style={styles.searchInput} placeholder="Search Student or Teacher..." placeholderTextColor={theme.textLight} value={searchQuery} onChangeText={handleSearch} autoFocus />
-                    <TouchableOpacity onPress={toggleSearch}>
-                        <Ionicons name="close-circle" size={20} color={theme.textLight} />
-                    </TouchableOpacity>
-                </Animated.View>) : (
+            <View style={{ flex: 1, position: 'relative', height: 52, justifyContent: 'center' }}>
                 <TouchableOpacity 
-                    style={[styles.notificationBar]} 
-                    onPress={() => ! isLocked && notifications.length > 0 && setShowNotifList(true)}
+                    style={[styles.notificationBar, { marginRight: 0 }]} 
+                    onPress={() => !isLocked && notifications.length > 0 && setShowNotifList(true)}
                     activeOpacity={isLocked ? 1 : 0.7}
                 >
                     <View style={styles.notifIconCircle}><Ionicons name="notifications" size={18} color="#fff" />{notifications.length > 0 && <View style={styles.notifBadgeRed} />}</View>
                     <View style={{ flex: 1, marginLeft: 12 }}><Text style={styles.notifTitle}>{notifications.length > 0 ? `${notifications.length} New Updates` : 'No updates'}</Text><Text style={styles.notifText} numberOfLines={1}>{notifications.length > 0 ? notifications[0].message : 'Everything caught up'}</Text></View>
                     <Ionicons name="chevron-down" size={16} color={theme.textLight} />
                 </TouchableOpacity>
-            )}
+
+                <Animated.View style={[styles.animatedSearchBar, animatedSearchStyle, { position: 'absolute', right: 0, top: 0, height: 52, zIndex: 100, overflow: 'hidden' }]}>
+                    <View style={{ flexDirection: 'row', alignItems: 'center', width: SCREEN_WIDTH - 100, height: 52, paddingHorizontal: 15 }}>
+                        <Ionicons name="search" size={20} color={theme.textLight} />
+                        <TextInput 
+                            style={styles.searchInput} 
+                            placeholder="Search Student or Teacher..." 
+                            placeholderTextColor={theme.textLight} 
+                            value={searchQuery} 
+                            onChangeText={handleSearch} 
+                            autoFocus={isSearchActive}
+                        />
+                        <TouchableOpacity onPress={toggleSearch}>
+                            <Ionicons name="close-circle" size={20} color={theme.textLight} />
+                        </TouchableOpacity>
+                    </View>
+                </Animated.View>
+            </View>
             
             <TouchableOpacity 
                 onPress={() => {
@@ -899,6 +910,7 @@ export default function PrincipalDashboard() {
                     toggleSearch();
                 }}
                 activeOpacity={isLocked ? 1 : 0.7}
+                style={{ marginLeft: 12 }}
             >
                 <LinearGradient colors={['#3b82f6', '#8b5cf6', '#ec4899']} style={[styles.gradientIconBtn]}>
                     <Ionicons name="search" size={22} color="#fff" />
@@ -1028,7 +1040,6 @@ export default function PrincipalDashboard() {
                                     </Text>
                                 </View>
                             )}
-                            <View style={{ position: 'absolute', bottom: 5, right: 0, width: 14, height: 14, borderRadius: 7, backgroundColor: '#27AE60', borderWidth: 2, borderColor: theme.card }} />
                         </View>
                         <View style={{ marginLeft: 18, flex: 1 }}>
                             <Text style={[styles.menuName, { fontSize: 20, marginBottom: 2 }]} numberOfLines={1}>

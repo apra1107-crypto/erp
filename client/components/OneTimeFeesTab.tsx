@@ -192,7 +192,6 @@ export default function OneTimeFeesTab({ }: OneTimeFeesTabProps) {
                 ? `${API_ENDPOINTS.ONE_TIME_FEES}/update/${editGroupId}` 
                 : `${API_ENDPOINTS.ONE_TIME_FEES}/publish`;
 
-            console.log(`[OneTimeFee] Attempting to save to: ${endpoint}`);
             const response = isEditing
                 ? await axios.put(endpoint, payload, { headers: { Authorization: `Bearer ${token}` } })
                 : await axios.post(endpoint, payload, { headers: { Authorization: `Bearer ${token}` } });

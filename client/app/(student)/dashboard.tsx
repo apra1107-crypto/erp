@@ -544,12 +544,6 @@ export default function StudentDashboard() {
         return () => sub.remove();
     }, [studentData?.unique_code, loadPersistedNotifs]);
 
-    // Stable ref for addNotif to prevent socket listener re-registration
-    const addNotifRef = useRef(addNotif);
-    useEffect(() => {
-        addNotifRef.current = addNotif;
-    }, [addNotif]);
-
     const addNotif = useCallback((notif: any) => {
         // High-quality spring animation for adding
         if (Platform.OS === 'android' && UIManager.setLayoutAnimationEnabledExperimental) {
@@ -576,6 +570,12 @@ export default function StudentDashboard() {
             return updated;
         });
     }, [studentData?.unique_code]);
+
+    // Stable ref for addNotif to prevent socket listener re-registration
+    const addNotifRef = useRef(addNotif);
+    useEffect(() => {
+        addNotifRef.current = addNotif;
+    }, [addNotif]);
 
     const clearAllNotifications = () => {
         // High-quality spring animation for clearing
@@ -607,7 +607,6 @@ export default function StudentDashboard() {
 
             // 1. Fetch fresh profile for the selected session
             const profileUrl = `${API_URL}/profile`;
-            console.log(`[StudentDashboard] Attempting profile fetch: ${profileUrl} with token: ${token ? 'exists' : 'null'}`);
             const profileRes = await axios.get(profileUrl, {
                 headers: { 
                     Authorization: `Bearer ${token}`,
@@ -785,7 +784,6 @@ export default function StudentDashboard() {
             if (sessionId) headers['x-academic-session-id'] = sessionId.toString();
 
             const url = `${API_URL}/dashboard`;
-            console.log(`[DashboardData] Attempting fetch: ${url} with session: ${sessionId}`);
             
             const response = await axios.get(url, { headers, timeout: 5000 });
             setDashboardData(response.data);

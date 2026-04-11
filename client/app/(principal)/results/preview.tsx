@@ -59,44 +59,54 @@ export default function ReportCardPreview() {
         },
         scroll: { flex: 1 },
         content: { padding: 10, paddingTop: insets.top + 80, alignItems: 'center' },
-        paper: {
-            width: width - 20,
-            backgroundColor: '#fff',
-            padding: 15,
-            paddingTop: 25,
-            borderWidth: 2.5,
-            borderColor: '#000',
-            borderRadius: 2,
-            elevation: 15,
-            shadowColor: '#000',
-            shadowOffset: { width: 0, height: 12 },
-            shadowOpacity: 0.4,
-            shadowRadius: 20,
-            position: 'relative',
+                paper: {
+                    width: width - 20,
+                    backgroundColor: '#fff',
+                    padding: 15,
+                    paddingTop: 10,
+                    borderWidth: 2.5,
+                    borderColor: '#000',
+                    borderRadius: 2,
+                    elevation: 15,
+                    shadowColor: '#000',
+                    shadowOffset: { width: 0, height: 12 },
+                    shadowOpacity: 0.4,
+                    shadowRadius: 20,
+                    position: 'relative',
+                },
+                paperInnerBorder: {
+                    position: 'absolute', top: 4, left: 4, right: 4, bottom: 4,
+                    borderWidth: 0.8,
+                    borderColor: '#333',
+                    zIndex: 0
+                },
+                // Header
+                header: { alignItems: 'center', paddingBottom: 15, marginBottom: 20, zIndex: 10, paddingTop: 0 },
+        headerLogoRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', width: '100%', marginBottom: 5, marginTop: -10 },
+        logo: { width: 50, height: 50, resizeMode: 'contain', marginRight: 12, marginTop: 12 },
+        instName: { fontSize: 22, fontWeight: '900', color: '#000', textAlign: 'center', textTransform: 'uppercase' },
+        instAffiliation: { 
+            fontSize: 9.5, 
+            fontWeight: '700', 
+            color: '#333', 
+            marginTop: -25, 
+            paddingLeft: 50,
+            textAlign: 'center', 
+            marginBottom: 8
         },
-        paperInnerBorder: {
-            position: 'absolute',
-            top: 4, left: 4, right: 4, bottom: 4,
-            borderWidth: 0.8,
-            borderColor: '#333',
-            zIndex: 0
-        },
-        // Header
-        header: { alignItems: 'center', marginBottom: 20, zIndex: 10 },
-        instRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 12, marginBottom: 5 },
-        logo: { width: 60, height: 60, resizeMode: 'contain' },
-        instName: { fontSize: 26, fontWeight: '900', color: '#1e1b4b', textAlign: 'center', textTransform: 'uppercase', flexShrink: 1, lineHeight: 28 },
-        instAffiliation: { fontSize: 14, color: '#4f46e5', fontWeight: '700', marginTop: -8, marginBottom: 2 },
-        instSub: { fontSize: 10.5, color: '#444', textAlign: 'center', fontWeight: '700', marginTop: 0 },
-        examTitleContainer: { 
+        instSub: { fontSize: 9.5, color: '#333', textAlign: 'center', marginTop: -8, paddingLeft: 40, fontWeight: '600' },
+        examTitle: { 
+            fontSize: 18, 
+            fontWeight: '900', 
+            color: '#000', 
+            borderWidth: 1, 
+            borderColor: '#000', 
+            paddingHorizontal: 15, 
+            paddingVertical: 5, 
             marginTop: 15, 
-            paddingVertical: 6, 
-            paddingHorizontal: 35, 
-            backgroundColor: '#1e1b4b', 
-            borderRadius: 4,
-            transform: [{ skewX: '-10deg' }]
+            textTransform: 'uppercase',
+            textAlign: 'center'
         },
-        examTitle: { fontSize: 15, fontWeight: '900', color: '#fff', textAlign: 'center', textTransform: 'uppercase' },
         
         // Student Info
         studentSection: { 
@@ -203,16 +213,32 @@ export default function ReportCardPreview() {
                         <View style={styles.paperInnerBorder} />
                         {/* Header */}
                         <View style={styles.header}>
-                            <View style={styles.instRow}>
+                            {/* Logo and Name Row */}
+                            <View style={styles.headerLogoRow}>
                                 {institute.logo_url && <Image source={{ uri: getFullImageUrl(institute.logo_url) ?? undefined }} style={styles.logo} />}
-                                <Text style={styles.instName}>{institute.institute_name}</Text>
+                                <Text 
+                                    style={[styles.instName, { flexShrink: 1 }]} 
+                                    numberOfLines={1} 
+                                    adjustsFontSizeToFit
+                                >
+                                    {institute.institute_name.toUpperCase()}
+                                </Text>
                             </View>
-                            {institute.affiliation && <Text style={styles.instAffiliation}>{institute.affiliation}</Text>}
-                            <Text style={styles.instSub}>{institute.address} {institute.landmark} {institute.district} {institute.state} {institute.pincode}</Text>
                             
-                            <View style={styles.examTitleContainer}>
-                                <Text style={styles.examTitle}>{exam.name}</Text>
-                            </View>
+                            {/* Affiliation Row */}
+                            {institute.affiliation && (
+                                <Text style={styles.instAffiliation}>
+                                    {institute.affiliation}
+                                </Text>
+                            )}
+
+                            {/* Detailed Address Row */}
+                            <Text style={styles.instSub}>
+                                {institute.address} {institute.landmark ? ` ${institute.landmark}` : ''}
+                                {"\n"}{institute.district} {institute.state} {institute.pincode}
+                            </Text>
+                            
+                            <Text style={styles.examTitle}>{exam.name}</Text>
                         </View>
 
                         {/* Student Details */}

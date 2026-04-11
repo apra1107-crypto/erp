@@ -464,13 +464,63 @@ const generatePDFLogic = async (examId, studentIds, instituteId, res) => {
                             position: relative; border: 2.5px solid #000; overflow: hidden; margin: 0;
                         }
                         .inner-border { position: absolute; top: 2mm; left: 2mm; right: 2mm; bottom: 2mm; border: 0.8px solid #333; pointer-events: none; z-index: 0; }
-                        .header { text-align: center; margin-bottom: 10px; z-index: 10; }
-                        .inst-row { display: flex; flex-direction: row; align-items: center; justify-content: center; gap: 15px; margin-bottom: 0; }
-                        .inst-logo { width: 80px; height: 80px; object-fit: contain; }
-                        .inst-name { font-size: 28px; white-space: nowrap; font-weight: 900; text-transform: uppercase; color: #1e1b4b; margin: 0; line-height: 1; margin-top: -10px; }
-                        .inst-affiliation { font-size: 17px; color: #4f46e5; font-weight: 700; margin-top: -27px; margin-bottom: 4px; margin-left: 60px; }
-                        .inst-sub { font-size: 13px; color: #444; font-weight: 700; margin-top: 2px; margin-bottom: 8px; line-height: 1.2; margin-left: 26px; }
-                        .exam-title-box { display: inline-block; background: #1e1b4b; color: #fff; padding: 6px 35px; border-radius: 4px; margin-top: 5px; transform: skewX(-10deg); font-weight: 900; font-size: 16px; }
+                        
+                        .header-container { 
+                            display: flex; 
+                            flex-direction: row; 
+                            align-items: center; 
+                            justify-content: center; 
+                            margin-bottom: 5px; 
+                            gap: 20px;
+                            padding-top: 25px;
+                        }
+                        
+                        .logo { 
+                            width: 80px; 
+                            height: 80px; 
+                            object-fit: contain;
+                        }
+                        
+                        .institute-info { 
+                            text-align: center; 
+                        }
+                        
+                        .institute-name { 
+                            font-size: 28px; 
+                            font-weight: 900; 
+                            color: #1A237E; 
+                            margin: 0; 
+                            text-transform: uppercase; 
+                            letter-spacing: 1px; 
+                        }
+                        
+                        .affiliation-text { 
+                            font-size: 18px; 
+                            color: #000000; 
+                            margin: 4px 0 0 2px; 
+                            font-weight: 700; 
+                        }
+                        
+                        .address-text { 
+                            font-size: 18px; 
+                            color: #000000; 
+                            margin-top: 4px;
+                            margin-left: 2px; 
+                            font-weight: 600; 
+                            text-align: center; 
+                        }
+                        
+                        .exam-box { 
+                            font-size: 22px; 
+                            font-weight: 900; 
+                            text-align: center; 
+                            margin: 0px auto 10px auto;
+                            text-transform: uppercase; 
+                            padding: 8px 45px; 
+                            border: 2.5px solid #000; 
+                            display: table; 
+                        }
+
                         .student-section { display: flex; flex-direction: row; justify-content: space-between; margin-bottom: 15px; padding: 12px; background: #f8fafc; border: 1.5px solid #e2e8f0; border-radius: 12px; }
                         .info-grid { flex: 1; }
                         .info-row { display: flex; border-bottom: 1px solid #cbd5e1; padding: 6px 0; }
@@ -519,19 +569,28 @@ const generatePDFLogic = async (examId, studentIds, instituteId, res) => {
             for (const s of optimizedStudents) {
                 const marks = s.marks_data || [];
                 const stats = s.calculated_stats || {};
+                const fullAddress = [
+                    exam.address,
+                    exam.landmark,
+                    exam.district,
+                    exam.state,
+                    exam.pincode
+                ].filter(Boolean).join(', ');
                 
                 htmlContent += `
                     <div class="report-card">
                         <div class="inner-border"></div>
-                        <div class="header">
-                            <div class="inst-row">
-                                ${logoBase64 ? `<img src="${logoBase64}" class="inst-logo" />` : ''}
-                                <h1 class="inst-name">${exam.institute_name}</h1>
+                        <div class="header-container">
+                            ${logoBase64 ? `<img src="${logoBase64}" class="logo" />` : ''}
+                            <div class="institute-info">
+                                <h1 class="institute-name">${exam.institute_name.toUpperCase()}</h1>
+                                ${exam.affiliation ? `<p class="affiliation-text">${exam.affiliation}</p>` : ''}
+                                <p class="address-text">${fullAddress}</p>
                             </div>
-                            ${exam.affiliation ? `<p class="inst-affiliation">${exam.affiliation}</p>` : ''}
-                            <p class="inst-sub" style="margin-top: 0;">${exam.address || ''} ${exam.landmark || ''} ${exam.district || ''} ${exam.state || ''} ${exam.pincode || ''}</p>
-                            <div class="exam-title-box">${exam.name}</div>
                         </div>
+                        
+                        <div class="exam-box">${exam.name}</div>
+
                         <div class="student-section">
                             <div class="info-grid">
                                 <div class="info-row"><div class="info-label">STUDENT NAME</div><div class="info-value">${s.name}</div></div>

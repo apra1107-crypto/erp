@@ -41,7 +41,7 @@ const StudentFees = () => {
     ];
 
     const fetchFeesFull = useCallback(async () => {
-        console.log("DEBUG: Attempting to fetch full fees data...");
+        
         try {
             const token = localStorage.getItem('token');
             const response = await axios.get(`${API_ENDPOINTS.AUTH.STUDENT}/fees-full`, {

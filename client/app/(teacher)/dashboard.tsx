@@ -337,7 +337,7 @@ export default function TeacherDashboard() {
             setSearchQuery('');
             setShowResults(false);
             setIsSearching(false);
-            setTimeout(() => setIsSearchActive(false), 300);
+            setIsSearchActive(false);
         }
     };
 
@@ -871,7 +871,7 @@ export default function TeacherDashboard() {
         notifItemTitle: { fontSize: 14, fontWeight: '800', color: theme.text },
         notifItemMsg: { fontSize: 12, color: theme.textLight, marginTop: 2 },
         notifItemTime: { fontSize: 10, color: theme.textLight, marginLeft: 10, fontWeight: '600' },
-        animatedSearchBar: { height: 52, backgroundColor: theme.card, borderRadius: 25, flexDirection: 'row', alignItems: 'center', paddingHorizontal: 15, borderWidth: 1, borderColor: theme.border, elevation: 10 },
+        animatedSearchBar: { position: 'absolute', backgroundColor: theme.card, borderRadius: 25, flexDirection: 'row', alignItems: 'center', zIndex: 100, borderWidth: 1, borderColor: theme.border, elevation: 10 },
         searchInput: { flex: 1, fontSize: 15, color: theme.text, marginLeft: 10 },
         resultsContainer: { position: 'absolute', top: 65, left: 20, right: 20, backgroundColor: theme.card, borderRadius: 15, maxHeight: 350, zIndex: 1000, borderWidth: 1, borderColor: theme.border, elevation: 10 },
         resultItem: { flexDirection: 'row', alignItems: 'center', padding: 15, borderBottomWidth: 1, borderBottomColor: theme.border },
@@ -896,21 +896,30 @@ export default function TeacherDashboard() {
 
                 <View style={{ flex: 1, position: 'relative' }}>
                     <View style={{ position: 'relative', marginTop: 10, marginHorizontal: 20, zIndex: 100, flexDirection: 'row', alignItems: 'center' }}>
-                        {isSearchActive ? (
-                            <Animated.View style={[styles.animatedSearchBar, animatedSearchStyle, { marginRight: 10 }]}>
-                                <Ionicons name="search" size={20} color={theme.textLight} />
-                                <TextInput style={styles.searchInput} placeholder="Search Students..." placeholderTextColor={theme.textLight} value={searchQuery} onChangeText={handleSearch} autoFocus />
-                                <TouchableOpacity onPress={toggleSearch}>
-                                    <Ionicons name="close-circle" size={20} color={theme.textLight} />
-                                </TouchableOpacity>
-                            </Animated.View>
-                        ) : (
-                            <TouchableOpacity style={[styles.notificationBar]} activeOpacity={0.9} onPress={() => { if (isLocked) { Toast.show({ type: 'error', text1: 'Locked', text2: 'Subscription expired', position: 'bottom', bottomOffset: 40 }); return; } if (notifications.length > 0) setShowNotifList(true); }}>
+                        <View style={{ flex: 1, position: 'relative', height: 52, justifyContent: 'center' }}>
+                            <TouchableOpacity style={[styles.notificationBar, { marginRight: 0 }]} activeOpacity={0.9} onPress={() => { if (isLocked) { Toast.show({ type: 'error', text1: 'Locked', text2: 'Subscription expired', position: 'bottom', bottomOffset: 40 }); return; } if (notifications.length > 0) setShowNotifList(true); }}>
                                 <View style={[styles.notifIconCircle, notifications.length === 0 && { backgroundColor: '#6366f1' }]}><Ionicons name="notifications" size={18} color="#fff" />{notifications.length > 0 && <View style={styles.notifBadgeRed} />}</View>
                                 <View style={{ flex: 1, marginLeft: 12 }}><Text style={[styles.notifTitle, notifications.length === 0 && { color: theme.textLight }]}>{notifications.length > 0 ? `${notifications.length} New Updates` : 'No updates'}</Text><Text style={styles.notifText} numberOfLines={1}>{notifications.length > 0 ? notifications[0].message : 'Everything caught up'}</Text></View>
                                 <Ionicons name={notifications.length > 0 ? "chevron-down" : "chevron-forward"} size={16} color={theme.textLight} />
                             </TouchableOpacity>
-                        )}
+
+                            <Animated.View style={[styles.animatedSearchBar, animatedSearchStyle, { position: 'absolute', right: 0, top: 0, height: 52, zIndex: 100, overflow: 'hidden' }]}>
+                                <View style={{ flexDirection: 'row', alignItems: 'center', width: SCREEN_WIDTH - 100, height: 52, paddingHorizontal: 15 }}>
+                                    <Ionicons name="search" size={20} color={theme.textLight} />
+                                    <TextInput 
+                                        style={styles.searchInput} 
+                                        placeholder="Search Students..." 
+                                        placeholderTextColor={theme.textLight} 
+                                        value={searchQuery} 
+                                        onChangeText={handleSearch} 
+                                        autoFocus={isSearchActive} 
+                                    />
+                                    <TouchableOpacity onPress={toggleSearch}>
+                                        <Ionicons name="close-circle" size={20} color={theme.textLight} />
+                                    </TouchableOpacity>
+                                </View>
+                            </Animated.View>
+                        </View>
                         
                         <TouchableOpacity 
                             onPress={() => {
@@ -921,6 +930,7 @@ export default function TeacherDashboard() {
                                 toggleSearch();
                             }}
                             activeOpacity={isLocked ? 1 : 0.7}
+                            style={{ marginLeft: 12 }}
                         >
                             <LinearGradient colors={['#3b82f6', '#8b5cf6', '#ec4899']} style={[styles.gradientIconBtn]}>
                                 <Ionicons name={isSearchActive ? "close" : "search"} size={22} color="#fff" />

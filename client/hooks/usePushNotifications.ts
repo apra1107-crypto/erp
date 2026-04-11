@@ -108,7 +108,7 @@ export const usePushNotifications = (): PushNotificationState => {
                 const projectId =
                     Constants?.expoConfig?.extra?.eas?.projectId ?? 
                     Constants?.easConfig?.projectId ?? 
-                    "7cc11cd9-774d-4dda-988a-aba00c125c58";
+                    "83267f08-5f41-4c51-9e3d-b9516ccd28f4";
                 
                 token = (await Notifications.getExpoPushTokenAsync({ 
                     projectId 

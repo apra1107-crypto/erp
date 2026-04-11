@@ -232,7 +232,7 @@ export const toastConfig = {
         marginTop: 20
       }}>
         <Text style={{ fontSize: 15, color: '#2E3A59', fontWeight: '600', lineHeight: 22, marginBottom: 15 }}>
-          Dear <Text style={{ fontWeight: '900' }}>{student_name}</Text>, you have been marked <Text style={{ color: isPresent ? '#00C853' : '#FF3D00', fontWeight: '900' }}>{status.toUpperCase()}</Text> today.
+          Dear <Text style={{ fontWeight: '900' }}>{student_name}</Text>, you he been marked <Text style={{ color: isPresent ? '#00C853' : '#FF3D00', fontWeight: '900' }}>{status.toUpperCase()}</Text> today.
         </Text>
 
         <View style={{

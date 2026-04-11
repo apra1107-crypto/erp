@@ -22,7 +22,10 @@ workflows:
           echo $FCM_CONFIG | base64 --decode > fcm.json
       - name: Build Android APK
         script: |
+          # The working_directory is 'client', so we are already in the 'client' folder.
+          # We just need to go into 'android' to find the gradlew file.
           cd android
+          chmod +x gradlew
           ./gradlew assembleRelease
     artifacts:
       - android/app/build/outputs/apk/release/*.apk

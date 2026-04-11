@@ -14,19 +14,22 @@ workflows:
       node: 20
       java: 17
     scripts:
-      - name: Install dependencies
-        script: npm install
       - name: Decode Firebase Configs
         script: |
-          # Decode to the root of the client folder so Expo can find them
+          # Decode to the root of the client folder
           echo $GOOGLE_SERVICES_B64 | base64 --decode > google-services.json
           echo $FCM_CONFIG | base64 --decode > fcm.json
+          # Debug: check if file is valid JSON (first few chars)
+          head -c 20 google-services.json
+      - name: Install dependencies
+        script: npm install
       - name: Prebuild Android Folder
         script: |
-          # Now that google-services.json exists, prebuild will work
           npx expo prebuild --platform android --no-install
       - name: Build Android APK
         script: |
+          # The prebuild may have failed to copy it correctly, let's force it
+          cp google-services.json android/app/google-services.json
           cd android
           chmod +x gradlew
           ./gradlew assembleRelease

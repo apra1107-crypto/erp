@@ -1,0 +1,32 @@
+workflows:
+  android-apk:
+    name: Klassin Android APK Build
+    max_build_duration: 60
+    instance_type: mac_mini_m1
+    # Since this file is in the client folder, we still set the working directory 
+    # relative to the repo root for absolute clarity during cloning.
+    working_directory: client
+    environment:
+      groups:
+        - keystore_credentials 
+      vars:
+        PACKAGE_NAME: "com.atul004.klassin"
+      node: 20
+      java: 17
+    scripts:
+      - name: Install dependencies
+        script: npm install
+      - name: Decode Firebase Configs
+        script: |
+          echo $GOOGLE_SERVICES_JSON | base64 --decode > android/app/google-services.json
+          echo $FCM_CONFIG | base64 --decode > fcm.json
+      - name: Build Android APK
+        script: |
+          cd android
+          ./gradlew assembleRelease
+    artifacts:
+      - android/app/build/outputs/apk/release/*.apk
+    publishing:
+      email:
+        recipients:
+          - atul@your-email.com 

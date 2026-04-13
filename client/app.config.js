@@ -35,9 +35,7 @@ export default ({ config }) => {
         package: "com.atul004.klassin",
         googleServicesFile: process.env.GOOGLE_SERVICES_JSON ?? "./google-services.json",
         usesCleartextTraffic: true,
-        jsEngine: "hermes",
-        // Always build only for arm64-v8a for smaller APK sizes
-        abiFilters: ["arm64-v8a"]
+        jsEngine: "hermes"
       },
       web: {
         output: "static",
@@ -65,7 +63,8 @@ export default ({ config }) => {
             android: {
               enableProguardInReleaseBuilds: true,
               enableShrinkResourcesInReleaseBuilds: true,
-              // For development/debug builds as well
+              // FORCE ONLY ONE ARCHITECTURE (Saves ~70MB)
+              abiFilters: ["arm64-v8a"],
               extraProguardRules: "-keep class com.facebook.react.bridge.** { *; }"
             }
           }

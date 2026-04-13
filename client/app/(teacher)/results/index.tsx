@@ -769,24 +769,32 @@ export default function TeacherResultsDashboard() {
                                 </View>
                                 {subjects.map((sub, idx) => (
                                     <View key={idx} style={[styles.subRow, { marginBottom: 15 }]}>
-                                        <View style={{ flex: 1, backgroundColor: isDark ? '#333' : '#f8fafc', borderRadius: 15, paddingHorizontal: 15, height: 50, justifyContent: 'center', borderWidth: 1, borderColor: theme.border }}>
+                                        <View style={{ flex: 2, backgroundColor: isDark ? '#333' : '#f8fafc', borderRadius: 12, paddingHorizontal: 12, height: 45, justifyContent: 'center', borderWidth: 1, borderColor: theme.border }}>
                                             <TextInput 
-                                                style={{ color: theme.text, fontWeight: '700', fontSize: 14 }} 
+                                                style={{ color: theme.text, fontWeight: '700', fontSize: 13 }} 
                                                 value={sub.name} 
-                                                placeholder="e.g. Language Fluency"
+                                                placeholder="Subject"
                                                 placeholderTextColor={theme.textLight}
-                                                onChangeText={(text) => {
-                                                    const updated = [...subjects];
-                                                    updated[idx].name = text;
-                                                    setSubjects(updated);
-                                                }}
+                                                onChangeText={(t) => handleSubjectChange(idx, 'name', t)}
                                             />
                                         </View>
+                                        <TextInput 
+                                            style={[styles.subInput, { height: 45, flex: 1, borderRadius: 12 }]} 
+                                            value={sub.max_theory.toString()} 
+                                            keyboardType="numeric"
+                                            onChangeText={(t) => handleSubjectChange(idx, 'max_theory', t)}
+                                        />
+                                        <TextInput 
+                                            style={[styles.subInput, { height: 45, flex: 1, borderRadius: 12 }]} 
+                                            value={sub.passing_marks.toString()} 
+                                            keyboardType="numeric"
+                                            onChangeText={(t) => handleSubjectChange(idx, 'passing_marks', t)}
+                                        />
                                         <TouchableOpacity 
                                             onPress={() => setSubjects(subjects.filter((_, i) => i !== idx))}
-                                            style={{ width: 40, height: 40, borderRadius: 20, backgroundColor: theme.danger + '15', justifyContent: 'center', alignItems: 'center' }}
+                                            style={{ width: 35, height: 35, borderRadius: 10, backgroundColor: theme.danger + '15', justifyContent: 'center', alignItems: 'center' }}
                                         >
-                                            <Ionicons name="trash" size={18} color={theme.danger} />
+                                            <Ionicons name="trash" size={16} color={theme.danger} />
                                         </TouchableOpacity>
                                     </View>
                                 ))}

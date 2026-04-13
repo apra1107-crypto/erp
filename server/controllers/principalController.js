@@ -435,26 +435,27 @@ const updateStudent = async (req, res) => {
 
     const newMonthly = parseFloat(monthly_fees || 0);
     const newTransport = parseFloat(transport_fees || 0);
+    const newTransportFacility = transport_facility === 'true';
+    
     const oldMonthly = parseFloat(currentStudent.monthly_fees || 0);
     const oldTransport = parseFloat(currentStudent.transport_fees || 0);
+    const oldTransportFacility = currentStudent.transport_facility;
 
-    // FEE UPDATE LOGIC: Automatically apply to unpaid months based on mode
-    if (newMonthly !== oldMonthly || newTransport !== oldTransport) {
-        const totalNewDue = newMonthly + (currentStudent.transport_facility ? newTransport : 0);
+    // FEE UPDATE LOGIC: Automatically apply to unpaid months (Current and Future Only)
+    // Triggers if Tuition changed, OR Transport Amount changed, OR Transport Toggle changed
+    if (newMonthly !== oldMonthly || newTransport !== oldTransport || newTransportFacility !== oldTransportFacility) {
+        const totalNewDue = newMonthly + (newTransportFacility ? newTransport : 0);
         
-        let query = `UPDATE student_fees SET amount_due = $1, status = 'pending' 
-                    WHERE student_id = $2 AND session_id = $3 AND status != 'paid'`;
-        const params = [totalNewDue, id, sessionId];
+        const now = new Date();
+        const currentMonth = now.getMonth() + 1; // 1-12
+        const currentYear = now.getFullYear();
 
-        // NEW CONDITION: Include current month if unpaid, plus all future months
-        if (fee_update_mode === 'upcoming' || true) { 
-            const now = new Date();
-            const currentMonth = now.getMonth() + 1; // 1-12
-            const currentYear = now.getFullYear();
-            // Changed '>' to '>=' for the month check in the current year
-            query += ` AND (year > $4 OR (year = $4 AND month >= $5))`;
-            params.push(currentYear, currentMonth);
-        }
+        // ONLY update records that are NOT paid AND are for the current month or future
+        // This protects past debts (like April unpaid while we are in May) from being recalculated
+        const query = `UPDATE student_fees SET amount_due = $1, status = 'pending' 
+                       WHERE student_id = $2 AND session_id = $3 AND status != 'paid'
+                       AND (year > $4 OR (year = $4 AND month >= $5))`;
+        const params = [totalNewDue, id, sessionId, currentYear, currentMonth];
 
         // Update records in the database
         await pool.query(query, params);
@@ -941,11 +942,6 @@ const collectFee = async (req, res) => {
       });
     }
 
-    // Calculate actual amount being paid from profile snapshot PLUS any extra charges
-    const studentProfile = student.rows[0];
-    const studentFull = await pool.query('SELECT monthly_fees, transport_fees, transport_facility FROM students WHERE id = $1', [id]);
-    const profile = studentFull.rows[0];
-    
     // Sum monthly extra charges for this student/month/year
     const extraChargesRes = await pool.query(
         `SELECT COALESCE(SUM(amount), 0) as total_extra FROM monthly_extra_charges 
@@ -954,16 +950,41 @@ const collectFee = async (req, res) => {
     );
     const extraTotal = parseFloat(extraChargesRes.rows[0].total_extra || 0);
 
-    const baseDue = parseFloat(profile.monthly_fees || 0) + (profile.transport_facility ? parseFloat(profile.transport_fees || 0) : 0);
+    // Calculate actual amount being paid from existing record OR profile fallback
+    const existingFeeRes = await pool.query(
+        `SELECT amount_due FROM student_fees 
+         WHERE student_id = $1 AND month = $2 AND year = $3 AND session_id = $4`,
+        [id, parseInt(month), parseInt(year), sessionId]
+    );
+
+    let baseDue;
+    let tuitionPart;
+    let transportPart;
+
+    const studentFull = await pool.query('SELECT monthly_fees, transport_fees, transport_facility FROM students WHERE id = $1', [id]);
+    const profile = studentFull.rows[0];
+
+    if (existingFeeRes.rows.length > 0 && existingFeeRes.rows[0].amount_due) {
+        baseDue = parseFloat(existingFeeRes.rows[0].amount_due);
+        // Best effort split for snapshot: try to use profile rates but cap transport
+        const currentTransportRate = profile.transport_facility ? parseFloat(profile.transport_fees || 0) : 0;
+        transportPart = Math.min(baseDue, currentTransportRate);
+        tuitionPart = baseDue - transportPart;
+    } else {
+        tuitionPart = parseFloat(profile.monthly_fees || 0);
+        transportPart = profile.transport_facility ? parseFloat(profile.transport_fees || 0) : 0;
+        baseDue = tuitionPart + transportPart;
+    }
+
     const totalDue = baseDue + extraTotal;
 
-    // Insert or update status in student_fees
+    // Insert or update status in student_fees with separate snapshots
     await pool.query(
-      `INSERT INTO student_fees (student_id, institute_id, session_id, month, year, status, paid_at, collected_by, payment_method, amount_paid, amount_due) 
-       VALUES ($1, $2, $3, $4, $5, 'paid', NOW(), $6, 'Cash', $7, $8)
+      `INSERT INTO student_fees (student_id, institute_id, session_id, month, year, status, paid_at, collected_by, payment_method, amount_paid, amount_due, tuition_paid, transport_paid) 
+       VALUES ($1, $2, $3, $4, $5, 'paid', NOW(), $6, 'Cash', $7, $7, $8, $9)
        ON CONFLICT (student_id, month, year, session_id) 
-       DO UPDATE SET status = 'paid', paid_at = NOW(), collected_by = $6, payment_method = 'Cash', amount_paid = $7, amount_due = $8`,
-      [id, instituteId, sessionId, parseInt(month), parseInt(year), collectedByName, totalDue, baseDue]
+       DO UPDATE SET status = 'paid', paid_at = NOW(), collected_by = $6, payment_method = 'Cash', amount_paid = $7, amount_due = $7, tuition_paid = $8, transport_paid = $9`,
+      [id, instituteId, sessionId, parseInt(month), parseInt(year), collectedByName, totalDue, tuitionPart, transportPart]
     );
 
     // Also mark all extra charges for this student, month, year as paid
@@ -1066,7 +1087,8 @@ const getFeesStatus = async (req, res) => {
             SELECT s.*, 
             CASE WHEN f.status = 'paid' THEN 'paid' ELSE 'pending' END as month_fee_status,
             f.payment_method, f.transaction_id, f.collected_by, f.paid_at, f.month, f.year,
-            f.amount_paid, f.amount_due as snapshot_amount_due
+            f.amount_paid, f.amount_due as snapshot_amount_due,
+            f.tuition_paid as snapshot_tuition, f.transport_paid as snapshot_transport
             FROM students s
             LEFT JOIN student_fees f ON s.id = f.student_id 
                 AND f.month = $3::integer AND f.year = $4::integer AND f.session_id = $2

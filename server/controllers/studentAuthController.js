@@ -626,7 +626,8 @@ export const getStudentFeesData = async (req, res) => {
 
         // 4. Get monthly payment records
         const paymentsRes = await pool.query(
-            `SELECT month, year, status, paid_at, payment_method, transaction_id, collected_by, amount_paid, amount_due
+            `SELECT month, year, status, paid_at, payment_method, transaction_id, collected_by, amount_paid, amount_due,
+                    tuition_paid, transport_paid
              FROM student_fees 
              WHERE student_id = $1 AND institute_id = $2 AND session_id = $3
              ORDER BY year DESC, month DESC`,

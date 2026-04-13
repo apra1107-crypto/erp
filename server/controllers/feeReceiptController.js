@@ -71,6 +71,34 @@ export const generateFeeReceiptPDF = async (req, res) => {
             const institute = instRes.rows[0];
             const student = studentRes.rows[0];
 
+            // 2.1 Refine Breakage for Monthly Paid (Server-side snapshot protection)
+            let finalBreakage = breakage;
+            if (type === 'MONTHLY') {
+                const feeRecordRes = await pool.query(
+                    `SELECT status, tuition_paid, transport_paid, amount_paid FROM student_fees 
+                     WHERE student_id = $1 AND month = $2 AND year = $3 AND session_id = $4`,
+                    [studentId, paymentData.month, paymentData.year, student.session_id]
+                );
+
+                if (feeRecordRes.rows.length > 0 && feeRecordRes.rows[0].status === 'paid') {
+                    const record = feeRecordRes.rows[0];
+                    if (record.tuition_paid !== null && parseFloat(record.tuition_paid) > 0) {
+                        // Reconstruct breakage from DB snapshots to ensure 100% accuracy
+                        const extraChargesRes = await pool.query(
+                            `SELECT reason, amount FROM monthly_extra_charges 
+                             WHERE student_id = $1 AND month = $2 AND year = $3 AND status = 'paid'`,
+                            [studentId, paymentData.month, paymentData.year]
+                        );
+                        
+                        finalBreakage = [
+                            { label: 'Monthly Tuition Fee', amount: parseFloat(record.tuition_paid) },
+                            ...(parseFloat(record.transport_paid) > 0 ? [{ label: 'Transport Fee', amount: parseFloat(record.transport_paid) }] : []),
+                            ...extraChargesRes.rows.map(ec => ({ label: ec.reason, amount: parseFloat(ec.amount) }))
+                        ];
+                    }
+                }
+            }
+
             // 2. Process Logo
             const rawLogo = institute.logo_url;
             const logoFullUrl = rawLogo?.startsWith('http') ? rawLogo : (rawLogo ? `${process.env.EOS_BUCKET_URL}/${rawLogo}` : null);
@@ -82,7 +110,7 @@ export const generateFeeReceiptPDF = async (req, res) => {
             const dayName = paidDate.toLocaleDateString('en-IN', { weekday: 'long' });
             const formattedTime = paidDate.toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit', hour12: true });
             
-            const totalPayable = breakage.reduce((sum, item) => sum + parseFloat(item.amount || 0), 0);
+            const totalPayable = finalBreakage.reduce((sum, item) => sum + parseFloat(item.amount || 0), 0);
             const safeTransactions = Array.isArray(paymentData?.transactions) ? paymentData.transactions : [];
 
             // 4. Generate HTML
@@ -189,7 +217,7 @@ export const generateFeeReceiptPDF = async (req, res) => {
                         </tr>
                     </thead>
                     <tbody>
-                        ${breakage.map(item => `
+                        ${finalBreakage.map(item => `
                         <tr>
                             <td>${item.reason || item.label}</td>
                             <td class="text-right">₹${parseFloat(item.amount || 0).toLocaleString()}</td>

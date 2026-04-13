@@ -32,10 +32,11 @@ import Toast from 'react-native-toast-message';
 
 const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get('window');
 
-const SmartMarkInput = React.memo(({ value, onChange, placeholder, style, keyboardType = 'default', theme, isDark }: any) => {
+const SmartMarkInput = React.memo(React.forwardRef(({ value, onChange, placeholder, style, keyboardType = 'default', theme, isDark }: any, ref: any) => {
     const [isFocused, setIsFocused] = useState(false);
     return (
         <TextInput
+            ref={ref}
             style={[
                 {
                     backgroundColor: isDark ? '#1a1a1a' : '#f8fafc',
@@ -54,13 +55,15 @@ const SmartMarkInput = React.memo(({ value, onChange, placeholder, style, keyboa
             placeholder={placeholder}
             placeholderTextColor={theme.textLight}
             onChangeText={onChange}
-            keyboardType={keyboardType}
+            keyboardType="default"
             onFocus={() => setIsFocused(true)}
             onBlur={() => setIsFocused(false)}
             selectTextOnFocus={true}
+            returnKeyType="next"
+            blurOnSubmit={false}
         />
     );
-});
+}));
 
 export default function TeacherExamDetail() {
     const { id } = useLocalSearchParams();
@@ -91,6 +94,28 @@ export default function TeacherExamDetail() {
     const [classSuggestions, setClassSuggestions] = useState<any[]>([]);
     const [showSectionList, setShowSectionList] = useState(false);
     const [showClassList, setShowClassList] = useState(false);
+
+    const inputRefs = React.useRef<Record<string, any>>({});
+
+    const focusNextField = (studentIdx: number, fieldIdx: number) => {
+        const subjectsCount = exam?.subjects_blueprint?.length || 0;
+        const fieldsPerRow = isJunior ? subjectsCount + 1 : (!!exam?.include_grade ? subjectsCount * 2 + 1 : subjectsCount + 1);
+        
+        let nextFieldIdx = fieldIdx + 1;
+        let nextStudentIdx = studentIdx;
+        
+        if (nextFieldIdx >= fieldsPerRow) {
+            nextFieldIdx = 0;
+            nextStudentIdx++;
+        }
+        
+        if (nextStudentIdx < students.length) {
+            const nextKey = `${nextStudentIdx}_${nextFieldIdx}`;
+            if (inputRefs.current[nextKey]) {
+                inputRefs.current[nextKey].focus();
+            }
+        }
+    };
 
     const isJunior = exam?.evaluation_mode === 'junior';
 
@@ -220,6 +245,47 @@ export default function TeacherExamDetail() {
         } finally {
             setIsGeneratingPDF(false);
         }
+    };
+
+    const evaluateMark = (val: string | number) => {
+        if (!val) return 0;
+        if (typeof val === 'number') return val;
+        if (typeof val === 'string' && val.includes('+')) {
+            return val.split('+').reduce((sum, p) => sum + (parseFloat(p.trim()) || 0), 0);
+        }
+        return parseFloat(val as string) || 0;
+    };
+
+    const updateGridMark = (studentId: any, subIdx: number, field: string, value: string) => {
+        const studentMarks = [...gridMarks[studentId]];
+        studentMarks[subIdx] = { ...studentMarks[subIdx], [field]: value };
+
+        const evaluateVal = (val: string) => {
+            if (!val) return 0;
+            if (val.includes('+')) {
+                return val.split('+').reduce((sum, p) => sum + (parseFloat(p.trim()) || 0), 0);
+            }
+            return parseFloat(val) || 0;
+        };
+
+        if (field === 'theory' && exam?.grading_rules && !isJunior) {
+            const blueprint = exam.subjects_blueprint.find((s: any) => s.name === studentMarks[subIdx].subject);
+            if (blueprint) {
+                const max = evaluateVal(blueprint.max_theory?.toString()) || 100;
+                const obt = evaluateVal(value);
+                const percent = (obt / max) * 100;
+                const rule = exam.grading_rules.find((r: any) => percent >= r.min && percent <= r.max);
+                if (rule) {
+                    studentMarks[subIdx].grade = rule.grade;
+                } else if (percent < 0) {
+                    studentMarks[subIdx].grade = 'F';
+                }
+            }
+        } else if (field === 'grade' && isJunior) {
+            studentMarks[subIdx].grade = value.toUpperCase();
+        }
+
+        setGridMarks({ ...gridMarks, [studentId]: studentMarks });
     };
 
     const handleSaveAllMarks = async () => {
@@ -472,15 +538,29 @@ export default function TeacherExamDetail() {
                         keyboardShouldPersistTaps="always"
                     >
                         <View>
-                            <View style={[styles.gridRow, { backgroundColor: isDark ? '#1a1a1a' : '#f8fafc', borderBottomWidth: 2, borderBottomColor: theme.border }]}>
-                                <View style={{ width: 150, padding: 15, borderRightWidth: 1, borderRightColor: theme.border }}><Text style={styles.subHeaderLabel}>STUDENT</Text></View>
-                                {exam?.subjects_blueprint.map((s: any, i: number) => (
-                                    <View key={i} style={{ width: isJunior ? 140 : 80, padding: 15, borderRightWidth: 1, borderRightColor: theme.border }}>
-                                        <Text style={styles.subHeaderLabel}>{s.name.toUpperCase()}</Text>
-                                        {isJunior ? null : <Text style={[styles.subHeaderLabel, { fontSize: 8, color: theme.primary, fontWeight: '900' }]}>MARKS</Text>}
+                            <View style={[styles.gridRow, { backgroundColor: isDark ? '#1a1a1a' : '#f8fafc', borderBottomWidth: 2, borderBottomColor: theme.border, padding: 0 }]}>
+                                <View style={{ width: 150, padding: 15, borderRightWidth: 1, borderRightColor: theme.border, justifyContent: 'center' }}>
+                                    <Text style={[styles.subHeaderLabel, { textAlign: 'left', color: theme.text, fontSize: 11 }]}>STUDENT</Text>
+                                </View>
+                                {exam?.subjects_blueprint.map((sub: any, i: number) => (
+                                    <View key={i} style={{ flexDirection: 'row', borderRightWidth: 1, borderRightColor: theme.border }}>
+                                        <View style={{ width: isJunior ? 140 : 80, padding: 10, justifyContent: 'center', alignItems: 'center' }}>
+                                            <Text style={[styles.subHeaderLabel, { color: theme.text, fontSize: 11 }]} numberOfLines={1}>{sub.name.toUpperCase()}</Text>
+                                            <Text style={[styles.subHeaderLabel, { fontSize: 8, color: theme.primary, fontWeight: '900' }]}>
+                                                {isJunior ? 'GRADE' : 'MARKS'}
+                                            </Text>
+                                        </View>
+                                        {!isJunior && !!exam.include_grade && (
+                                            <View style={{ width: 60, padding: 10, justifyContent: 'center', alignItems: 'center', borderLeftWidth: 1, borderLeftColor: theme.border + '20' }}>
+                                                <Text style={styles.subHeaderLabel} numberOfLines={1}> </Text>
+                                                <Text style={[styles.subHeaderLabel, { fontSize: 9, color: theme.primary, fontWeight: '900' }]}>GRADE</Text>
+                                            </View>
+                                        )}
                                     </View>
                                 ))}
-                                <View style={{ width: 150, padding: 15, borderRightWidth: 1, borderRightColor: theme.border }}><Text style={styles.subHeaderLabel}>OVERALL REMARK</Text></View>
+                                <View style={{ width: 200, padding: 15, justifyContent: 'center' }}>
+                                    <Text style={[styles.subHeaderLabel, { color: theme.text, fontSize: 11 }]}>OVERALL REMARK</Text>
+                                </View>
                             </View>
                             <ScrollView 
                                 style={{ flex: 1 }}
@@ -488,43 +568,77 @@ export default function TeacherExamDetail() {
                                 directionalLockEnabled={false}
                                 keyboardShouldPersistTaps="always"
                             >
-                                {students.map((s) => (
-                                    <View key={s.student.id} style={styles.gridRow}>
-                                        <View style={{ width: 150, padding: 12, borderRightWidth: 1, borderRightColor: theme.border }}><Text style={{fontSize:12, fontWeight:'800', color:theme.text}} numberOfLines={1}>{s.student.name}</Text></View>
+                                {students.map((s, sIdx) => (
+                                    <View key={s.student.id} style={[styles.gridRow, { borderBottomWidth: 1, borderBottomColor: theme.border, padding: 0 }]}>
+                                        <View style={{ width: 150, padding: 12, borderRightWidth: 1, borderRightColor: theme.border, justifyContent: 'center' }}>
+                                            <Text style={{fontSize:12, fontWeight:'800', color:theme.text}} numberOfLines={1}>{s.student.name}</Text>
+                                            <Text style={{ fontSize: 10, color: theme.textLight }}>Roll: {s.student.roll_no}</Text>
+                                        </View>
                                         {gridMarks[s.student.id]?.map((m: any, idx: number) => (
-                                            <View key={idx} style={{ width: isJunior ? 140 : 80, height: 50, borderRightWidth: 1, borderRightColor: theme.border }}>
+                                            <View key={idx} style={{ flexDirection: 'row', borderRightWidth: 1, borderRightColor: theme.border }}>
                                                 {isJunior ? (
-                                                    <SmartMarkInput value={m.grade} onChange={(v: string) => {
-                                                        const updated = [...gridMarks[s.student.id]]; updated[idx].grade = v.toUpperCase();
-                                                        setGridMarks({ ...gridMarks, [s.student.id]: updated });
-                                                    }} theme={theme} isDark={isDark} autoCapitalize="characters" />
+                                                    <View style={{ width: 140, height: 50 }}>
+                                                        <SmartMarkInput
+                                                            ref={(el: any) => inputRefs.current[`${sIdx}_${idx}`] = el}
+                                                            value={m.grade}
+                                                            placeholder="Enter Grade..."
+                                                            onChange={(v: string) => updateGridMark(s.student.id, idx, 'grade', v.toUpperCase())}
+                                                            onSubmitEditing={() => focusNextField(sIdx, idx)}
+                                                            autoCapitalize="characters"
+                                                            theme={theme}
+                                                            isDark={isDark}
+                                                        />
+                                                    </View>
                                                 ) : (
-                                                    <SmartMarkInput value={m.theory} onChange={(v: string) => {
-                                                        const updated = [...gridMarks[s.student.id]]; updated[idx].theory = v;
-                                                        setGridMarks({ ...gridMarks, [s.student.id]: updated });
-                                                    }} theme={theme} isDark={isDark} />
+                                                    <>
+                                                        <View style={{ width: 80, height: 50 }}>
+                                                            <SmartMarkInput
+                                                                ref={(el: any) => inputRefs.current[`${sIdx}_${idx * (exam.include_grade ? 2 : 1)}`] = el}
+                                                                value={m.theory}
+                                                                placeholder="0"
+                                                                onChange={(v: string) => updateGridMark(s.student.id, idx, 'theory', v)}
+                                                                onSubmitEditing={() => focusNextField(sIdx, idx * (exam.include_grade ? 2 : 1))}
+                                                                theme={theme}
+                                                                isDark={isDark}
+                                                            />
+                                                        </View>
+                                                        {!!exam.include_grade && (
+                                                            <View style={{ width: 60, height: 50, borderLeftWidth: 1, borderLeftColor: theme.border + '20' }}>
+                                                                <SmartMarkInput
+                                                                    ref={(el: any) => inputRefs.current[`${sIdx}_${idx * 2 + 1}`] = el}
+                                                                    style={{ color: theme.primary }}
+                                                                    value={m.grade}
+                                                                    placeholder="-"
+                                                                    onChange={(v: string) => updateGridMark(s.student.id, idx, 'grade', v.toUpperCase())}
+                                                                    onSubmitEditing={() => focusNextField(sIdx, idx * 2 + 1)}
+                                                                    autoCapitalize="characters"
+                                                                    theme={theme}
+                                                                    isDark={isDark}
+                                                                />
+                                                            </View>
+                                                        )}
+                                                    </>
                                                 )}
                                             </View>
                                         ))}
-                                        <View style={{ width: 150, height: 50, borderRightWidth: 1, borderRightColor: theme.border }}>
-                                            <TextInput
-                                                style={[
-                                                    {
-                                                        backgroundColor: isDark ? '#1a1a1a' : '#f8fafc',
-                                                        borderRadius: 8,
-                                                        height: '100%',
-                                                        width: '100%',
-                                                        textAlign: 'left',
-                                                        paddingHorizontal: 10,
-                                                        fontSize: 12,
-                                                        fontWeight: '700',
-                                                        color: theme.text,
-                                                    }
-                                                ]}
+                                        <View style={{ width: 200, height: 50 }}>
+                                            <SmartMarkInput
+                                                ref={(el: any) => {
+                                                    const subjectsCount = exam?.subjects_blueprint?.length || 0;
+                                                    const remarkIdx = isJunior ? subjectsCount : (!!exam?.include_grade ? subjectsCount * 2 : subjectsCount);
+                                                    inputRefs.current[`${sIdx}_${remarkIdx}`] = el;
+                                                }}
+                                                style={{ textAlign: 'left', paddingHorizontal: 12, height: '100%', width: '100%', fontSize: 12, fontWeight: '700' }}
                                                 value={gridRemarks[s.student.id]}
-                                                placeholder="Remark..."
-                                                placeholderTextColor={theme.textLight}
-                                                onChangeText={(v) => setGridRemarks({ ...gridRemarks, [s.student.id]: v })}
+                                                placeholder="Enter remark..."
+                                                onChange={(v: string) => setGridRemarks({ ...gridRemarks, [s.student.id]: v })}
+                                                onSubmitEditing={() => {
+                                                    const subjectsCount = exam?.subjects_blueprint?.length || 0;
+                                                    const remarkIdx = isJunior ? subjectsCount : (!!exam?.include_grade ? subjectsCount * 2 : subjectsCount);
+                                                    focusNextField(sIdx, remarkIdx);
+                                                }}
+                                                theme={theme}
+                                                isDark={isDark}
                                             />
                                         </View>
                                     </View>

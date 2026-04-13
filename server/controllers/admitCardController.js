@@ -5,7 +5,7 @@ import { getBase64Image } from '../utils/imageUtils.js';
 
 // --- Global Concurrency Queue Logic (Shared with Exam) ---
 let activeJobs = 0;
-const MAX_CONCURRENT_PDFS = 2; 
+const MAX_CONCURRENT_PDFS = 5; 
 const queue = [];
 
 const processQueue = async () => {
@@ -62,23 +62,17 @@ const generateAdmitCardPDFLogic = async (eventId, studentIds, instituteId, res) 
             const logoFullUrl = rawLogo?.startsWith('http') ? rawLogo : (rawLogo ? `${cleanBucketUrl}/${rawLogo}` : null);
             const logoBase64 = await getBase64Image(logoFullUrl);
 
-            // Fetch Student Photos in small chunks (Sequential batches of 5)
-            const CHUNK_SIZE = 5;
-            const optimizedStudents = [];
-            for (let i = 0; i < students.length; i += CHUNK_SIZE) {
-                const chunk = students.slice(i, i + CHUNK_SIZE);
-                const results = await Promise.all(chunk.map(async (s) => {
-                    const rawPhoto = s.photo_url || s.profile_image;
-                    const photoFullUrl = rawPhoto?.startsWith('http') ? rawPhoto : (rawPhoto ? `${cleanBucketUrl}/${rawPhoto}` : null);
-                    
-                    let photoBase64 = null;
-                    if (photoFullUrl) {
-                        photoBase64 = await getBase64Image(photoFullUrl);
-                    }
-                    return { ...s, photoBase64 };
-                }));
-                optimizedStudents.push(...results);
-            }
+            // Fetch Student Photos in Parallel (MUCH FASTER)
+            const optimizedStudents = await Promise.all(students.map(async (s) => {
+                const rawPhoto = s.photo_url || s.profile_image;
+                const photoFullUrl = rawPhoto?.startsWith('http') ? rawPhoto : (rawPhoto ? `${cleanBucketUrl}/${rawPhoto}` : null);
+                
+                let photoBase64 = null;
+                if (photoFullUrl) {
+                    photoBase64 = await getBase64Image(photoFullUrl);
+                }
+                return { ...s, photoBase64 };
+            }));
 
             // 3. Generate HTML Content (Matched exactly to Requested UI)
             let htmlContent = `

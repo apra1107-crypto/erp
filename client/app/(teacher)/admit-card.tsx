@@ -31,6 +31,7 @@ import Toast from 'react-native-toast-message';
 import { useTheme } from '../../context/ThemeContext';
 import DateTimePicker from '@react-native-community/datetimepicker';
 import Animated, { useSharedValue, useAnimatedStyle, withSpring, interpolateColor } from 'react-native-reanimated';
+import AdmitCardPreview from '../../components/AdmitCardPreview';
 
 const { width } = Dimensions.get('window');
 
@@ -266,41 +267,6 @@ const AdmitCardScreen = () => {
         // Individual Preview Styles
         previewScroll: { flex: 1, backgroundColor: isDark ? '#000' : '#f8f9fa' },
         previewContainer: { padding: 20, alignItems: 'center' },
-        admitCardPaper: {
-            width: width - 40,
-            backgroundColor: '#fff',
-            padding: 25,
-            borderWidth: 2,
-            borderColor: '#000',
-            elevation: 10,
-            shadowColor: '#000',
-            shadowOffset: { width: 0, height: 10 },
-            shadowOpacity: 0.3,
-            shadowRadius: 15,
-        },
-        paperHeader: { alignItems: 'center', paddingBottom: 15, marginBottom: 20 },
-        paperInstName: { fontSize: 24, fontWeight: '900', color: '#000', textAlign: 'center', textTransform: 'uppercase', letterSpacing: 1 },
-        paperInstSub: { fontSize: 11, color: '#333', textAlign: 'center', marginTop: 6, fontWeight: '700', lineHeight: 16 },
-        paperExamTitle: { fontSize: 18, fontWeight: '900', color: '#000', borderWidth: 2, borderColor: '#000', paddingHorizontal: 20, paddingVertical: 8, marginTop: 20, textTransform: 'uppercase' },
-        paperInfoRow: { flexDirection: 'row', justifyContent: 'space-between', marginBottom: 25 },
-        paperTable: { flex: 1, marginRight: 15 },
-        paperTableRow: { flexDirection: 'row', borderBottomWidth: 1, borderBottomColor: '#eee', paddingVertical: 6 },
-        paperLabel: { width: 110, fontSize: 10, fontWeight: 'bold', color: '#555', textTransform: 'uppercase' },
-        paperValue: { flex: 1, fontSize: 13, fontWeight: '900', color: '#000' },
-        paperPhoto: { width: 110, height: 135, borderWidth: 2, borderColor: '#000', backgroundColor: '#f9f9f9', justifyContent: 'center', alignItems: 'center' },
-        paperTimetable: { marginBottom: 25 },
-        paperTableTitle: { fontSize: 13, fontWeight: '900', textDecorationLine: 'underline', marginBottom: 12, color: '#000', letterSpacing: 0.5 },
-        paperGrid: { borderWidth: 2, borderColor: '#000' },
-        paperGridHeader: { flexDirection: 'row', backgroundColor: '#f0f0f0', borderBottomWidth: 2, borderBottomColor: '#000' },
-        paperGridRow: { flexDirection: 'row', borderBottomWidth: 1, borderBottomColor: '#000' },
-        paperGridCell: { padding: 10, borderRightWidth: 1, borderRightColor: '#000', flex: 1 },
-        paperGridText: { fontSize: 10, fontWeight: 'bold', color: '#000' },
-        paperInstructions: { borderWidth: 1.5, borderColor: '#000', padding: 12, borderRadius: 4, backgroundColor: '#fdfdfd' },
-        paperInstTitle: { fontSize: 11, fontWeight: '900', textDecorationLine: 'underline', marginBottom: 8 },
-        paperInstItem: { fontSize: 10, fontWeight: '700', color: '#333', marginBottom: 4, lineHeight: 14 },
-        paperFooter: { flexDirection: 'row', justifyContent: 'space-between', marginTop: 60, paddingHorizontal: 10 },
-        paperSigLine: { borderTopWidth: 1.5, borderTopColor: '#000', width: 130, alignItems: 'center', paddingTop: 8 },
-        paperSigText: { fontSize: 10, fontWeight: '900' },
         modalOverlay: { position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, backgroundColor: 'rgba(0,0,0,0.7)', justifyContent: 'center', alignItems: 'center', zIndex: 9999 },
     }), [theme, isDark, insets]);
 
@@ -342,7 +308,11 @@ const AdmitCardScreen = () => {
             setInstProfile({
                 institute_name: profile.institute_name,
                 affiliation: profile.affiliation,
-                address: profile.institute_address,
+                institute_address: profile.institute_address,
+                landmark: profile.landmark,
+                district: profile.district,
+                state: profile.state,
+                pincode: profile.pincode,
                 logo_url: profile.institute_logo
             });
         } catch (error) {
@@ -580,12 +550,6 @@ const AdmitCardScreen = () => {
         const m = (date.getMonth() + 1).toString().padStart(2, '0');
         const y = date.getFullYear();
         return `${d}-${m}-${y}`;
-    };
-
-    const getFullImageUrl = (url: string | null | undefined): string | null => {
-        if (!url) return null;
-        if (url.startsWith('http')) return url;
-        return `${BASE_URL}${url.startsWith('/') ? '' : '/'}${url}`;
     };
 
         const generatePDF = async (isBulk: boolean) => {
@@ -1315,13 +1279,13 @@ const AdmitCardScreen = () => {
             </View>
 
             <ScrollView style={styles.previewScroll} showsVerticalScrollIndicator={false}>
-                <View style={styles.previewContainer}>
-                    <Text style={{ color: theme.textLight, fontSize: 16, textAlign: 'center', marginTop: 50 }}>
-                        Preview not available for individual generation.
-                    </Text>
-                    <Text style={{ color: theme.textLight, fontSize: 14, textAlign: 'center', marginTop: 10 }}>
-                        Tap 'Download PDF' to get the full document.
-                    </Text>
+                <View style={[styles.previewContainer, { paddingTop: 20 }]}>
+                    <AdmitCardPreview 
+                        student={selectedStudent} 
+                        event={currentEvent} 
+                        institute={instProfile} 
+                    />
+                    <View style={{ height: 100 }} />
                 </View>
             </ScrollView>
         </View>

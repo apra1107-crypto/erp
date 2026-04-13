@@ -1,6 +1,6 @@
 import { Platform } from 'react-native';
 
-export const BASE_URL = 'https://klassin.co.in';
+export const BASE_URL = 'http://10.159.155.252:5000';
 export const EOS_BUCKET_URL = 'https://klassinimg.objectstore.e2enetworks.net';
 
 export const API_ENDPOINTS = {

@@ -150,14 +150,20 @@ export default function FeesScreen() {
             let breakage = [];
             if (payment.type === 'MONTHLY') {
                 const monthExtraCharges = (feeData?.extra_charges || []).filter((ec: any) => ec.month === payment.month && ec.year === payment.year);
-                const isPaid = payment.status === 'paid';
-
-                if (isPaid && payment.amount_paid) {
+                
+                // Priority 1: Use the new DB snapshots (Perfect history)
+                if (payment.tuition_paid && parseFloat(payment.tuition_paid) > 0) {
+                    breakage = [
+                        { label: 'Monthly Tuition Fee', amount: parseFloat(payment.tuition_paid) },
+                        ...(parseFloat(payment.transport_paid) > 0 ? [{ label: 'Transport Fee', amount: parseFloat(payment.transport_paid) }] : []),
+                        ...monthExtraCharges.map((ec: any) => ({ label: ec.reason, amount: parseFloat(ec.amount) }))
+                    ];
+                } 
+                // Priority 2: Fallback to existing amount_paid logic for older records
+                else if (payment.amount_paid) {
                     const totalPaid = parseFloat(payment.amount_paid);
                     const extraTotal = monthExtraCharges.reduce((sum: number, ec: any) => sum + parseFloat(ec.amount), 0);
                     const transport = feeData.fee_structure.transport_facility ? parseFloat(feeData.fee_structure.transport_fees || 0) : 0;
-                    
-                    // Tuition is the remainder (Total - Transport - Extras)
                     const tuitionPaid = totalPaid - transport - extraTotal;
 
                     breakage = [
@@ -339,7 +345,11 @@ export default function FeesScreen() {
                             ? parseFloat(item.paid_amount) 
                             : (item.amount_paid 
                                 ? parseFloat(item.amount_paid)
-                                : (feeData.fee_structure.monthly_fees + (feeData.fee_structure.transport_facility ? feeData.fee_structure.transport_fees : 0) + (feeData.extra_charges || []).filter((ec: any) => ec.month === item.month && ec.year === item.year).reduce((sum: number, ec: any) => sum + parseFloat(ec.amount), 0))
+                                : (
+                                    (item.tuition_paid && parseFloat(item.tuition_paid) > 0 ? parseFloat(item.tuition_paid) : feeData.fee_structure.monthly_fees) + 
+                                    (item.transport_paid && parseFloat(item.transport_paid) > 0 ? parseFloat(item.transport_paid) : (feeData.fee_structure.transport_facility ? feeData.fee_structure.transport_fees : 0)) + 
+                                    (feeData.extra_charges || []).filter((ec: any) => ec.month === item.month && ec.year === item.year).reduce((sum: number, ec: any) => sum + parseFloat(ec.amount), 0)
+                                )
                             )
                         ).toLocaleString()}
                     </Text>
@@ -375,11 +385,17 @@ export default function FeesScreen() {
                                         const monthExtraCharges = (feeData.extra_charges || []).filter((ec: any) => ec.month === item.month && ec.year === item.year);
                                         const extra = monthExtraCharges.reduce((sum: number, ec: any) => sum + parseFloat(ec.amount || 0), 0);
                                         
+                                        // TRUST THE SNAPSHOT: baseDue is what the school actually billed the student
                                         const baseDue = paymentRecord?.amount_due 
                                             ? parseFloat(paymentRecord.amount_due) 
                                             : (feeData.fee_structure.monthly_fees + (feeData.fee_structure.transport_facility ? feeData.fee_structure.transport_fees : 0));
-                                        
+
                                         const total = baseDue + extra;
+
+                                        // RECONSTRUCT BREAKDOWN
+                                        // Use profile transport rate as a guide to split the baseDue
+                                        const transportRate = feeData.fee_structure.transport_facility ? feeData.fee_structure.transport_fees : 0;
+                                        const tuition = baseDue - transportRate;
 
                                         return (
                                             <View key={`m-${index}`} style={styles.cardContainer}>
@@ -395,12 +411,12 @@ export default function FeesScreen() {
                                                     <View style={{ marginVertical: 10, gap: 4 }}>
                                                         <View style={styles.miniBreakdownRow}>
                                                             <Text style={styles.miniBreakdownLabel}>Tuition Fee</Text>
-                                                            <Text style={styles.miniBreakdownValue}>₹{(baseDue - (feeData.fee_structure.transport_facility ? feeData.fee_structure.transport_fees : 0)).toLocaleString()}</Text>
+                                                            <Text style={styles.miniBreakdownValue}>₹{tuition.toLocaleString()}</Text>
                                                         </View>
-                                                        {feeData.fee_structure.transport_facility && (
+                                                        {transportRate > 0 && (
                                                             <View style={styles.miniBreakdownRow}>
                                                                 <Text style={styles.miniBreakdownLabel}>Transport Fee</Text>
-                                                                <Text style={styles.miniBreakdownValue}>₹{feeData.fee_structure.transport_fees.toLocaleString()}</Text>
+                                                                <Text style={styles.miniBreakdownValue}>₹{transportRate.toLocaleString()}</Text>
                                                             </View>
                                                         )}
                                                         {monthExtraCharges.map((ec: any, idx: number) => (

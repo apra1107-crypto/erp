@@ -1,38 +1,44 @@
-export default ({ config }) => ({
-  expo: {
-    name: "Klassin",
-    slug: "klassin",
-    version: "1.2.1",
-    orientation: "portrait",
-    icon: "./assets/images/icon2.png",
-    scheme: "klassin",
-    userInterfaceStyle: "automatic",
-    newArchEnabled: true,
-    ios: {
-      supportsTablet: true,
-      bundleIdentifier: "com.atul004.klassin",
-      infoPlist: {
-        NSAppTransportSecurity: {
-          NSAllowsArbitraryLoads: true
+export default ({ config }) => {
+  const isDev = process.env.IS_DEV_BUILD === 'true';
+  
+  return {
+    expo: {
+      name: "Klassin",
+      slug: "klassin",
+      version: "1.2.1",
+      orientation: "portrait",
+      icon: "./assets/images/icon2.png",
+      scheme: "klassin",
+      userInterfaceStyle: "automatic",
+      newArchEnabled: true,
+      ios: {
+        supportsTablet: true,
+        bundleIdentifier: "com.atul004.klassin",
+        infoPlist: {
+          NSAppTransportSecurity: {
+            NSAllowsArbitraryLoads: true
+          }
         }
-      }
-    },
-    android: {
-      adaptiveIcon: {
-        backgroundColor: "#E6F4FE",
-        foregroundImage: "./assets/images/KLassin.png"
       },
-      permissions: [
-        "android.permission.REQUEST_INSTALL_PACKAGES",
-        "android.permission.WRITE_EXTERNAL_STORAGE",
-        "android.permission.READ_EXTERNAL_STORAGE"
-      ],
-      edgeToEdgeEnabled: true,
-      predictiveBackGestureEnabled: false,
-      package: "com.atul004.klassin",
-      googleServicesFile: process.env.GOOGLE_SERVICES_JSON ?? "./google-services.json",
-      usesCleartextTraffic: true
-    },
+      android: {
+        adaptiveIcon: {
+          backgroundColor: "#E6F4FE",
+          foregroundImage: "./assets/images/KLassin.png"
+        },
+        permissions: [
+          "android.permission.REQUEST_INSTALL_PACKAGES",
+          "android.permission.WRITE_EXTERNAL_STORAGE",
+          "android.permission.READ_EXTERNAL_STORAGE"
+        ],
+        edgeToEdgeEnabled: true,
+        predictiveBackGestureEnabled: false,
+        package: "com.atul004.klassin",
+        googleServicesFile: process.env.GOOGLE_SERVICES_JSON ?? "./google-services.json",
+        usesCleartextTraffic: true,
+        jsEngine: "hermes",
+        // Always build only for arm64-v8a for smaller APK sizes
+        abiFilters: ["arm64-v8a"]
+      },
     web: {
       output: "static",
       favicon: "./assets/images/splash-icon.png"
@@ -52,7 +58,18 @@ export default ({ config }) => ({
         }
       ],
       "@react-native-community/datetimepicker",
-      "./plugins/withSingleTaskAndroidLaunchMode.js"
+      "./plugins/withSingleTaskAndroidLaunchMode.js",
+      [
+        "expo-build-properties",
+        {
+          android: {
+            enableProguardInReleaseBuilds: true,
+            enableShrinkResourcesInReleaseBuilds: true,
+            // For development/debug builds as well
+            extraProguardRules: "-keep class com.facebook.react.bridge.** { *; }"
+          }
+        }
+      ]
     ],
     experiments: {
       typedRoutes: true,

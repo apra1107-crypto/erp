@@ -47,32 +47,24 @@ export default function TeacherReportCardPreview() {
             position: 'absolute', top: 4, left: 4, right: 4, bottom: 4,
             borderWidth: 0.8, borderColor: '#333', zIndex: 0
         },
-        header: { alignItems: 'center', paddingBottom: 15, marginBottom: 20, zIndex: 10, paddingTop: 0 },
-        headerLogoRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', width: '100%', marginBottom: 5, marginTop: -10 },
-        logo: { width: 50, height: 50, resizeMode: 'contain', marginRight: 12, marginTop: 12 },
-        instName: { fontSize: 22, fontWeight: '900', color: '#000', textAlign: 'center', textTransform: 'uppercase' },
-        instAffiliation: { 
-            fontSize: 9.5, 
-            fontWeight: '700', 
-            color: '#333', 
-            marginTop: -25, 
-            paddingLeft: 50,
-            textAlign: 'center', 
-            marginBottom: 8
-        },
-        instSub: { fontSize: 9.5, color: '#333', textAlign: 'center', marginTop: -8, paddingLeft: 40, fontWeight: '600' },
-        examTitle: { 
-            fontSize: 18, 
-            fontWeight: '900', 
-            color: '#000', 
-            borderWidth: 1, 
-            borderColor: '#000', 
-            paddingHorizontal: 15, 
-            paddingVertical: 5, 
+        header: { alignItems: 'center', marginBottom: 20, zIndex: 10 },
+        instRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 12, marginBottom: 5, width: '100%', paddingHorizontal: 5 },
+        logo: { width: 60, height: 60, resizeMode: 'contain' },
+        instName: { flex: 1, fontSize: 26, fontWeight: '900', color: '#1e1b4b', textAlign: 'center', marginTop: -29, textTransform: 'uppercase', lineHeight: 28 },
+        instSubRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', marginTop: -35, paddingLeft: 60, width: '100%' },
+        instAddrRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', marginTop: 2, paddingLeft: 60, width: '100%' },
+        instAffiliation: { fontSize: 9, color: '#4f46e5', fontWeight: '700', textAlign: 'center' },
+        instSub: { fontSize: 9, color: '#444', textAlign: 'center', fontWeight: '700' },
+        dot: { width: 3, height: 3, borderRadius: 1.5, backgroundColor: '#444', marginHorizontal: 8 },
+        examTitleContainer: { 
             marginTop: 15, 
-            textTransform: 'uppercase',
-            textAlign: 'center'
+            paddingVertical: 6, 
+            paddingHorizontal: 35, 
+            backgroundColor: '#1e1b4b', 
+            borderRadius: 4,
+            transform: [{ skewX: '-10deg' }]
         },
+        examTitle: { fontSize: 15, fontWeight: '900', color: '#fff', textAlign: 'center', textTransform: 'uppercase' },
         studentSection: { 
             flexDirection: 'row', justifyContent: 'space-between', marginBottom: 20, 
             padding: 12, backgroundColor: '#f8fafc', borderRadius: 12, borderWidth: 1.5, borderColor: '#e2e8f0'
@@ -138,32 +130,20 @@ export default function TeacherReportCardPreview() {
                         <View style={styles.paperInnerBorder} />
                         {/* Header */}
                         <View style={styles.header}>
-                            {/* Logo and Name Row */}
-                            <View style={styles.headerLogoRow}>
+                            <View style={styles.instRow}>
                                 {institute.logo_url && <Image source={{ uri: getFullImageUrl(institute.logo_url) ?? undefined }} style={styles.logo} />}
-                                <Text 
-                                    style={[styles.instName, { flexShrink: 1 }]} 
-                                    numberOfLines={1} 
-                                    adjustsFontSizeToFit
-                                >
-                                    {institute.institute_name.toUpperCase()}
-                                </Text>
+                                <Text style={styles.instName} numberOfLines={1} adjustsFontSizeToFit>{institute.institute_name}</Text>
+                            </View>
+                            <View style={styles.instSubRow}>
+                                {institute.affiliation && <Text style={styles.instAffiliation}>{institute.affiliation}</Text>}
+                            </View>
+                            <View style={styles.instAddrRow}>
+                                <Text style={styles.instSub}>{institute.address} {institute.landmark} {institute.district} {institute.state} {institute.pincode}</Text>
                             </View>
                             
-                            {/* Affiliation Row */}
-                            {institute.affiliation && (
-                                <Text style={styles.instAffiliation}>
-                                    {institute.affiliation}
-                                </Text>
-                            )}
-
-                            {/* Detailed Address Row */}
-                            <Text style={styles.instSub}>
-                                {institute.address} {institute.landmark ? ` ${institute.landmark}` : ''}
-                                {"\n"}{institute.district} {institute.state} {institute.pincode}
-                            </Text>
-                            
-                            <Text style={styles.examTitle}>{exam.name}</Text>
+                            <View style={styles.examTitleContainer}>
+                                <Text style={styles.examTitle}>{exam.name}</Text>
+                            </View>
                         </View>
 
                         {/* Student Details */}
@@ -297,7 +277,6 @@ export default function TeacherReportCardPreview() {
                         <View style={styles.signatures}>
                             <View style={styles.sigLine}><Text style={styles.sigText}>CLASS TEACHER</Text></View>
                             <View style={styles.sigLine}><Text style={styles.sigText}>PRINCIPAL</Text></View>
-                            {isJunior ? null : <View style={styles.sigLine}><Text style={styles.sigText}>PARENT</Text></View>}
                         </View>
                     </View>
                 </View>

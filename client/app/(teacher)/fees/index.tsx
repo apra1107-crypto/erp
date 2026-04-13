@@ -231,11 +231,31 @@ export default function TeacherFees() {
         if (!instituteData) return;
         setProcessing(true);
         try {
-            const breakage = [
-                { label: 'Monthly Tuition Fee', amount: parseFloat(student.monthly_fees || 0) },
-                ...(student.transport_facility ? [{ label: 'Transport Fee', amount: parseFloat(student.transport_fees || 0) }] : []),
-                ...(student.extra_charges || []).map((ec: any) => ({ label: ec.reason, amount: parseFloat(ec.amount) }))
-            ];
+            const isPaid = parseFloat(student.amount_paid || 0) > 0;
+            let breakage = [];
+
+            if (isPaid) {
+                // For paid records, we must respect the actual amount_paid snapshot
+                const totalPaid = parseFloat(student.amount_paid || 0);
+                const extraTotal = (student.extra_charges || []).reduce((acc: number, ec: any) => acc + parseFloat(ec.amount), 0);
+                const transport = student.transport_facility ? parseFloat(student.transport_fees || 0) : 0;
+                
+                // Tuition is the remainder (Total - Transport - Extras)
+                const tuitionPaid = totalPaid - transport - extraTotal;
+
+                breakage = [
+                    { label: 'Monthly Tuition Fee', amount: tuitionPaid },
+                    ...(student.transport_facility ? [{ label: 'Transport Fee', amount: transport }] : []),
+                    ...(student.extra_charges || []).map((ec: any) => ({ label: ec.reason, amount: parseFloat(ec.amount) }))
+                ];
+            } else {
+                // For unpaid, use current profile fees
+                breakage = [
+                    { label: 'Monthly Tuition Fee', amount: parseFloat(student.monthly_fees || 0) },
+                    ...(student.transport_facility ? [{ label: 'Transport Fee', amount: parseFloat(student.transport_fees || 0) }] : []),
+                    ...(student.extra_charges || []).map((ec: any) => ({ label: ec.reason, amount: parseFloat(ec.amount) }))
+                ];
+            }
 
             await generateReceiptPDF({
                 institute: instituteData,
@@ -246,6 +266,7 @@ export default function TeacherFees() {
                 months
             });
         } catch (error) {
+            console.error('Download Error:', error);
             Toast.show({ type: 'error', text1: 'Error', text2: 'Failed to generate PDF' });
         } finally {
             setProcessing(false);
@@ -254,11 +275,39 @@ export default function TeacherFees() {
 
     const handlePreviewMonthly = (student: any) => {
         if (!instituteData) return;
-        const breakage = [
-            { label: 'Monthly Tuition Fee', amount: parseFloat(student.monthly_fees || 0) },
-            ...(student.transport_facility ? [{ label: 'Transport Fee', amount: parseFloat(student.transport_fees || 0) }] : []),
-            ...(student.extra_charges || []).map((ec: any) => ({ label: ec.reason, amount: parseFloat(ec.amount) }))
-        ];
+        const isPaid = parseFloat(student.amount_paid || 0) > 0;
+        let breakage = [];
+
+        if (isPaid) {
+            // FOR PAID: Priority 1: Use the new DB snapshots (Perfect history)
+            if (student.snapshot_tuition && parseFloat(student.snapshot_tuition) > 0) {
+                breakage = [
+                    { label: 'Monthly Tuition Fee', amount: parseFloat(student.snapshot_tuition) },
+                    ...(parseFloat(student.snapshot_transport) > 0 ? [{ label: 'Transport Fee', amount: parseFloat(student.snapshot_transport) }] : []),
+                    ...(student.extra_charges || []).map((ec: any) => ({ label: ec.reason, amount: parseFloat(ec.amount) }))
+                ];
+            } 
+            // Priority 2: Fallback to existing amount_paid logic for older records
+            else {
+                const totalPaid = parseFloat(student.amount_paid || 0);
+                const extraTotal = (student.extra_charges || []).reduce((acc: number, ec: any) => acc + parseFloat(ec.amount), 0);
+                const transport = student.transport_facility ? parseFloat(student.transport_fees || 0) : 0;
+                const tuitionPaid = totalPaid - transport - extraTotal;
+
+                breakage = [
+                    { label: 'Monthly Tuition Fee', amount: tuitionPaid },
+                    ...(student.transport_facility ? [{ label: 'Transport Fee', amount: transport }] : []),
+                    ...(student.extra_charges || []).map((ec: any) => ({ label: ec.reason, amount: parseFloat(ec.amount) }))
+                ];
+            }
+        } else {
+            // For unpaid, use current profile fees
+            breakage = [
+                { label: 'Monthly Tuition Fee', amount: parseFloat(student.monthly_fees || 0) },
+                ...(student.transport_facility ? [{ label: 'Transport Fee', amount: parseFloat(student.transport_fees || 0) }] : []),
+                ...(student.extra_charges || []).map((ec: any) => ({ label: ec.reason, amount: parseFloat(ec.amount) }))
+            ];
+        }
 
         setPreviewData({
             institute: instituteData,
@@ -298,7 +347,40 @@ export default function TeacherFees() {
         const paidAmount = parseFloat(item.amount_paid || 0);
         const isFullyPaid = paidAmount >= totalDue && totalDue > 0;
 
-        const transport = item.transport_facility ? parseFloat(item.transport_fees || 0) : 0;
+        // Breakage recovery logic for PAID display
+        let tuitionDisp = parseFloat(item.monthly_fees || 0);
+        let transportDisp = parseFloat(item.transport_fees || 0);
+        let showTransport = item.transport_facility;
+
+        if (isFullyPaid) {
+            // FOR PAID: Priority 1: Use the new DB snapshots (Perfect history)
+            if (item.snapshot_tuition && parseFloat(item.snapshot_tuition) > 0) {
+                tuitionDisp = parseFloat(item.snapshot_tuition);
+                transportDisp = parseFloat(item.snapshot_transport || 0);
+                showTransport = transportDisp > 0;
+            } 
+            // Priority 2: Fallback to existing snapshot_amount_due guessing (for older records)
+            else {
+                const totalBasePaid = baseDue; 
+                const transportRate = parseFloat(item.transport_fees || 0);
+                
+                if (totalBasePaid === (tuitionDisp + transportRate)) {
+                    showTransport = transportRate > 0;
+                    transportDisp = transportRate;
+                } 
+                else if (totalBasePaid > tuitionDisp) {
+                    showTransport = true;
+                    transportDisp = totalBasePaid - tuitionDisp;
+                } else {
+                    showTransport = false;
+                    transportDisp = 0;
+                    tuitionDisp = totalBasePaid;
+                }
+            }
+        } else {
+            transportDisp = item.transport_facility ? parseFloat(item.transport_fees || 0) : 0;
+            tuitionDisp = baseDue - transportDisp;
+        }
 
         return (
             <Animated.View 
@@ -334,12 +416,12 @@ export default function TeacherFees() {
                 <View style={styles.cardContent}>
                     <View style={styles.breakdownRow}>
                         <Text style={[styles.breakdownLabel, { color: theme.textLight }]}>Tuition Fee</Text>
-                        <Text style={[styles.breakdownValue, { color: theme.text }]}>₹{(baseDue - (item.transport_facility ? parseFloat(item.transport_fees || 0) : 0)).toLocaleString()}</Text>
+                        <Text style={[styles.breakdownValue, { color: theme.text }]}>₹{tuitionDisp.toLocaleString()}</Text>
                     </View>
-                    {item.transport_facility && (
+                    {showTransport && (
                         <View style={styles.breakdownRow}>
                             <Text style={[styles.breakdownLabel, { color: theme.textLight }]}>Transport Fee</Text>
-                            <Text style={[styles.breakdownValue, { color: theme.text }]}>₹{transport.toLocaleString()}</Text>
+                            <Text style={[styles.breakdownValue, { color: theme.text }]}>₹{transportDisp.toLocaleString()}</Text>
                         </View>
                     )}
                     {(item.extra_charges || []).map((ec: any, idx: number) => (

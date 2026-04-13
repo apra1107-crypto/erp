@@ -220,15 +220,19 @@ export const verifyFeePayment = async (req, res) => {
             // 1.1 Calculate baseDue (Snapshot of Tuition + Transport) for this month
             const profileRes = await db.query('SELECT monthly_fees, transport_fees, transport_facility FROM students WHERE id = $1', [studentId]);
             const profile = profileRes.rows[0];
-            const baseDue = parseFloat(profile.monthly_fees || 0) + (profile.transport_facility ? parseFloat(profile.transport_fees || 0) : 0);
+            
+            // Calculate components for snapshot
+            const transportRate = profile.transport_facility ? parseFloat(profile.transport_fees || 0) : 0;
+            const tuitionRate = parseFloat(profile.monthly_fees || 0);
+            const baseDue = tuitionRate + transportRate;
 
-            // 2. Mark as PAID in student_fees
+            // 2. Mark as PAID in student_fees with snapshots
             await db.query(
-                `INSERT INTO student_fees (student_id, institute_id, session_id, month, year, status, paid_at, collected_by, payment_method, transaction_id, amount_paid, amount_due) 
-                 VALUES ($1, $2, $3, $4, $5, 'paid', NOW(), 'Online', 'Razorpay', $6, $7, $8)
+                `INSERT INTO student_fees (student_id, institute_id, session_id, month, year, status, paid_at, collected_by, payment_method, transaction_id, amount_paid, amount_due, tuition_paid, transport_paid) 
+                 VALUES ($1, $2, $3, $4, $5, 'paid', NOW(), 'Online', 'Razorpay', $6, $7, $7, $8, $9)
                  ON CONFLICT (student_id, month, year, session_id) 
-                 DO UPDATE SET status = 'paid', paid_at = NOW(), collected_by = 'Online', payment_method = 'Razorpay', transaction_id = $6, amount_paid = $7, amount_due = $8`,
-                [studentId, institute_id, session_id, month, year, razorpay_payment_id, baseAmount, baseDue]
+                 DO UPDATE SET status = 'paid', paid_at = NOW(), collected_by = 'Online', payment_method = 'Razorpay', transaction_id = $6, amount_paid = $7, amount_due = $7, tuition_paid = $8, transport_paid = $9`,
+                [studentId, institute_id, session_id, month, year, razorpay_payment_id, baseAmount, tuitionRate, transportRate]
             );
 
             // 2.1 Mark all monthly extra charges for this student, month, year as paid

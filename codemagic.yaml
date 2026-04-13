@@ -45,6 +45,7 @@ workflows:
         - keystore_credentials 
       vars:
         PACKAGE_NAME: "com.atul004.klassin"
+        IS_DEV_BUILD: "true"
       node: 20
       java: 17
     scripts:

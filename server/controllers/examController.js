@@ -450,6 +450,8 @@ const generatePDFLogic = async (examId, studentIds, instituteId, res) => {
 
             // 3. Generate HTML Content
             const totalMax = subjects_blueprint.reduce((sum, sub) => sum + (parseFloat(sub.max_theory) || 0) + (parseFloat(sub.max_practical) || 0), 0);
+            const subjectCount = subjects_blueprint.length;
+            const compactClass = subjectCount > 14 ? 'super-compact' : (subjectCount > 11 ? 'compact-mode' : '');
 
             let htmlContent = `
                 <html>
@@ -465,61 +467,13 @@ const generatePDFLogic = async (examId, studentIds, instituteId, res) => {
                         }
                         .inner-border { position: absolute; top: 2mm; left: 2mm; right: 2mm; bottom: 2mm; border: 0.8px solid #333; pointer-events: none; z-index: 0; }
                         
-                        .header-container { 
-                            display: flex; 
-                            flex-direction: row; 
-                            align-items: center; 
-                            justify-content: center; 
-                            margin-bottom: 5px; 
-                            gap: 20px;
-                            padding-top: 25px;
-                        }
-                        
-                        .logo { 
-                            width: 80px; 
-                            height: 80px; 
-                            object-fit: contain;
-                        }
-                        
-                        .institute-info { 
-                            text-align: center; 
-                        }
-                        
-                        .institute-name { 
-                            font-size: 28px; 
-                            font-weight: 900; 
-                            color: #1A237E; 
-                            margin: 0; 
-                            text-transform: uppercase; 
-                            letter-spacing: 1px; 
-                        }
-                        
-                        .affiliation-text { 
-                            font-size: 18px; 
-                            color: #000000; 
-                            margin: 4px 0 0 2px; 
-                            font-weight: 700; 
-                        }
-                        
-                        .address-text { 
-                            font-size: 18px; 
-                            color: #000000; 
-                            margin-top: 4px;
-                            margin-left: 2px; 
-                            font-weight: 600; 
-                            text-align: center; 
-                        }
-                        
-                        .exam-box { 
-                            font-size: 22px; 
-                            font-weight: 900; 
-                            text-align: center; 
-                            margin: 0px auto 10px auto;
-                            text-transform: uppercase; 
-                            padding: 8px 45px; 
-                            border: 2.5px solid #000; 
-                            display: table; 
-                        }
+                        .header { text-align: center; margin-bottom: 10px; z-index: 10; position: relative; }
+                        .inst-row { display: flex; flex-direction: row; align-items: center; justify-content: center; gap: 40px; margin-bottom: 0; }
+                        .inst-logo { width: 85px; height: 85px; object-fit: contain; margin-top: 25px; maargin-left: -10px; }
+                        .inst-name { font-size: 28px; white-space: nowrap; font-weight: 900; text-transform: uppercase; color: #1e1b4b; margin: 0; line-height: 1; margin-top: -10px; }
+                        .inst-affiliation { font-size: 17px; color: #4f46e5; font-weight: 700; margin-top: -37px; margin-bottom: 4px; margin-left: 100px; }
+                        .inst-sub { font-size: 13px; color: #444; font-weight: 700; margin-top: 2px; margin-bottom: 8px; line-height: 1.2; margin-left: 100px; }
+                        .exam-title-box { display: inline-block; background: #1e1b4b; color: #fff; padding: 6px 35px; border-radius: 4px; margin-top: 5px; transform: skewX(-10deg); font-weight: 900; font-size: 16px; margin-left: 100px; }
 
                         .student-section { display: flex; flex-direction: row; justify-content: space-between; margin-bottom: 15px; padding: 12px; background: #f8fafc; border: 1.5px solid #e2e8f0; border-radius: 12px; }
                         .info-grid { flex: 1; }
@@ -547,6 +501,23 @@ const generatePDFLogic = async (examId, studentIds, instituteId, res) => {
                         .footer { margin-top: auto; display: flex; flex-direction: row; justify-content: space-between; padding: 0 10px 25px 10px; }
                         .sig-line { border-top: 2.5px solid #1e1b4b; width: 150px; text-align: center; font-size: 10px; font-weight: 900; padding-top: 8px; }
                         
+                        /* Compact Scaling Logic (Targeting mainly the Table) */
+                        .compact-mode table { margin-bottom: 8px; }
+                        .compact-mode td, .compact-mode th { padding: 5px; font-size: 11px; }
+                        .compact-mode .student-section { margin-bottom: 8px; }
+                        .compact-mode .summary-box { padding: 10px; margin-bottom: 10px; }
+                        .compact-mode .remarks-box { margin-bottom: 8px; }
+
+                        .super-compact table { margin-bottom: 5px; }
+                        .super-compact td, .super-compact th { padding: 3px; font-size: 10px; }
+                        .super-compact .student-section { margin-bottom: 5px; padding: 8px; }
+                        .super-compact .summary-box { padding: 8px; margin-bottom: 8px; }
+                        .super-compact .remarks-box { margin-bottom: 5px; }
+                        .super-compact .remark-text { font-size: 11px; }
+                        .super-compact .medal-row { margin-bottom: 5px; }
+                        .super-compact .medal { padding: 6px; }
+                        .super-compact .footer { padding-bottom: 15px; }
+
                         /* Junior Mode Styles */
                         .attendance-box { 
                             margin-top: 10px; 
@@ -569,28 +540,19 @@ const generatePDFLogic = async (examId, studentIds, instituteId, res) => {
             for (const s of optimizedStudents) {
                 const marks = s.marks_data || [];
                 const stats = s.calculated_stats || {};
-                const fullAddress = [
-                    exam.address,
-                    exam.landmark,
-                    exam.district,
-                    exam.state,
-                    exam.pincode
-                ].filter(Boolean).join(', ');
                 
                 htmlContent += `
-                    <div class="report-card">
+                    <div class="report-card ${compactClass}">
                         <div class="inner-border"></div>
-                        <div class="header-container">
-                            ${logoBase64 ? `<img src="${logoBase64}" class="logo" />` : ''}
-                            <div class="institute-info">
-                                <h1 class="institute-name">${exam.institute_name.toUpperCase()}</h1>
-                                ${exam.affiliation ? `<p class="affiliation-text">${exam.affiliation}</p>` : ''}
-                                <p class="address-text">${fullAddress}</p>
+                        <div class="header">
+                            <div class="inst-row">
+                                ${logoBase64 ? `<img src="${logoBase64}" class="inst-logo" />` : ''}
+                                <h1 class="inst-name">${exam.institute_name}</h1>
                             </div>
+                             ${exam.affiliation ? `<p class="inst-affiliation">${exam.affiliation}</p>` : ''}
+                            <p class="inst-sub" style="margin-top: 0;">${exam.address || ''} ${exam.landmark || ''} ${exam.district || ''} ${exam.state || ''} ${exam.pincode || ''}</p>
+                            <div class="exam-title-box">${exam.name}</div>
                         </div>
-                        
-                        <div class="exam-box">${exam.name}</div>
-
                         <div class="student-section">
                             <div class="info-grid">
                                 <div class="info-row"><div class="info-label">STUDENT NAME</div><div class="info-value">${s.name}</div></div>

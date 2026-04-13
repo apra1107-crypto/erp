@@ -30,6 +30,7 @@ import { useNavigation } from 'expo-router';
 import Toast from 'react-native-toast-message';
 import { useTheme } from '../../context/ThemeContext';
 import DateTimePicker from '@react-native-community/datetimepicker';
+import AdmitCardPreview from '../../components/AdmitCardPreview';
 
 const { width } = Dimensions.get('window');
 
@@ -260,41 +261,6 @@ const AdmitCardScreen = () => {
         // Individual Preview Styles
         previewScroll: { flex: 1, backgroundColor: isDark ? '#000' : '#f0f2f5' },
         previewContainer: { padding: 20, alignItems: 'center' },
-        admitCardPaper: {
-            width: width - 40,
-            backgroundColor: '#fff',
-            padding: 20,
-            borderWidth: 2,
-            borderColor: '#000',
-            elevation: 10,
-            shadowColor: '#000',
-            shadowOffset: { width: 0, height: 10 },
-            shadowOpacity: 0.3,
-            shadowRadius: 15,
-        },
-        paperHeader: { alignItems: 'center', paddingBottom: 15, marginBottom: 20 },
-        paperInstName: { fontSize: 22, fontWeight: '900', color: '#000', textAlign: 'center', textTransform: 'uppercase' },
-        paperInstSub: { fontSize: 11, color: '#333', textAlign: 'center', marginTop: 4, fontWeight: '600' },
-        paperExamTitle: { fontSize: 18, fontWeight: '900', color: '#000', borderWidth: 1, borderColor: '#000', paddingHorizontal: 15, paddingVertical: 5, marginTop: 15, textTransform: 'uppercase' },
-        paperInfoRow: { flexDirection: 'row', justifyContent: 'space-between', marginBottom: 20 },
-        paperTable: { flex: 1, marginRight: 15 },
-        paperTableRow: { flexDirection: 'row', borderBottomWidth: 0.5, borderBottomColor: '#eee', paddingVertical: 5 },
-        paperLabel: { width: 100, fontSize: 10, fontWeight: 'bold', color: '#555' },
-        paperValue: { flex: 1, fontSize: 12, fontWeight: '900', color: '#000' },
-        paperPhoto: { width: 100, height: 120, borderWidth: 1, borderColor: '#000', backgroundColor: '#f9f9f9', justifyContent: 'center', alignItems: 'center' },
-        paperTimetable: { marginBottom: 20 },
-        paperTableTitle: { fontSize: 12, fontWeight: '900', textDecorationLine: 'underline', marginBottom: 10, color: '#000' },
-        paperGrid: { borderWidth: 1.5, borderColor: '#000' },
-        paperGridHeader: { flexDirection: 'row', backgroundColor: '#f0f0f0', borderBottomWidth: 1.5, borderBottomColor: '#000' },
-        paperGridRow: { flexDirection: 'row', borderBottomWidth: 1, borderBottomColor: '#000' },
-        paperGridCell: { padding: 8, borderRightWidth: 1, borderRightColor: '#000', flex: 1 },
-        paperGridText: { fontSize: 10, fontWeight: 'bold', color: '#000' },
-        paperInstructions: { borderWidth: 1, borderColor: '#000', padding: 10, borderRadius: 4 },
-        paperInstTitle: { fontSize: 10, fontWeight: '900', textDecorationLine: 'underline', marginBottom: 5 },
-        paperInstItem: { fontSize: 9, fontWeight: '700', color: '#333', marginBottom: 2 },
-        paperFooter: { flexDirection: 'row', justifyContent: 'space-between', marginTop: 50, paddingHorizontal: 20 },
-        paperSigLine: { borderTopWidth: 1, borderTopColor: '#000', width: 120, alignItems: 'center', paddingTop: 5 },
-        paperSigText: { fontSize: 9, fontWeight: '900' },
         modalOverlay: { position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, backgroundColor: 'rgba(0,0,0,0.7)', justifyContent: 'center', alignItems: 'center', zIndex: 9999 },
         
         // Filter Modal Styles
@@ -577,419 +543,64 @@ const AdmitCardScreen = () => {
     const generatePDF = async () => {
         if (!currentEvent) return Alert.alert('Error', 'No exam event selected');
         
-        const selectedIds = Object.keys(selectionMap).filter(id => selectionMap[id]);
-        if (selectedIds.length === 0 && !selectedStudent) {
-            return Alert.alert('Warning', 'Select students first');
-        }
+        let studentIdsToGenerate: (string | number)[] = [];
 
-        // If it's a bulk operation (Selection Mode)
-        if (isSelectionMode && selectedIds.length > 0) {
-            try {
-                setIsGeneratingPDF(true);
-                const token = await AsyncStorage.getItem('principalToken') || await AsyncStorage.getItem('token');
-                
-                const response = await axios.post(
-                    `${API_ENDPOINTS.ADMIT_CARD}/generate-bulk-pdf/${currentEvent.id}`,
-                    { studentIds: selectedIds },
-                    {
-                        headers: { Authorization: `Bearer ${token}` },
-                        responseType: 'arraybuffer',
-                        timeout: 300000 // 5 minutes for heavy PDF generation
-                    }
-                );
-
-                // Efficient ArrayBuffer to Base64 conversion using chunking for large files
-                const arrayBuffer = response.data; // This is the ArrayBuffer
-                const chunkSize = 16 * 1024; // Process in 16KB chunks (adjust as needed)
-                let base64 = '';
-                const bytes = new Uint8Array(arrayBuffer);
-                const len = bytes.byteLength;
-
-                for (let i = 0; i < len; i += chunkSize) {
-                    const chunk = bytes.subarray(i, Math.min(i + chunkSize, len));
-                    base64 += String.fromCharCode.apply(null, Array.from(chunk));
-                }
-                // Ensure btoa is available, fallback if not (Expo usually polyfills it)
-                const base64data = btoa(base64);
-                
-                const fileName = `admit_cards_${currentEvent.id}_${Date.now()}.pdf`;
-                const fileUri = `${FileSystem.cacheDirectory}${fileName}`;
-
-                await FileSystem.writeAsStringAsync(fileUri, base64data, {
-                    encoding: 'base64',
-                });
-
-                await Sharing.shareAsync(fileUri, {
-                    UTI: '.pdf',
-                    mimeType: 'application/pdf',
-                    dialogTitle: 'Admit Cards'
-                });
-
-                setIsSelectionMode(false);
-                setSelectionMap({});
-            } catch (error: any) {
-                console.error('Bulk Admit Card Error:', error.message);
-                Alert.alert('Error', 'Failed to generate bundle. Please try again.');
-            } finally {
-                setIsGeneratingPDF(false);
+        if (isSelectionMode) {
+            studentIdsToGenerate = Object.keys(selectionMap).filter(id => selectionMap[id]);
+            if (studentIdsToGenerate.length === 0) {
+                return Alert.alert('Warning', 'Select students first');
             }
-            return;
+        } else {
+            if (!selectedStudent) return Alert.alert('Error', 'No student selected');
+            studentIdsToGenerate = [selectedStudent.id];
         }
 
-        // Individual Preview Print (Original logic for single card)
         try {
             setIsGeneratingPDF(true);
-            const dataToPrint = [selectedStudent as Student];
-            const instLogoB64 = await toBase64(instProfile?.logo_url || instProfile?.institute_logo);
-            const studentsWithPhotos = await Promise.all(dataToPrint.map(async (s) => ({
-                ...s,
-                photoB64: s.photo_url ? await toBase64(s.photo_url) : null
-            })));
-
-            const fullAddress = [
-                instProfile?.address || instProfile?.institute_address,
-                instProfile?.landmark,
-                instProfile?.district,
-                instProfile?.state,
-                instProfile?.pincode
-            ].filter(Boolean).join(' ');
-
-            const eventName = currentEvent.exam_name;
-            const eventSchedule = currentEvent.schedule;
-            let htmlContent = `
-                <html>
-                <head>
-                    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-                    <style>
-                        @page { size: A4; margin: 0; }
-                        * { box-sizing: border-box; -webkit-print-color-adjust: exact; }
-                        body { 
-                            font-family: 'Helvetica Neue', Helvetica, Arial, sans-serif; 
-                            padding: 0; 
-                            margin: 0; 
-                            color: #333; 
-                            background: #fff; 
-                        }
-                        
-                        .page-container {
-                            width: 210mm;
-                            height: 297mm;
-                            padding: 15mm;
-                            box-sizing: border-box;
-                            page-break-after: always;
-                            display: flex;
-                            flex-direction: column;
-                            background: #fff;
-                            position: relative;
-                        }
-
-                        /* A4 Page Border */
-                        .page-border {
-                            position: absolute;
-                            top: 10mm;
-                            left: 10mm;
-                            right: 10mm;
-                            bottom: 10mm;
-                            border: 2px solid #000;
-                            pointer-events: none;
-                            z-index: 10;
-                        }
-
-                        .content-wrapper {
-                            position: relative;
-                            z-index: 5;
-                            height: 100%;
-                            display: flex;
-                            flex-direction: column;
-                            padding: 5mm;
-                        }
-                        
-                        .header-container { 
-                            display: flex; 
-                            flex-direction: row; 
-                            align-items: center; 
-                            justify-content: center; 
-                            margin-bottom: 5px; 
-                            gap: 20px;
-                        }
-                        
-                        .logo { 
-                            width: 80px; 
-                            height: 80px; 
-                            object-fit: contain;
-                        }
-                        
-                        .institute-info { 
-                            text-align: center; 
-                        }
-                        
-                        .institute-name { 
-                            font-size: 28px; 
-                            font-weight: 900; 
-                            color: #1A237E; 
-                            margin: 0; 
-                            text-transform: uppercase; 
-                            letter-spacing: 1px; 
-                        }
-                        
-                        .affiliation-text { 
-                            font-size: 14px; 
-                            color: #444; 
-                            margin: 4px 0 0 0; 
-                            font-weight: 700; 
-                        }
-                        
-                        .address-text { 
-                            font-size: 12px; 
-                            color: #666; 
-                            margin-top: 4px; 
-                            font-weight: 600; 
-                            text-align: center; 
-                        }
-                        
-                        .divider { 
-                            height: 2px; 
-                            background-color: #000; 
-                            margin: 15px 0; 
-                        }
-                        
-                        .exam-box { 
-                            font-size: 22px; 
-                            font-weight: 900; 
-                            text-align: center; 
-                            margin: 0px auto 10px auto; /* Moved up further */
-                            text-transform: uppercase; 
-                            padding: 8px 45px; 
-                            border: 2.5px solid #000; 
-                            display: table; 
-                        }
-                        
-                        .details-section { 
-                            display: flex; 
-                            flex-direction: row; 
-                            justify-content: space-between; 
-                            margin: 20px 0; /* Reduced margin */
-                            align-items: flex-start;
-                        }
-                        
-                        .info-table { 
-                            width: 70%; 
-                            border-collapse: collapse; 
-                        }
-                        
-                        .info-table td { 
-                            padding: 10px 0; 
-                            font-size: 15px; 
-                            border-bottom: 1px solid #eee; 
-                        }
-                        
-                        .label { 
-                            font-weight: bold; 
-                            width: 150px; 
-                            color: #555; 
-                            font-size: 12px; 
-                            text-transform: uppercase; 
-                        }
-                        
-                        .value { 
-                            font-weight: 900; 
-                            color: #000; 
-                            font-size: 16px; 
-                        }
-                        
-                        .photo-box { 
-                            width: 130px; 
-                            height: 160px; 
-                            border: 2.5px solid #000; 
-                            display: flex; 
-                            align-items: center; 
-                            justify-content: center; 
-                            background: #fff; 
-                            overflow: hidden; 
-                        }
-                        
-                        .photo-box img { 
-                            width: 100%; 
-                            height: 100%; 
-                            object-fit: cover; 
-                        }
-                        
-                        .timetable-section { 
-                            width: 100%; 
-                            margin-top: 10px; 
-                        }
-                        
-                        .section-title { 
-                            font-weight: 900; 
-                            text-decoration: underline; 
-                            font-size: 14px; 
-                            margin-bottom: 12px; 
-                            color: #000;
-                        }
-                        
-                        table.schedule { 
-                            width: 100%; 
-                            border-collapse: collapse; 
-                            border: 2px solid #000; 
-                        }
-                        
-                        .schedule th { 
-                            background-color: #f8f9fa; 
-                            border: 1.5px solid #000; 
-                            padding: 12px; 
-                            text-align: left; 
-                            font-size: 13px; 
-                            font-weight: 900; 
-                            text-transform: uppercase;
-                        }
-                        
-                        .schedule td { 
-                            border: 1.5px solid #000; 
-                            padding: 10px; 
-                            font-size: 13px; 
-                            font-weight: bold; 
-                            color: #000;
-                        }
-                        
-                        .instructions { 
-                            border: 2px solid #000; 
-                            padding: 15px; 
-                            border-radius: 4px; 
-                            margin-top: 20px; /* Reduced margin */
-                            background: #fafafa; 
-                        }
-                        
-                        .inst-title { 
-                            font-weight: 900; 
-                            font-size: 13px; 
-                            text-decoration: underline; 
-                            margin-bottom: 8px; 
-                        }
-                        
-                        .inst-list { 
-                            font-size: 12px; 
-                            font-weight: bold; 
-                            margin: 0; 
-                            padding-left: 20px; 
-                            line-height: 1.5; 
-                        }
-                        
-                        .signature-section { 
-                            margin-top: auto; 
-                            padding-top: 30px; /* Reduced padding */
-                            display: flex; 
-                            justify-content: space-between; 
-                            padding-bottom: 20px; 
-                        }
-                        
-                        .sig-line { 
-                            border-top: 2px solid #000; 
-                            width: 200px; 
-                            text-align: center; 
-                            font-size: 12px; 
-                            font-weight: 900; 
-                            padding-top: 8px; 
-                            text-transform: uppercase; 
-                        }
-                    </style>
-                </head>
-                <body>
-            `;
-
-            for (const student of studentsWithPhotos) {
-                const logoHtml = instLogoB64 ? `<img src="${instLogoB64}" class="logo" />` : '';
-                const photoHtml = student.photoB64 
-                    ? `<img src="${student.photoB64}" />` 
-                    : '<div style="font-size: 10px; color: #999; font-weight: bold; text-align: center;">AFFIX PHOTO</div>';
-
-                htmlContent += `
-                    <div class="page-container">
-                        <div class="page-border"></div>
-                        <div class="content-wrapper">
-                            <div class="header-container">
-                                ${logoHtml}
-                                <div class="institute-info">
-                                    <h1 class="institute-name">${(instProfile?.institute_name || 'INSTITUTE').toUpperCase()}</h1>
-                                    ${instProfile?.affiliation ? `<p class="affiliation-text">${instProfile.affiliation}</p>` : ''}
-                                    <p class="address-text">${fullAddress}</p>
-                                </div>
-                            </div>
-
-                            <div class="divider"></div>
-                            
-                            <div class="exam-box">${eventName}</div>
-
-                            <div class="details-section">
-                                <table class="info-table">
-                                    <tr><td class="label">Student Name</td><td class="value">${student.name}</td></tr>
-                                    <tr><td class="label">Class & Section</td><td class="value">${student.class} - ${student.section}</td></tr>
-                                    <tr><td class="label">Roll Number</td><td class="value">${student.roll_no || 'TBD'}</td></tr>
-                                    <tr><td class="label">Date of Birth</td><td class="value">${student.dob ? formatDate(student.dob) : 'N/A'}</td></tr>
-                                    <tr><td class="label">Father's Name</td><td class="value">${student.father_name}</td></tr>
-                                    <tr><td class="label">Contact Number</td><td class="value">${student.mobile}</td></tr>
-                                </table>
-                                <div class="photo-box">${photoHtml}</div>
-                            </div>
-
-                            <div class="timetable-section">
-                                <div class="section-title">EXAMINATION TIMETABLE</div>
-                                <table class="schedule">
-                                    <thead>
-                                        <tr>
-                                            <th>Date & Day</th>
-                                            <th>Subject Name</th>
-                                            <th>Time / Shift</th>
-                                        </tr>
-                                    </thead>
-                                    <tbody>
-                                        ${eventSchedule.map(row => `
-                                            <tr>
-                                                <td>${formatDate(row.date)} (${row.day})</td>
-                                                <td>${row.subject}</td>
-                                                <td>${row.time}</td>
-                                            </tr>
-                                        `).join('')}
-                                    </tbody>
-                                </table>
-                            </div>
-
-                            <div class="instructions">
-                                <div class="inst-title">IMPORTANT INSTRUCTIONS:</div>
-                                <ol class="inst-list">
-                                    <li>Candidate must carry this Admit Card to the examination hall for all sessions.</li>
-                                    <li>Possession of mobile phones, electronic gadgets, or calculators is strictly prohibited.</li>
-                                    <li>Candidates must report at the examination center at least 20 minutes before time.</li>
-                                    <li>The card must be signed by the invigilator during every examination session.</li>
-                                </ol>
-                            </div>
-
-                            <div class="signature-section">
-                                <div class="sig-line">TEACHER'S SIGNATURE</div>
-                                <div class="sig-line">PRINCIPAL'S SIGNATURE</div>
-                            </div>
-                        </div>
-                    </div>
-                `;
-            }
-
-            htmlContent += `</body></html>`;
-
-            const { uri } = await Print.printToFileAsync({ html: htmlContent });
+            const token = await AsyncStorage.getItem('principalToken') || await AsyncStorage.getItem('token');
             
-            if (Platform.OS === 'ios') {
-                await Sharing.shareAsync(uri);
-            } else {
-                await Sharing.shareAsync(uri, {
-                    mimeType: 'application/pdf',
-                    dialogTitle: 'Admit Card',
-                    UTI: 'com.adobe.pdf'
-                });
+            const response = await axios.post(
+                `${API_ENDPOINTS.ADMIT_CARD}/generate-bulk-pdf/${currentEvent.id}`,
+                { studentIds: studentIdsToGenerate },
+                {
+                    headers: { Authorization: `Bearer ${token}` },
+                    responseType: 'arraybuffer',
+                    timeout: 300000 // 5 minutes for heavy PDF generation
+                }
+            );
+
+            // Efficient ArrayBuffer to Base64 conversion using chunking for large files
+            const arrayBuffer = response.data; // This is the ArrayBuffer
+            const chunkSize = 16 * 1024; // Process in 16KB chunks (adjust as needed)
+            let base64 = '';
+            const bytes = new Uint8Array(arrayBuffer);
+            const len = bytes.byteLength;
+
+            for (let i = 0; i < len; i += chunkSize) {
+                const chunk = bytes.subarray(i, Math.min(i + chunkSize, len));
+                base64 += String.fromCharCode.apply(null, Array.from(chunk));
             }
+            // Ensure btoa is available, fallback if not (Expo usually polyfills it)
+            const base64data = btoa(base64);
+            
+            const fileName = `admit_cards_${currentEvent.id}_${Date.now()}.pdf`;
+            const fileUri = `${FileSystem.cacheDirectory}${fileName}`;
+
+            await FileSystem.writeAsStringAsync(fileUri, base64data, {
+                encoding: 'base64',
+            });
+
+            await Sharing.shareAsync(fileUri, {
+                UTI: '.pdf',
+                mimeType: 'application/pdf',
+                dialogTitle: 'Admit Cards'
+            });
+
             setIsSelectionMode(false);
             setSelectionMap({});
-        } catch (error) {
-            console.error('PDF generation error:', error);
-            Alert.alert('Error', 'Failed to generate PDF');
+        } catch (error: any) {
+            console.error('Admit Card PDF Error:', error.message);
+            Alert.alert('Error', 'Failed to generate PDF. Please try again.');
         } finally {
             setIsGeneratingPDF(false);
         }
@@ -1537,136 +1148,36 @@ const AdmitCardScreen = () => {
     );
 
     const renderIndividualPreview = () => (
-        <View style={styles.container}>
-            {/* Free Flow Back Button */}
-            <TouchableOpacity 
-                onPress={() => setViewMode('event-details')}
-                style={{ 
-                    position: 'absolute', 
-                    top: insets.top + 15, 
-                    left: 20, 
-                    zIndex: 100,
-                    width: 45,
-                    height: 45,
-                    borderRadius: 22.5,
-                    backgroundColor: theme.card,
-                    justifyContent: 'center',
-                    alignItems: 'center',
-                    elevation: 4,
-                    shadowColor: '#000',
-                    shadowOffset: { width: 0, height: 2 },
-                    shadowOpacity: 0.2,
-                    shadowRadius: 4
-                }}
-            >
-                <Ionicons name="arrow-back" size={24} color={theme.text} />
-            </TouchableOpacity>
+        <View style={[styles.container, { paddingTop: insets.top }]}>
+            <View style={{ flexDirection: 'row', alignItems: 'center', paddingHorizontal: 20, paddingVertical: 15 }}>
+                <TouchableOpacity onPress={() => setViewMode('event-details')} style={{ padding: 5 }}>
+                    <Ionicons name="arrow-back" size={28} color={theme.text} />
+                </TouchableOpacity>
+                <Text style={[styles.modalTitle, { marginLeft: 12, flex: 1, fontSize: 22, fontWeight: '900' }]}>Preview</Text>
+                <TouchableOpacity 
+                    style={{ backgroundColor: theme.primary, paddingHorizontal: 15, paddingVertical: 8, borderRadius: 12, flexDirection: 'row', alignItems: 'center', gap: 5 }}
+                    onPress={() => generatePDF()}
+                    disabled={isGeneratingPDF}
+                >
+                    {isGeneratingPDF ? (
+                        <ActivityIndicator color="#fff" size="small" />
+                    ) : (
+                        <>
+                            <Ionicons name="download-outline" size={20} color="#fff" />
+                            <Text style={{ color: '#fff', fontWeight: 'bold', fontSize: 13 }}>Download PDF</Text>
+                        </>
+                    )}
+                </TouchableOpacity>
+            </View>
 
             <ScrollView style={styles.previewScroll} showsVerticalScrollIndicator={false}>
-                <View style={[styles.previewContainer, { paddingTop: insets.top + 80 }]}>
-                    <View style={styles.admitCardPaper}>
-                        {/* Professional Header Section */}
-                        <View style={styles.paperHeader}>
-                            {/* Logo and Name Row */}
-                            <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'center', width: '100%', marginBottom: 5, marginTop: -10 }}>
-                                {instProfile?.logo_url || instProfile?.institute_logo ? (
-                                        <Image 
-                                            source={{ uri: getFullImageUrl(instProfile.logo_url || instProfile.institute_logo) || '' }} 
-                                            style={{ width: 50, height: 50, resizeMode: 'contain', marginRight: 12, marginTop: 12 }} 
-                                        />
-                                    ) : null}
-                                <Text 
-                                    style={[styles.paperInstName, { flexShrink: 1 }]} 
-                                    numberOfLines={1} 
-                                    adjustsFontSizeToFit
-                                >
-                                    {(instProfile?.institute_name || 'INSTITUTE NAME').toUpperCase()}
-                                </Text>
-                            </View>
-                            
-                            {/* Affiliation Row */}
-                            {instProfile?.affiliation && (
-                                <Text style={{ 
-                                    fontSize: 9.5, 
-                                    fontWeight: '700', 
-                                    color: '#333', 
-                                    marginTop: -25, 
-                                    paddingLeft: 50,
-                                    textAlign: 'center', 
-                                    marginBottom: 8
-                                }}>
-                                    {instProfile.affiliation}
-                                </Text>
-                            )}
-
-                            {/* Detailed Address Row */}
-                            <Text style={[styles.paperInstSub, { fontSize: 9.5, marginTop: -8, paddingLeft: 40 }]}>
-                                {instProfile?.address || instProfile?.institute_address}
-                                {instProfile?.landmark ? ` ${instProfile.landmark}` : ''}
-                                {"\n"}{instProfile?.district} {instProfile?.state} {instProfile?.pincode}
-                            </Text>
-
-                            <View style={{ width: '100%', height: 2, backgroundColor: '#000', marginTop: 15 }} />
-                            
-                            <Text style={styles.paperExamTitle}>{currentEvent?.exam_name}</Text>
-                        </View>
-
-                        {/* Student Info Section */}
-                        <View style={styles.paperInfoRow}>
-                            <View style={styles.paperTable}>
-                                <View style={styles.paperTableRow}><Text style={styles.paperLabel}>STUDENT NAME</Text><Text style={styles.paperValue}>{selectedStudent?.name}</Text></View>
-                                <View style={styles.paperTableRow}><Text style={styles.paperLabel}>CLASS & SECTION</Text><Text style={styles.paperValue}>{selectedStudent?.class} - {selectedStudent?.section}</Text></View>
-                                <View style={styles.paperTableRow}><Text style={styles.paperLabel}>ROLL NUMBER</Text><Text style={styles.paperValue}>{selectedStudent?.roll_no || 'TBD'}</Text></View>
-                                <View style={styles.paperTableRow}><Text style={styles.paperLabel}>FATHER'S NAME</Text><Text style={styles.paperValue}>{selectedStudent?.father_name}</Text></View>
-                                <View style={styles.paperTableRow}><Text style={styles.paperLabel}>MOBILE NO.</Text><Text style={styles.paperValue}>{selectedStudent?.mobile}</Text></View>
-                            </View>
-                            <View style={styles.paperPhoto}>
-                                {selectedStudent?.photo_url && getFullImageUrl(selectedStudent.photo_url) ? (
-                                    <Image source={{ uri: getFullImageUrl(selectedStudent.photo_url) as string }} style={{ width: '100%', height: '100%' }} />
-                                ) : (
-                                    <Text style={{ fontSize: 8, textAlign: 'center' }}>AFFIX PHOTO</Text>
-                                )}
-                            </View>
-                        </View>
-
-                        {/* Timetable */}
-                        <View style={styles.paperTimetable}>
-                            <Text style={styles.paperTableTitle}>EXAMINATION TIMETABLE</Text>
-                            <View style={styles.paperGrid}>
-                                <View style={styles.paperGridHeader}>
-                                    <View style={styles.paperGridCell}><Text style={styles.paperGridText}>DATE & DAY</Text></View>
-                                    <View style={styles.paperGridCell}><Text style={styles.paperGridText}>SUBJECT</Text></View>
-                                    <View style={styles.paperGridCell}><Text style={styles.paperGridText}>TIME / SHIFT</Text></View>
-                                </View>
-                                {currentEvent?.schedule.map((row, idx) => (
-                                    <View key={idx} style={styles.paperGridRow}>
-                                        <View style={styles.paperGridCell}><Text style={styles.paperGridText}>{`${String(formatDate(row.date)).trim()} (${String(row.day).trim()})`}</Text></View>
-                                        <View style={styles.paperGridCell}><Text style={styles.paperGridText}>{row.subject}</Text></View>
-                                        <View style={styles.paperGridCell}><Text style={styles.paperGridText}>{row.time}</Text></View>
-                                    </View>
-                                ))}
-                            </View>
-                        </View>
-
-                        {/* Instructions */}
-                        <View style={styles.paperInstructions}>
-                            <Text style={styles.paperInstTitle}>IMPORTANT INSTRUCTIONS:</Text>
-                            <Text style={styles.paperInstItem}>1. Candidate must carry this Admit Card to the examination hall for all papers.</Text>
-                            <Text style={styles.paperInstItem}>2. Possession of mobile phones, electronic gadgets, or calculators is strictly prohibited.</Text>
-                            <Text style={styles.paperInstItem}>3. Candidates must report at the examination center at least 20 minutes before time.</Text>
-                            <Text style={styles.paperInstItem}>4. Ensure invigilator signature on this card during every examination session.</Text>
-                        </View>
-
-                        {/* Footer Signatures */}
-                        <View style={styles.paperFooter}>
-                            <View style={styles.paperSigLine}>
-                                <Text style={styles.paperSigText}>TEACHER'S SIGNATURE</Text>
-                            </View>
-                            <View style={styles.paperSigLine}>
-                                <Text style={styles.paperSigText}>PRINCIPAL'S SIGNATURE</Text>
-                            </View>
-                        </View>
-                    </View>
+                <View style={[styles.previewContainer, { paddingTop: 20 }]}>
+                    <AdmitCardPreview 
+                        student={selectedStudent} 
+                        event={currentEvent} 
+                        institute={instProfile} 
+                    />
+                    <View style={{ height: 100 }} />
                 </View>
             </ScrollView>
         </View>

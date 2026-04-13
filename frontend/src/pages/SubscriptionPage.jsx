@@ -8,7 +8,7 @@ import './SubscriptionPage.css';
 const SubscriptionPage = ({ onRefreshStatus }) => {
     const navigate = useNavigate();
     const [minutes, setMinutes] = useState(1);
-    const [planPrice, setPlanPrice] = useState(499);
+    const [planPrice, setPlanPrice] = useState(1499);
     const [loading, setLoading] = useState(true);
     const [subscriptionStatus, setSubscriptionStatus] = useState(null);
     const [history, setHistory] = useState([]);

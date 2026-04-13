@@ -19,7 +19,7 @@ export const getSubscriptionSettings = async (req, res) => {
             // Create default settings if not exists
             const createQuery = `
                 INSERT INTO subscription_settings (institute_id, monthly_price)
-                VALUES ($1, 499.00)
+                VALUES ($1, 1499.00)
                 RETURNING *
             `;
             const createResult = await db.query(createQuery, [instituteId]);
@@ -125,7 +125,7 @@ export const checkSubscriptionStatus = async (req, res) => {
             const createQuery = `
                 INSERT INTO subscription_settings 
                 (institute_id, monthly_price)
-                VALUES ($1, 499.00)
+                VALUES ($1, 1499.00)
                 RETURNING *, 'expired' as status
             `;
 

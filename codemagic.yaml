@@ -32,6 +32,19 @@ workflows:
           chmod +x gradlew
           ./gradlew clean
           ./gradlew assembleRelease --no-daemon
+          
+          # --- DEBUG: ANALYZE THE APK SIZE ---
+          echo "🔍 ANALYZING APK STRUCTURE..."
+          APK_PATH=$(find app/build/outputs/apk/release -name "*.apk" | head -n 1)
+          if [ -f "$APK_PATH" ]; then
+            echo "✅ Found APK at $APK_PATH"
+            echo "📦 APK Architectures (lib folder):"
+            unzip -l "$APK_PATH" | grep "lib/" | cut -d'/' -f2 | sort | uniq
+            echo "📊 Top 20 Largest Files in APK:"
+            unzip -l "$APK_PATH" | sort -nr | head -n 20
+          else
+            echo "❌ APK not found for analysis!"
+          fi
     artifacts:
       - android/app/build/outputs/apk/release/*.apk
     publishing:

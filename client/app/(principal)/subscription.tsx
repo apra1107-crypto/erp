@@ -31,7 +31,7 @@ export default function SubscriptionScreen() {
 
     const [loading, setLoading] = useState(true);
     const [subStatus, setSubStatus] = useState<any>(null);
-    const [planPrice, setPlanPrice] = useState(499);
+    const [planPrice, setPlanPrice] = useState(1499);
     const [history, setHistory] = useState<any[]>([]);
     const [months, setMonths] = useState(1);
     const [processing, setProcessing] = useState(false);

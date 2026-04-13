@@ -10,7 +10,7 @@ const AdminSubscriptionManager = ({ instituteId, currentStatus, onUpdate }) => {
     const [updating, setUpdating] = useState(false);
     const [logs, setLogs] = useState([]);
     const [settings, setSettings] = useState({
-        monthly_price: 499,
+        monthly_price: 1499,
         subscription_end_date: null,
         override_access: false
     });
@@ -32,7 +32,7 @@ const AdminSubscriptionManager = ({ instituteId, currentStatus, onUpdate }) => {
             console.log('Real-time subscription update for Admin:', data);
             if (data.settings) {
                 setSettings({
-                    monthly_price: parseFloat(data.settings.monthly_price) || 499,
+                    monthly_price: parseFloat(data.settings.monthly_price) || 1499,
                     subscription_end_date: data.settings.subscription_end_date,
                     override_access: data.settings.override_access || false
                 });
@@ -66,7 +66,7 @@ const AdminSubscriptionManager = ({ instituteId, currentStatus, onUpdate }) => {
 
             const s = settingsRes.data;
             setSettings({
-                monthly_price: parseFloat(s.monthly_price) || 499,
+                monthly_price: parseFloat(s.monthly_price) || 1499,
                 subscription_end_date: s.subscription_end_date,
                 override_access: s.override_access || false
             });

@@ -5,7 +5,7 @@ const createSubscriptionSettingsTable = async () => {
         CREATE TABLE IF NOT EXISTS subscription_settings (
             id SERIAL PRIMARY KEY,
             institute_id INTEGER NOT NULL UNIQUE,
-            monthly_price DECIMAL(10, 2) DEFAULT 499.00,
+            monthly_price DECIMAL(10, 2) DEFAULT 1499.00,
             trial_days INTEGER DEFAULT 14,
             is_active BOOLEAN DEFAULT TRUE,
             subscription_start_date DATE,

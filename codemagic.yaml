@@ -31,7 +31,13 @@ workflows:
           cd android
           chmod +x gradlew
           ./gradlew clean
-          ./gradlew assembleRelease --no-daemon
+          
+          # FORCE ABI FILTERING AND MINIFICATION AT THE COMMAND LINE
+          ./gradlew assembleRelease \
+            -PreactNativeArchitectures=arm64-v8a \
+            -PminifyEnabled=true \
+            -PshrinkResources=true \
+            --no-daemon
           
           # --- DEBUG: ANALYZE THE APK SIZE ---
           echo "🔍 ANALYZING APK STRUCTURE..."

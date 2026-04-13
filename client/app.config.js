@@ -39,48 +39,49 @@ export default ({ config }) => {
         // Always build only for arm64-v8a for smaller APK sizes
         abiFilters: ["arm64-v8a"]
       },
-    web: {
-      output: "static",
-      favicon: "./assets/images/splash-icon.png"
-    },
-    plugins: [
-      "expo-router",
-      [
-        "expo-splash-screen",
-        {
-          image: "./assets/images/splash-icon.png",
-          imageWidth: 200,
-          resizeMode: "contain",
-          backgroundColor: "#ffffff",
-          dark: {
-            backgroundColor: "#000000"
-          }
-        }
-      ],
-      "@react-native-community/datetimepicker",
-      "./plugins/withSingleTaskAndroidLaunchMode.js",
-      [
-        "expo-build-properties",
-        {
-          android: {
-            enableProguardInReleaseBuilds: true,
-            enableShrinkResourcesInReleaseBuilds: true,
-            // For development/debug builds as well
-            extraProguardRules: "-keep class com.facebook.react.bridge.** { *; }"
-          }
-        }
-      ]
-    ],
-    experiments: {
-      typedRoutes: true,
-      reactCompiler: true
-    },
-    extra: {
-      router: {},
-      eas: {
-        projectId: "83267f08-5f41-4c51-9e3d-b9516ccd28f4"
+      web: {
+        output: "static",
+        favicon: "./assets/images/splash-icon.png"
       },
-      fcmConfig: "./fcm.json"
+      plugins: [
+        "expo-router",
+        [
+          "expo-splash-screen",
+          {
+            image: "./assets/images/splash-icon.png",
+            imageWidth: 200,
+            resizeMode: "contain",
+            backgroundColor: "#ffffff",
+            dark: {
+              backgroundColor: "#000000"
+            }
+          }
+        ],
+        "@react-native-community/datetimepicker",
+        "./plugins/withSingleTaskAndroidLaunchMode.js",
+        [
+          "expo-build-properties",
+          {
+            android: {
+              enableProguardInReleaseBuilds: true,
+              enableShrinkResourcesInReleaseBuilds: true,
+              // For development/debug builds as well
+              extraProguardRules: "-keep class com.facebook.react.bridge.** { *; }"
+            }
+          }
+        ]
+      ],
+      experiments: {
+        typedRoutes: true,
+        reactCompiler: true
+      },
+      extra: {
+        router: {},
+        eas: {
+          projectId: "83267f08-5f41-4c51-9e3d-b9516ccd28f4"
+        },
+        fcmConfig: "./fcm.json"
+      }
     }
-  }
-});
+  };
+};

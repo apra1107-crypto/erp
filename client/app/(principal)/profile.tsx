@@ -237,7 +237,7 @@ export default function Profile() {
                             <Text style={styles.imgLabel}>School Logo</Text>
                             {logo || profile?.logo_url ? (
                                 <Image
-                                    source={logo ? { uri: logo.uri } : { uri: profile.logo_url }}
+                                    source={logo ? { uri: logo.uri } : { uri: getFullImageUrl(profile.logo_url) || undefined }}
                                     style={styles.logoImg}
                                 />
                             ) : (
@@ -259,7 +259,7 @@ export default function Profile() {
                                 {principalPhoto ? (
                                     <Image source={{ uri: principalPhoto.uri }} style={styles.avatarImg} />
                                 ) : (profile?.principal_photo_url ? (
-                                    <Image source={{ uri: profile.principal_photo_url }} style={styles.avatarImg} />
+                                    <Image source={{ uri: getFullImageUrl(profile.principal_photo_url) || undefined }} style={styles.avatarImg} />
                                 ) : (
                                     <Ionicons name="person" size={40} color={theme.border} />
                                 ))}

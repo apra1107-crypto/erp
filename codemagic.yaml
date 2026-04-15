@@ -91,7 +91,13 @@ workflows:
           cd android
           chmod +x gradlew
           ./gradlew clean
-          ./gradlew assembleDebug --no-daemon
+          
+          # FORCE ABI FILTERING AND MINIFICATION AT THE COMMAND LINE
+          ./gradlew assembleDebug \
+            -PreactNativeArchitectures=arm64-v8a \
+            -PminifyEnabled=true \
+            -PshrinkResources=true \
+            --no-daemon
     artifacts:
       - android/app/build/outputs/apk/debug/*.apk
     publishing:

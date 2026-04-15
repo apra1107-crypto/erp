@@ -847,8 +847,7 @@ export default function PrincipalDashboard() {
         >
             <View style={{ position: 'relative' }}>
                 <Image 
-                    key={`${profileData?.logo_url}-${new Date().getTime()}`}
-                    source={profileData?.logo_url ? { uri: `${getFullImageUrl(profileData.logo_url)}?t=${new Date().getTime()}` } : require('../../assets/images/react-logo.png')} 
+                    source={profileData?.logo_url ? { uri: getFullImageUrl(profileData.logo_url) || undefined } : require('../../assets/images/react-logo.png')} 
                     style={styles.headerLogo} 
                     resizeMode="contain" 
                 />
@@ -874,8 +873,7 @@ export default function PrincipalDashboard() {
             <View style={{ position: 'relative' }}>
                 {profileData?.principal_photo_url ? (
                     <Image 
-                        key={`${profileData?.principal_photo_url}-${new Date().getTime()}`}
-                        source={{ uri: `${getFullImageUrl(profileData.principal_photo_url)}?t=${new Date().getTime()}` }} 
+                        source={{ uri: getFullImageUrl(profileData.principal_photo_url) || undefined }} 
                         style={styles.headerAvatar} 
                     />
                 ) : (
@@ -1193,7 +1191,7 @@ export default function PrincipalDashboard() {
             </View>
         </View>
       </Modal>
-      {showAccountMenu && <TouchableOpacity style={styles.modalOverlay} activeOpacity={1} onPress={() => setShowAccountMenu(false)}><View style={styles.accountMenu}><Text style={{ fontSize: 12, fontWeight: '800', color: theme.textLight, marginBottom: 15, textTransform: 'uppercase' }}>Switch Account</Text>{savedAccounts.map((acc, index) => (<TouchableOpacity key={index} style={[styles.accountItem, userData?.email === acc.email && { backgroundColor: theme.primary + '10' }]} onPress={() => switchAccount(acc)}><Image source={acc.logo_url ? { uri: `${getFullImageUrl(acc.logo_url)}?t=${new Date().getTime()}` } : require('../../assets/images/react-logo.png')} style={styles.accountLogo} /><View style={{ flex: 1 }}><Text style={{ fontSize: 15, fontWeight: '700', color: theme.text }}>{acc.userData?.institute_name || 'Institute'}</Text><Text style={{ fontSize: 12, color: theme.textLight }}>{acc.email}</Text></View>{userData?.email === acc.email && <Ionicons name="checkmark-circle" size={20} color="#27AE60" />}</TouchableOpacity>))}<TouchableOpacity style={{ flexDirection: 'row', alignItems: 'center', padding: 15, marginTop: 10, borderWidth: 1, borderStyle: 'dashed', borderColor: theme.primary, borderRadius: 15 }} onPress={() => { setShowAddAccountModal(true); }}><Ionicons name="add-circle-outline" size={24} color={theme.primary} /><Text style={{ marginLeft: 12, color: theme.primary, fontWeight: '800' }}>Add another account</Text></TouchableOpacity></View></TouchableOpacity>}
+      {showAccountMenu && <TouchableOpacity style={styles.modalOverlay} activeOpacity={1} onPress={() => setShowAccountMenu(false)}><View style={styles.accountMenu}><Text style={{ fontSize: 12, fontWeight: '800', color: theme.textLight, marginBottom: 15, textTransform: 'uppercase' }}>Switch Account</Text>{savedAccounts.map((acc, index) => (<TouchableOpacity key={index} style={[styles.accountItem, userData?.email === acc.email && { backgroundColor: theme.primary + '10' }]} onPress={() => switchAccount(acc)}><Image source={acc.logo_url ? { uri: getFullImageUrl(acc.logo_url) } : require('../../assets/images/react-logo.png')} style={styles.accountLogo} /><View style={{ flex: 1 }}><Text style={{ fontSize: 15, fontWeight: '700', color: theme.text }}>{acc.userData?.institute_name || 'Institute'}</Text><Text style={{ fontSize: 12, color: theme.textLight }}>{acc.email}</Text></View>{userData?.email === acc.email && <Ionicons name="checkmark-circle" size={20} color="#27AE60" />}</TouchableOpacity>))}<TouchableOpacity style={{ flexDirection: 'row', alignItems: 'center', padding: 15, marginTop: 10, borderWidth: 1, borderStyle: 'dashed', borderColor: theme.primary, borderRadius: 15 }} onPress={() => { setShowAddAccountModal(true); }}><Ionicons name="add-circle-outline" size={24} color={theme.primary} /><Text style={{ marginLeft: 12, color: theme.primary, fontWeight: '800' }}>Add another account</Text></TouchableOpacity></View></TouchableOpacity>}
 
       {/* ADD ACCOUNT MODAL */}
       <Modal

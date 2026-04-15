@@ -166,6 +166,16 @@ export default function StudentDetails() {
             data.append('monthly_fees', formData.monthly_fees);
             data.append('transport_fees', formData.transport_fees);
 
+            // Determine if fees have changed to send update mode
+            const isFeeChanged = 
+                parseFloat(formData.monthly_fees) !== parseFloat(student.monthly_fees) ||
+                parseFloat(formData.transport_fees) !== parseFloat(student.transport_fees) ||
+                formData.transport_facility !== !!student.transport_facility;
+
+            if (isFeeChanged) {
+                data.append('fee_update_mode', 'upcoming'); // Update profile and all future unpaid months
+            }
+
             if (photo) {
                 data.append('photo', {
                     uri: photo.uri,

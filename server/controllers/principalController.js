@@ -435,35 +435,45 @@ const updateStudent = async (req, res) => {
 
     const newMonthly = parseFloat(monthly_fees || 0);
     const newTransport = parseFloat(transport_fees || 0);
-    const newTransportFacility = transport_facility === 'true';
+    // Correctly parse boolean from FormData string
+    const newTransportFacility = String(transport_facility) === 'true';
     
     const oldMonthly = parseFloat(currentStudent.monthly_fees || 0);
     const oldTransport = parseFloat(currentStudent.transport_fees || 0);
-    const oldTransportFacility = currentStudent.transport_facility;
+    const oldTransportFacility = !!currentStudent.transport_facility;
 
     // FEE UPDATE LOGIC: Automatically apply to unpaid months (Current and Future Only)
-    // Triggers if Tuition changed, OR Transport Amount changed, OR Transport Toggle changed
     if (newMonthly !== oldMonthly || newTransport !== oldTransport || newTransportFacility !== oldTransportFacility) {
+        const today = getTodayIST();
+        const currentMonth = new Date(today).getMonth() + 1;
+        const currentYear = new Date(today).getFullYear();
         const totalNewDue = newMonthly + (newTransportFacility ? newTransport : 0);
-        
-        const now = new Date();
-        const currentMonth = now.getMonth() + 1; // 1-12
-        const currentYear = now.getFullYear();
 
-        // ONLY update records that are NOT paid AND are for the current month or future
-        // This protects past debts (like April unpaid while we are in May) from being recalculated
-        const query = `UPDATE student_fees SET amount_due = $1, status = 'pending' 
-                       WHERE student_id = $2 AND session_id = $3 AND status != 'paid'
-                       AND (year > $4 OR (year = $4 AND month >= $5))`;
-        const params = [totalNewDue, id, sessionId, currentYear, currentMonth];
-
-        // Update records in the database
-        await pool.query(query, params);
+        if (fee_update_mode === 'current') {
+            await pool.query(
+                `UPDATE student_fees SET amount_due = $1, tuition_due = $6, transport_due = $7
+                 WHERE student_id = $2 AND month = $3 AND year = $4 AND session_id = $5 AND status != 'paid'`,
+                [totalNewDue, id, currentMonth, currentYear, sessionId, newMonthly, newTransportFacility ? newTransport : 0]
+            );
+        } else if (fee_update_mode === 'upcoming') {
+            await pool.query(
+                `UPDATE student_fees SET amount_due = $1, tuition_due = $6, transport_due = $7
+                 WHERE student_id = $2 AND session_id = $3 AND status != 'paid'
+                 AND (year > $4 OR (year = $4 AND month >= $5))`,
+                [totalNewDue, id, sessionId, currentYear, currentMonth, newMonthly, newTransportFacility ? newTransport : 0]
+            );
+        }
     }
 
-    // Always use the new fees for the profile update
-    const finalMonthly = newMonthly;
-    const finalTransport = newTransport;
+    // Determine final values for the profile update
+    // If upcoming is chosen OR if it's a standard non-fee edit (no fee_update_mode provided)
+    // we should update the profile with the new values.
+    const isFeeEdit = (newMonthly !== oldMonthly || newTransport !== oldTransport || newTransportFacility !== oldTransportFacility);
+    const shouldUpdateProfile = !isFeeEdit || fee_update_mode === 'upcoming';
+
+    const finalMonthly = shouldUpdateProfile ? newMonthly : oldMonthly;
+    const finalTransport = shouldUpdateProfile ? newTransport : oldTransport;
+    const finalTransportFacility = shouldUpdateProfile ? newTransportFacility : oldTransportFacility;
 
     // Update DB
     const result = await pool.query(
@@ -473,7 +483,7 @@ const updateStudent = async (req, res) => {
            transport_facility = $12, photo_url = $13, monthly_fees = $14, transport_fees = $15
        WHERE id = $16 RETURNING *`,
       [name, studentClass, section, roll_no, dob, gender, father_name, mother_name,
-        mobile, email, address, transport_facility === 'true', photoUrl, 
+        mobile, email, address, finalTransportFacility, photoUrl, 
         finalMonthly, finalTransport, id]
     );
 
@@ -1087,8 +1097,16 @@ const getFeesStatus = async (req, res) => {
             SELECT s.*, 
             CASE WHEN f.status = 'paid' THEN 'paid' ELSE 'pending' END as month_fee_status,
             f.payment_method, f.transaction_id, f.collected_by, f.paid_at, f.month, f.year,
-            f.amount_paid, f.amount_due as snapshot_amount_due,
-            f.tuition_paid as snapshot_tuition, f.transport_paid as snapshot_transport
+            COALESCE(f.amount_due, (s.monthly_fees + CASE WHEN s.transport_facility THEN s.transport_fees ELSE 0 END)) as snap_amount_due,
+            COALESCE(f.amount_paid, 0) as snap_amount_paid,
+            CASE 
+                WHEN f.status = 'paid' THEN COALESCE(f.tuition_paid, f.tuition_due, s.monthly_fees)
+                ELSE COALESCE(f.tuition_due, s.monthly_fees)
+            END as snap_tuition,
+            CASE 
+                WHEN f.status = 'paid' THEN COALESCE(f.transport_paid, f.transport_due, CASE WHEN s.transport_facility THEN s.transport_fees ELSE 0 END)
+                ELSE COALESCE(f.transport_due, CASE WHEN s.transport_facility THEN s.transport_fees ELSE 0 END)
+            END as snap_transport
             FROM students s
             LEFT JOIN student_fees f ON s.id = f.student_id 
                 AND f.month = $3::integer AND f.year = $4::integer AND f.session_id = $2
@@ -1118,6 +1136,11 @@ const getFeesStatus = async (req, res) => {
             ...student,
             dob: formatIndianDate(student.dob),
             fee_status: student.month_fee_status, // Override current fee_status with the monthly one
+            // Use snapshots for amounts
+            monthly_fees: student.snap_amount_due, 
+            amount_paid: student.snap_amount_paid,
+            tuition_snapshot: student.snap_tuition,
+            transport_snapshot: student.snap_transport,
             // Ensure receipt fields are explicit if not already caught by spread
             payment_method: student.payment_method,
             transaction_id: student.transaction_id,
@@ -1414,9 +1437,11 @@ const toggleMonthlyActivation = async (req, res) => {
             // Create pending fee records for all active students for this month
             // This ensures every student has a fixed 'amount_due' snapshot for this month
             await pool.query(
-                `INSERT INTO student_fees (student_id, institute_id, session_id, month, year, status, amount_due)
+                `INSERT INTO student_fees (student_id, institute_id, session_id, month, year, status, amount_due, tuition_due, transport_due)
                  SELECT id, institute_id, session_id, $1, $2, 'pending', 
-                        (monthly_fees + CASE WHEN transport_facility THEN transport_fees ELSE 0 END)
+                        (monthly_fees + CASE WHEN transport_facility THEN transport_fees ELSE 0 END),
+                        monthly_fees,
+                        CASE WHEN transport_facility THEN transport_fees ELSE 0 END
                  FROM students
                  WHERE institute_id = $3 AND session_id = $4 AND is_active = true
                  ON CONFLICT (student_id, month, year, session_id) DO NOTHING`,

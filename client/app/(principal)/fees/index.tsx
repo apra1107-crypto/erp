@@ -67,18 +67,14 @@ export default function Fees() {
             all: filtered.length,
             paid: filtered.filter(s => {
                 const extraChargesSum = (s.extra_charges || []).reduce((acc: number, ec: any) => acc + parseFloat(ec.amount || 0), 0);
-                const baseDue = s.snapshot_amount_due 
-                    ? parseFloat(s.snapshot_amount_due) 
-                    : (parseFloat(s.monthly_fees || 0) + (s.transport_facility ? parseFloat(s.transport_fees || 0) : 0));
+                const baseDue = parseFloat(s.monthly_fees || 0);
                 const totalDue = baseDue + extraChargesSum;
                 const paidAmount = parseFloat(s.amount_paid || 0);
                 return paidAmount >= totalDue && totalDue > 0;
             }).length,
             unpaid: filtered.filter(s => {
                 const extraChargesSum = (s.extra_charges || []).reduce((acc: number, ec: any) => acc + parseFloat(ec.amount || 0), 0);
-                const baseDue = s.snapshot_amount_due 
-                    ? parseFloat(s.snapshot_amount_due) 
-                    : (parseFloat(s.monthly_fees || 0) + (s.transport_facility ? parseFloat(s.transport_fees || 0) : 0));
+                const baseDue = parseFloat(s.monthly_fees || 0);
                 const totalDue = baseDue + extraChargesSum;
                 const paidAmount = parseFloat(s.amount_paid || 0);
                 return paidAmount < totalDue;
@@ -89,9 +85,7 @@ export default function Fees() {
             if (filters.status === 'all') return true;
             
             const extraChargesSum = (s.extra_charges || []).reduce((acc: number, ec: any) => acc + parseFloat(ec.amount || 0), 0);
-            const baseDue = s.snapshot_amount_due 
-                ? parseFloat(s.snapshot_amount_due) 
-                : (parseFloat(s.monthly_fees || 0) + (s.transport_facility ? parseFloat(s.transport_fees || 0) : 0));
+            const baseDue = parseFloat(s.monthly_fees || 0);
             const totalDue = baseDue + extraChargesSum;
             const paidAmount = parseFloat(s.amount_paid || 0);
             const isFullyPaid = paidAmount >= totalDue && totalDue > 0;
@@ -101,9 +95,7 @@ export default function Fees() {
 
         const totalExpected = filtered.reduce((sum, s) => {
             const extra = (s.extra_charges || []).reduce((acc: number, ec: any) => acc + parseFloat(ec.amount || 0), 0);
-            const base = s.snapshot_amount_due 
-                ? parseFloat(s.snapshot_amount_due) 
-                : (parseFloat(s.monthly_fees || 0) + (s.transport_facility ? parseFloat(s.transport_fees || 0) : 0));
+            const base = parseFloat(s.monthly_fees || 0);
             return sum + base + extra;
         }, 0);
 
@@ -236,22 +228,15 @@ export default function Fees() {
             const isPaid = student.fee_status === 'paid';
             let breakage = [];
 
-            if (isPaid) {
-                // For paid records, we must respect the actual amount_paid snapshot
-                const totalPaid = parseFloat(student.amount_paid || 0);
-                const extraTotal = (student.extra_charges || []).reduce((acc: number, ec: any) => acc + parseFloat(ec.amount), 0);
-                const transport = student.transport_facility ? parseFloat(student.transport_fees || 0) : 0;
-                
-                // Tuition is the remainder (Total - Transport - Extras)
-                const tuitionPaid = totalPaid - transport - extraTotal;
-
+            if (isPaid && student.tuition_snapshot !== undefined && student.tuition_snapshot !== null) {
+                // Use absolute snapshots from DB
                 breakage = [
-                    { label: 'Monthly Tuition Fee', amount: tuitionPaid },
-                    ...(student.transport_facility ? [{ label: 'Transport Fee', amount: transport }] : []),
+                    { label: 'Monthly Tuition Fee', amount: parseFloat(student.tuition_snapshot) },
+                    ...(parseFloat(student.transport_snapshot) > 0 ? [{ label: 'Transport Fee', amount: parseFloat(student.transport_snapshot) }] : []),
                     ...(student.extra_charges || []).map((ec: any) => ({ label: ec.reason, amount: parseFloat(ec.amount) }))
                 ];
             } else {
-                // For unpaid, use current profile fees
+                // For unpaid or legacy, use current profile fees
                 breakage = [
                     { label: 'Monthly Tuition Fee', amount: parseFloat(student.monthly_fees || 0) },
                     ...(student.transport_facility ? [{ label: 'Transport Fee', amount: parseFloat(student.transport_fees || 0) }] : []),
@@ -280,14 +265,14 @@ export default function Fees() {
 
         if (isPaid) {
             // FOR PAID: Priority 1: Use the new DB snapshots (Perfect history)
-            if (student.snapshot_tuition && parseFloat(student.snapshot_tuition) > 0) {
+            if (student.tuition_snapshot !== undefined && student.tuition_snapshot !== null) {
                 breakage = [
-                    { label: 'Monthly Tuition Fee', amount: parseFloat(student.snapshot_tuition) },
-                    ...(parseFloat(student.snapshot_transport) > 0 ? [{ label: 'Transport Fee', amount: parseFloat(student.snapshot_transport) }] : []),
+                    { label: 'Monthly Tuition Fee', amount: parseFloat(student.tuition_snapshot) },
+                    ...(parseFloat(student.transport_snapshot) > 0 ? [{ label: 'Transport Fee', amount: parseFloat(student.transport_snapshot) }] : []),
                     ...(student.extra_charges || []).map((ec: any) => ({ label: ec.reason, amount: parseFloat(ec.amount) }))
                 ];
             } 
-            // Priority 2: Fallback to existing amount_paid logic for older records
+            // Priority 2: Fallback logic for older records
             else {
                 const totalPaid = parseFloat(student.amount_paid || 0);
                 const extraTotal = (student.extra_charges || []).reduce((acc: number, ec: any) => acc + parseFloat(ec.amount), 0);
@@ -320,51 +305,35 @@ export default function Fees() {
     };
 
     const renderStudentCard = ({ item }: { item: any }) => {
-        const extraChargesSum = (item.extra_charges || []).reduce((acc: number, ec: any) => acc + parseFloat(ec.amount || 0), 0);
-        const baseDue = item.snapshot_amount_due 
-            ? parseFloat(item.snapshot_amount_due) 
-            : (parseFloat(item.monthly_fees || 0) + (item.transport_facility ? parseFloat(item.transport_fees || 0) : 0));
+        const unpaidExtraChargesSum = (item.extra_charges || [])
+            .filter((ec: any) => ec.status !== 'paid')
+            .reduce((acc: number, ec: any) => acc + parseFloat(ec.amount || 0), 0);
+            
+        // Backend now returns 'monthly_fees' as the complete base snapshot (Tuition + Transport)
+        const baseDue = parseFloat(item.monthly_fees || 0);
         
-        const totalDue = baseDue + extraChargesSum;
+        const totalDue = baseDue + unpaidExtraChargesSum;
         const paidAmount = parseFloat(item.amount_paid || 0);
-        const isFullyPaid = paidAmount >= totalDue && totalDue > 0;
+        const isFullyPaid = item.fee_status === 'paid' || (paidAmount >= totalDue && totalDue > 0);
         const isProcessing = processingId === item.id;
 
-        // Breakage recovery logic for PAID display
-        let tuitionDisp = parseFloat(item.monthly_fees || 0);
-        let transportDisp = parseFloat(item.transport_fees || 0);
-        let showTransport = item.transport_facility;
-
-        if (isFullyPaid) {
-            // FOR PAID: Priority 1: Use the new DB snapshots (Perfect history)
-            // We check > 0 because old records default to 0 in DB
-            if (item.snapshot_tuition && parseFloat(item.snapshot_tuition) > 0) {
-                tuitionDisp = parseFloat(item.snapshot_tuition);
-                transportDisp = parseFloat(item.snapshot_transport || 0);
-                showTransport = transportDisp > 0;
-            } 
-            // Priority 2: Fallback to existing snapshot_amount_due guessing (for older records)
-            else {
-                const totalBasePaid = baseDue; 
-                const transportRate = parseFloat(item.transport_fees || 0);
-                
-                if (totalBasePaid === (tuitionDisp + transportRate)) {
-                    showTransport = transportRate > 0;
-                    transportDisp = transportRate;
-                } 
-                else if (totalBasePaid > tuitionDisp) {
-                    showTransport = true;
-                    transportDisp = totalBasePaid - tuitionDisp;
-                } else {
-                    showTransport = false;
-                    transportDisp = 0;
-                    tuitionDisp = totalBasePaid;
-                }
+        // Breakage recovery logic for display
+        let tuitionDisp = item.tuition_snapshot ? parseFloat(item.tuition_snapshot) : parseFloat(item.monthly_fees || 0);
+        let transportDisp = item.transport_snapshot ? parseFloat(item.transport_snapshot) : (item.transport_facility ? parseFloat(item.transport_fees || 0) : 0);
+        
+        // If it's a legacy record without snapshots but is paid, use baseDue logic
+        if (!item.tuition_snapshot && isFullyPaid) {
+            const transportRate = parseFloat(item.transport_fees || 0);
+            if (baseDue === (parseFloat(item.monthly_fees || 0) + transportRate)) {
+                tuitionDisp = parseFloat(item.monthly_fees || 0);
+                transportDisp = transportRate;
+            } else {
+                transportDisp = item.transport_facility ? transportRate : 0;
+                tuitionDisp = baseDue - transportDisp;
             }
-        } else {
-            transportDisp = item.transport_facility ? parseFloat(item.transport_fees || 0) : 0;
-            tuitionDisp = baseDue - transportDisp;
         }
+
+        const showTransport = transportDisp > 0;
 
         return (
             <Animated.View 
@@ -390,8 +359,8 @@ export default function Fees() {
                             <Text style={[styles.studentMeta, { color: theme.textLight }]}>Class {item.class}-{item.section} | Roll: {item.roll_no}</Text>
                         </View>
                     </TouchableOpacity>
-                    <View style={[styles.statusBadge, { backgroundColor: isFullyPaid ? '#4CAF5020' : (paidAmount > 0 ? '#FF980020' : '#F4433620') }]}>
-                        <Text style={[styles.statusText, { color: isFullyPaid ? '#4CAF50' : (paidAmount > 0 ? '#FF9800' : '#F44336') }]}>{isFullyPaid ? 'PAID' : (paidAmount > 0 ? 'PARTIAL' : 'UNPAID')}</Text>
+                    <View style={[styles.statusBadge, { backgroundColor: isFullyPaid ? '#4CAF5020' : '#F4433620' }]}>
+                        <Text style={[styles.statusText, { color: isFullyPaid ? '#4CAF50' : '#F44336' }]}>{isFullyPaid ? 'PAID' : 'UNPAID'}</Text>
                     </View>
                 </View>
 
@@ -424,8 +393,22 @@ export default function Fees() {
 
                 <View style={[styles.cardFooter, { backgroundColor: isDark ? '#ffffff05' : '#00000002' }]}>
                     <View>
-                        <Text style={[styles.totalLabel, { color: theme.textLight }]}>Total Due</Text>
-                        <Text style={[styles.totalValue, { color: theme.text }]}>₹{totalDue.toLocaleString()}</Text>
+                        {isFullyPaid ? (
+                            <View>
+                                <Text style={[styles.totalLabel, { color: '#4CAF50' }]}>PAID ON</Text>
+                                <Text style={[styles.totalValue, { color: theme.text, fontSize: 13 }]}>
+                                    {item.paid_at ? new Date(item.paid_at).toLocaleDateString('en-IN', { weekday: 'short', day: '2-digit', month: 'short', year: 'numeric' }) : '—'}
+                                </Text>
+                                <Text style={{ fontSize: 11, color: theme.textLight, fontWeight: '600' }}>
+                                    {item.paid_at ? new Date(item.paid_at).toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit', hour12: true }) : ''}
+                                </Text>
+                            </View>
+                        ) : (
+                            <View>
+                                <Text style={[styles.totalLabel, { color: theme.textLight }]}>Total Due</Text>
+                                <Text style={[styles.totalValue, { color: theme.text }]}>₹{totalDue.toLocaleString()}</Text>
+                            </View>
+                        )}
                     </View>
                     {!isFullyPaid && (
                         <TouchableOpacity 

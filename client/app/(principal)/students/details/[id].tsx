@@ -178,6 +178,16 @@ export default function StudentDetails() {
             data.append('monthly_fees', String(formData.monthly_fees));
             data.append('transport_fees', String(formData.transport_fees));
             
+            // Determine if fees have changed to send update mode
+            const isFeeChanged = 
+                parseFloat(formData.monthly_fees) !== parseFloat(originalData.monthly_fees) ||
+                parseFloat(formData.transport_fees) !== parseFloat(originalData.transport_fees) ||
+                formData.transport_facility !== !!originalData.transport_facility;
+
+            if (isFeeChanged) {
+                data.append('fee_update_mode', 'upcoming'); // Update profile and all future unpaid months
+            }
+            
             if (photo && photo.uri) {
                 const photoName = photo.uri.split('/').pop() || 'photo.jpg';
                 const match = /\.(\w+)$/.exec(photoName);

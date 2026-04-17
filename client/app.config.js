@@ -5,7 +5,7 @@ export default ({ config }) => {
     expo: {
       name: "Klassin",
       slug: "klassin",
-      version: "1.2.4",
+      version: "1.3.0",
       orientation: "portrait",
       icon: "./assets/images/icon2.png",
       scheme: "klassin",

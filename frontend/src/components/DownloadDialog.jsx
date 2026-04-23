@@ -40,7 +40,7 @@ const DownloadDialog = ({ isOpen, onClose }) => {
                 </div>
 
                 <a
-                  href="https://klassin.co.in/downloads/klassinv130.apk"
+                  href="https://klassin.co.in/downloads/klassinv140.apk"
                     className="btn-download-primary"
                  style={{ textDecoration: 'none', display: 'flex', justifyContent:'center', alignItems: 'center' }} 
                  download
